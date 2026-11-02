@@ -129,6 +129,14 @@ function start(root: HTMLElement): void {
     onNeedRefresh() {
       ui.showUpdate(() => {
         persist();
+        // workbox-window solo recarga si ya había SW controlando al registrar; en la
+        // primera visita no lo hay, así que recargamos nosotros al cambiar de controlador.
+        let reloading = false;
+        navigator.serviceWorker.addEventListener('controllerchange', () => {
+          if (reloading) return;
+          reloading = true;
+          location.reload();
+        });
         void updateSW(true);
       });
     },

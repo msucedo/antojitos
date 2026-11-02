@@ -83,3 +83,12 @@ Fórmulas estándar del género (Kongregate, "The Math of Idle Games"); constant
 3. `npm run build && npm run preview`: manifest sin errores, SW activo; Offline + recargar → abre; Lighthouse ≥ 90 en a11y y perf.
 4. Rebuild con preview abierto → aviso de nueva versión, recarga y no se pierde progreso.
 5. Tras el deploy (lo decide el user): `curl -I` para los headers; iPhone instalado → pantalla completa y ganancias offline.
+
+## Estado MVP1 (2026-11-01)
+- [x] `npm run check`: 48 tests, tsc y eslint en verde.
+- [x] Chrome headless con los headers de `vercel.json`: render, venta, compra, gerente, import, recarga con progreso intacto, guardado corrupto → aviso + copia, segunda pestaña bloqueada, SW activo, sin violaciones de CSP.
+- [x] Aviso de nueva versión, en primera visita y en visitas posteriores: aparece, recarga, conserva el progreso y no muestra un bloqueo falso. Hizo falta `clientsClaim` + `controllerchange` propio, porque workbox-window no recarga en la primera visita.
+- [x] Lighthouse 12.8.2 móvil: Performance 100, Accesibilidad 100 (FCP 1.0 s, LCP 1.4 s, TBT 10 ms, CLS 0).
+- [x] Firefox y Safari: candado, guardado, offline (probado por el user).
+- [ ] Deploy a Vercel + `curl -I` de headers + Manifest sin errores.
+- [ ] iPhone instalado: pantalla completa, sin red, ganancias offline.

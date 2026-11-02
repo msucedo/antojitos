@@ -11,6 +11,9 @@ export default defineConfig({
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,webmanifest}'],
         cleanupOutdatedCaches: true,
+        // Controlar la página desde la primera visita: si no, una actualización que llega
+        // en esa misma sesión activa el SW nuevo pero el botón "Recargar" nunca recarga.
+        clientsClaim: true,
       },
       manifest: {
         name: 'Imperio de Antojitos',
