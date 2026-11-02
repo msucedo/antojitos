@@ -27,3 +27,6 @@ npm-debug.log*
 # Reportes de Lighthouse
 *.report.html
 *.report.json
+
+# Playwright MCP (capturas y snapshots)
+.playwright-mcp/

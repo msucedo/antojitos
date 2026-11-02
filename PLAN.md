@@ -61,6 +61,7 @@ Fórmulas estándar del género (Kongregate, "The Math of Idle Games"); constant
 - Mobile-first, una columna, `lang="es-MX"`.
 - Paleta papel picado (rosa mexicano, amarillo maíz, verde nopal) con contraste AA verificado. Iconos emoji; sin assets externos.
 - Dinero: dígitos completos por debajo de 1e6; después escala larga española con singular/plural (millón, mil millones, billón = 1e12…).
+- Cantidades: los precios son enteros desde la lógica (`costOf` redondea hacia arriba, como Cookie Clicker) y la vista siempre trunca con una sola función (`formatMoney`). Bajo 1e6, "alcanza" ⇔ precio mostrado ≤ dinero mostrado; arriba de eso, dos cifras pueden verse iguales y el estado del botón decide. Lo ganado se calcula directo, nunca restando dineros.
 - Toggle de compra x1/x10/Max; modal "Mientras no estabas ganaste…"; Doña Chelo con tips en los primeros pasos.
 - `<button>` reales, áreas táctiles ≥ 44 px, `prefers-reduced-motion`, modal con foco atrapado + `Esc`, `aria-live="polite"` solo para eventos.
 - Render: el DOM se crea una vez; el texto se actualiza a ~10 Hz y las barras en cada rAF.

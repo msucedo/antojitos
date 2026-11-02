@@ -1,6 +1,34 @@
 import { describe, expect, it } from 'vitest';
 import { formatDuration, formatMoney, formatNumber } from './format';
 
+describe('formatMoney', () => {
+  it('trunca a entero bajo 1e6: nunca muestra más de lo que hay', () => {
+    expect(formatMoney(0)).toBe('$0');
+    expect(formatMoney(4.99)).toBe('$4');
+    expect(formatMoney(4.9999999999)).toBe('$4');
+    expect(formatMoney(999_999.99)).toBe('$999,999');
+    expect(formatMoney(1_500_000)).toBe('$1.50 millones');
+  });
+
+  it('valores exactos en todas las escalas: ni un escalón de menos', () => {
+    for (const exp of [6, 9, 12, 15, 18, 21, 24, 27, 30, 33, 36, 39]) {
+      for (let hundredths = 100; hundredths < 100_000; hundredths += 1237) {
+        const n = (hundredths / 100) * 10 ** exp;
+        expect(formatMoney(n).startsWith(`$${(hundredths / 100).toFixed(2)} `)).toBe(true);
+      }
+    }
+  });
+
+  it('desde 1e42 trunca la mantisa', () => {
+    expect(formatMoney(1.996e42)).toBe('$1.99e42');
+    expect(formatMoney(1e42)).toBe('$1.00e42');
+  });
+
+  it('no muestra "-0"', () => {
+    expect(formatMoney(-1e-12)).toBe('$0');
+  });
+});
+
 describe('formatNumber', () => {
   it('enteros con separador', () => {
     expect(formatNumber(0)).toBe('0');
@@ -17,6 +45,10 @@ describe('formatNumber', () => {
 
   it('no redondea hacia el siguiente escalón', () => {
     expect(formatNumber(999_999_999)).toBe('999.99 millones');
+  });
+
+  it('el error de punto flotante no deja "1,000.00" en un escalón', () => {
+    expect(formatNumber(9.99999999999999e41)).toBe('1.00e42');
   });
 
   it('sin error de punto flotante y singular en 1', () => {

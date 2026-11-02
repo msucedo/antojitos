@@ -17,18 +17,40 @@ const SCALE: readonly [number, string, string][] = [
 const integer = new Intl.NumberFormat('es-MX', { maximumFractionDigits: 0 });
 const decimal = new Intl.NumberFormat('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+/**
+ * Trunca a 2 decimales. El épsilon absorbe el error de la división
+ * (1.15e6 / 1e6 * 100 = 114.999…); a cambio, un valor a menos de ~1e-11 relativo de
+ * un escalón se muestra en ese escalón (solo desde 1e6, donde el botón decide).
+ */
+function hundredths(x: number): number {
+  return Math.floor(x * 100 + 1e-9) / 100;
+}
+
+/**
+ * Trunca (ver `hundredths`). Los precios son enteros desde la lógica (`costOf`), así que bajo 1e6
+ * "alcanza" ⇔ precio mostrado ≤ dinero mostrado; arriba, el estado del botón decide.
+ */
 export function formatNumber(n: number): string {
   if (!Number.isFinite(n)) return '∞';
-  if (n < 0) return `-${formatNumber(-n)}`;
-  if (n >= 1e42) return n.toExponential(2).replace('+', '');
-  for (const [value, singular, plural] of SCALE) {
+  if (n < 0) {
+    const abs = formatNumber(-n);
+    return abs === '0' ? abs : `-${abs}`;
+  }
+  if (n >= 1e42) {
+    let exp = Math.floor(Math.log10(n));
+    let mantissa = hundredths(n / 10 ** exp);
+    if (mantissa >= 10) [mantissa, exp] = [hundredths(mantissa / 10), exp + 1];
+    return `${mantissa.toFixed(2)}e${exp}`;
+  }
+  for (const [i, [value, singular, plural]] of SCALE.entries()) {
     if (n >= value) {
-      // Trunca a 2 decimales (nunca muestra de más); el épsilon absorbe el error de
-      // punto flotante de la división (1.15e6 / 1e6 * 100 = 114.999…).
-      const scaled = Math.floor((n / value) * 100 + 1e-9) / 100;
+      const scaled = hundredths(n / value);
+      // El épsilon puede llegar a 1000: se muestra en el escalón siguiente.
+      if (scaled >= 1000) return formatNumber(SCALE[i - 1]?.[0] ?? 1e42);
       return `${decimal.format(scaled)} ${scaled === 1 ? singular : plural}`;
     }
   }
+  // Enteros exactos: sin épsilon, para que $4.9999 nunca se vea como $5.
   return integer.format(Math.floor(n));
 }
 

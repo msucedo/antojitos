@@ -4,6 +4,7 @@ import {
   applyOffline,
   buy,
   buyUpgrade,
+  canHireManager,
   getUpgrade,
   nextUpgrades,
   upgradeMultiplier,
@@ -13,6 +14,7 @@ import {
   maxAffordable,
   newState,
   pendingRecipes,
+  quantityFor,
   prestige,
   revenuePerCycle,
   startCycle,
@@ -28,15 +30,46 @@ function withMoney(money: number, s: State = newState(T0)): State {
 }
 
 describe('costos', () => {
-  it('costo de una unidad es geométrico', () => {
-    expect(costOf(elotes, 0, 1)).toBeCloseTo(elotes.baseCost);
-    expect(costOf(elotes, 3, 1)).toBeCloseTo(elotes.baseCost * elotes.growth ** 3);
+  it('costo geométrico, redondeado hacia arriba a entero', () => {
+    expect(costOf(elotes, 0, 1)).toBe(elotes.baseCost);
+    expect(costOf(elotes, 1, 1)).toBe(5); // 4 × 1.07 = 4.28 → $5
+    expect(costOf(elotes, 3, 1)).toBe(Math.ceil(elotes.baseCost * elotes.growth ** 3));
   });
 
-  it('compra múltiple = suma de compras individuales', () => {
+  it('compra múltiple ≈ suma de individuales (redondea el total, no cada unidad)', () => {
     let sum = 0;
     for (let i = 0; i < 10; i++) sum += costOf(elotes, 5 + i, 1);
-    expect(costOf(elotes, 5, 10)).toBeCloseTo(sum, 6);
+    const bulk = costOf(elotes, 5, 10);
+    expect(bulk).toBeLessThanOrEqual(sum);
+    expect(sum - bulk).toBeLessThan(10);
+  });
+
+  it('bajo 1e6, el botón y el texto coinciden: alcanza ⇔ precio ≤ dinero mostrado', () => {
+    for (const def of BUSINESSES) {
+      for (const mode of [1, 10] as const) {
+        for (let owned = 0; owned < 120; owned += 7) {
+          const cost = costOf(def, owned, mode);
+          if (cost >= 1e6) break;
+          expect(Number.isInteger(cost)).toBe(true);
+          for (const delta of [-1, -0.5, -0.01, -1e-9, 0, 1e-9, 0.01, 0.5, 0.99]) {
+            const money = cost + delta;
+            const s = withMoney(money);
+            const st = { ...s, businesses: { ...s.businesses, [def.id]: { ...s.businesses[def.id]!, count: owned } } };
+            const looks = cost <= Math.floor(money);
+            expect(quantityFor(st, def.id, mode) > 0).toBe(looks);
+            if (mode === 1) expect(quantityFor(st, def.id, 'max') > 0).toBe(looks);
+          }
+        }
+      }
+    }
+  });
+
+  it('precios fijos (gerentes, mejoras) son enteros y coherentes con dinero fraccionario', () => {
+    for (const def of BUSINESSES) expect(Number.isInteger(def.managerCost)).toBe(true);
+    for (const u of UPGRADES) expect(Number.isInteger(u.cost)).toBe(true);
+    const s = buy(withMoney(elotes.baseCost), 'elotes', 1);
+    expect(canHireManager({ ...s, money: elotes.managerCost - 1e-9 }, 'elotes')).toBe(false);
+    expect(canHireManager({ ...s, money: elotes.managerCost }, 'elotes')).toBe(true);
   });
 
   it('maxAffordable es exacto en el borde', () => {
@@ -44,7 +77,7 @@ describe('costos', () => {
       for (const owned of [0, 1, 37, 150]) {
         const exact = costOf(def, owned, 13);
         expect(maxAffordable(def, owned, exact)).toBe(13);
-        expect(maxAffordable(def, owned, exact * 0.999999)).toBe(12);
+        expect(maxAffordable(def, owned, exact - 1)).toBe(12);
       }
     }
   });
@@ -133,6 +166,13 @@ describe('offline', () => {
     const { earned, state } = applyOffline(managed(), T0 - 1_000_000);
     expect(earned).toBe(0);
     expect(state.lastSeen).toBe(T0 - 1_000_000);
+  });
+
+  it('earned exacto con mucho dinero (no resta dineros)', () => {
+    // Con recetas el ingreso es fraccionario y (money + earned) - money pierde precisión.
+    const s = { ...managed(), money: 836_214.3777, recipes: 1 };
+    const { earned } = applyOffline(s, T0 + 60_000);
+    expect(earned).toBe(60 * revenuePerCycle(s, 'elotes'));
   });
 
   it('sin gerente no gana offline', () => {

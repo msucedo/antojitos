@@ -378,6 +378,13 @@ p {
   cursor: default;
 }
 
+/* Con relleno sólido el punteado no se ve: deshabilitado pasa a contorno. */
+.btn.primary:disabled,
+.btn.heir:disabled {
+  background: transparent;
+  color: var(--text);
+}
+
 /* ---------- Barra inferior (zona del pulgar) ---------- */
 .bottom {
   position: fixed;
@@ -621,8 +628,9 @@ p {
 
   .bottom-inner {
     max-width: 1008px;
-    grid-template-columns: minmax(0, 420px) minmax(0, 340px);
-    justify-content: space-between;
+    /* Mismas columnas y gap que .layout: la barra se alinea con las tarjetas. */
+    grid-template-columns: 1fr 340px;
+    column-gap: 12px;
   }
 }
 

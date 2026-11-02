@@ -101,11 +101,14 @@ function capAdd(a: number, b: number): number {
   return Math.min(a + b, Number.MAX_VALUE);
 }
 
-/** Costo de comprar `k` unidades teniendo ya `owned`. */
+/**
+ * Costo de comprar `k` unidades teniendo ya `owned`. Entero (hacia arriba, como
+ * Cookie Clicker): así lo que se muestra es exactamente lo que se compara con el dinero.
+ */
 export function costOf(def: BusinessDef, owned: number, k: number): number {
   if (k <= 0) return 0;
   const r = def.growth;
-  return (def.baseCost * r ** owned * (r ** k - 1)) / (r - 1);
+  return Math.ceil((def.baseCost * r ** owned * (r ** k - 1)) / (r - 1));
 }
 
 /** Cuántas unidades alcanza `money`, con corrección por error de punto flotante. */
@@ -162,7 +165,12 @@ export function hireManager(state: State, id: string): State {
  * Con gerente: ciclos continuos. Sin gerente: termina como mucho el ciclo en curso.
  */
 export function tick(state: State, dtMs: number): State {
-  if (!(dtMs > 0) || !Number.isFinite(dtMs)) return state;
+  return advance(state, dtMs).state;
+}
+
+/** `tick` más lo ganado, calculado directo (restar dos dineros arrastra error de punto flotante). */
+function advance(state: State, dtMs: number): { state: State; earned: number } {
+  if (!(dtMs > 0) || !Number.isFinite(dtMs)) return { state, earned: 0 };
   let earned = 0;
   const businesses: Record<string, BizState> = {};
   for (const def of BUSINESSES) {
@@ -185,19 +193,22 @@ export function tick(state: State, dtMs: number): State {
     }
   }
   return {
-    ...state,
-    businesses,
-    money: capAdd(state.money, earned),
-    runEarned: capAdd(state.runEarned, earned),
-    lifetimeEarned: capAdd(state.lifetimeEarned, earned),
+    state: {
+      ...state,
+      businesses,
+      money: capAdd(state.money, earned),
+      runEarned: capAdd(state.runEarned, earned),
+      lifetimeEarned: capAdd(state.lifetimeEarned, earned),
+    },
+    earned,
   };
 }
 
 /** Aplica el tiempo fuera desde `lastSeen` (tope 8 h, reloj atrasado → 0). */
 export function applyOffline(state: State, now: number): { state: State; earned: number; elapsedMs: number } {
   const elapsedMs = Math.min(Math.max(now - state.lastSeen, 0), OFFLINE_CAP_MS);
-  const next = { ...tick(state, elapsedMs), lastSeen: now };
-  return { state: next, earned: next.money - state.money, elapsedMs };
+  const { state: advanced, earned } = advance(state, elapsedMs);
+  return { state: { ...advanced, lastSeen: now }, earned, elapsedMs };
 }
 
 export function incomePerSecond(state: State): number {
