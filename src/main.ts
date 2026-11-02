@@ -1,6 +1,20 @@
 import './style.css';
 import { registerSW } from 'virtual:pwa-register';
-import { applyOffline, buy, getDef, hireManager, prestige, startCycle, type BuyMode, type State } from './game';
+import {
+  applyOffline,
+  buy,
+  buyUpgrade,
+  getDef,
+  getUpgrade,
+  hireManager,
+  prestige,
+  revenuePerCycle,
+  startCycle,
+  type BuyMode,
+  type State,
+} from './game';
+import { BUSINESSES } from './data';
+import { createAudio, loadPrefs, savePrefs, type Sound } from './audio';
 import { backup, exportSave, importSave, load, save, type KV } from './save';
 import { createUI, showLocked, type UI } from './ui';
 import { formatMoney } from './format';
@@ -35,6 +49,12 @@ function start(root: HTMLElement): void {
   let mode: BuyMode = 1;
   let dirty = true;
   let warnedNoSave = false;
+  const audio = createAudio(loadPrefs());
+  // El audio solo arranca dentro de un gesto. Se escuchan varios porque cada navegador
+  // cuenta como "activación" uno distinto (iOS: touchend/click; teclado: keydown).
+  for (const type of ['pointerdown', 'click', 'keydown', 'touchend'] as const) {
+    document.addEventListener(type, () => audio.unlock(), { passive: true, capture: true });
+  }
 
   const set = (next: State) => {
     if (next !== state) {
@@ -53,11 +73,31 @@ function start(root: HTMLElement): void {
 
   const ui: UI = createUI(root, {
     onStart: (id) => set(startCycle(state, id)),
-    onBuy: (id) => set(buy(state, id, mode)),
+    onBuy: (id) => act(buy(state, id, mode), 'buy', id),
     onHire: (id) => {
-      const next = hireManager(state, id);
-      if (next !== state) ui.announce(`Contrataste a ${getDef(id).managerName}.`);
-      set(next);
+      if (act(hireManager(state, id), 'hire', id)) ui.announce(`Contrataste a ${getDef(id).managerName}.`);
+    },
+    onUpgrade: (id) => {
+      if (act(buyUpgrade(state, id), 'upgrade', id)) ui.announce(`Compraste ${getUpgrade(id).name}.`);
+    },
+    onToggleSound: () => {
+      const on = !audio.prefs().sound;
+      audio.setSound(on);
+      savePrefs(audio.prefs());
+      if (on) {
+        audio.unlock();
+        audio.play('buy');
+      }
+      ui.announce(on ? 'Efectos de sonido activados.' : 'Efectos de sonido desactivados.');
+      dirty = true;
+    },
+    onToggleMusic: () => {
+      const on = !audio.prefs().music;
+      audio.setMusic(on);
+      savePrefs(audio.prefs());
+      if (on) audio.unlock();
+      ui.announce(on ? 'Música activada.' : 'Música desactivada.');
+      dirty = true;
     },
     onMode: (m) => {
       mode = m;
@@ -69,6 +109,8 @@ function start(root: HTMLElement): void {
       set(next);
       persist();
       backup(kv, state);
+      audio.play('prestige');
+      ui.celebrate();
       ui.announce(`Heredaste. Ahora tienes ${next.recipes} recetas.`);
     },
     onImport: (text) => {
@@ -83,14 +125,34 @@ function start(root: HTMLElement): void {
     getExport: () => exportSave(state),
   });
 
+  /** Aplica una acción; si cambió el estado, da feedback visual y sonoro. */
+  function act(next: State, kind: Extract<Sound, 'buy' | 'hire' | 'upgrade'>, id: string): boolean {
+    if (next === state) return false;
+    set(next);
+    audio.play(kind);
+    ui.confirm(kind, id);
+    return true;
+  }
+
   if (loaded.problem) ui.showProblem();
 
   // Todo avance de tiempo usa el reloj de pared contra lastSeen: un frame, una pausa
   // del hilo o horas fuera pasan por el mismo camino (tope 8 h, reloj atrasado → 0).
   const catchUp = (notify: boolean) => {
+    const before = state;
     const r = applyOffline(state, Date.now());
     state = r.state;
     dirty ||= r.earned > 0;
+    // Ciclos manuales que terminaron (en un frame o al volver a la pestaña):
+    // moneda + sonido. Los gerentes no suenan.
+    for (const def of BUSINESSES) {
+      const b0 = before.businesses[def.id];
+      const b1 = state.businesses[def.id];
+      if (b0?.running && b1 && !b1.running && !b1.manager) {
+        ui.sold(def.id, revenuePerCycle(before, def.id));
+        audio.play('sell');
+      }
+    }
     if (r.earned > 0 && r.elapsedMs >= MIN_OFFLINE_NOTICE_MS) {
       if (notify) ui.showOffline(r.earned, r.elapsedMs);
       else ui.announce(`Ganaste ${formatMoney(r.earned)} mientras no estabas.`);
@@ -102,7 +164,7 @@ function start(root: HTMLElement): void {
   const frame = (t: number) => {
     catchUp(false);
     if (dirty || t - lastText >= TEXT_MS) {
-      ui.render(state, mode);
+      ui.render(state, mode, audio.prefs());
       lastText = t;
       dirty = false;
     }
@@ -117,7 +179,9 @@ function start(root: HTMLElement): void {
     if (document.visibilityState === 'hidden') {
       catchUp(false);
       persist();
+      audio.setVisible(false);
     } else {
+      audio.setVisible(true);
       catchUp(true);
     }
   });

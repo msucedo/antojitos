@@ -1,6 +1,15 @@
-import { BUSINESSES, MILESTONES, OFFLINE_CAP_MS, RECIPE_BONUS, RECIPE_DIVISOR, type BusinessDef } from './data';
+import {
+  BUSINESSES,
+  MILESTONES,
+  OFFLINE_CAP_MS,
+  RECIPE_BONUS,
+  RECIPE_DIVISOR,
+  UPGRADES,
+  type BusinessDef,
+  type UpgradeDef,
+} from './data';
 
-export const SAVE_VERSION = 1;
+export const SAVE_VERSION = 2;
 
 export interface BizState {
   count: number;
@@ -20,6 +29,8 @@ export interface State {
   lifetimeEarned: number;
   recipes: number;
   businesses: Record<string, BizState>;
+  /** Ids de mejoras compradas en esta partida (se reinician con la herencia). */
+  upgrades: string[];
   /** Date.now() de la última vez que se guardó/actualizó. */
   lastSeen: number;
 }
@@ -42,6 +53,7 @@ export function newState(now: number): State {
     lifetimeEarned: 0,
     recipes: 0,
     businesses: freshBusinesses(),
+    upgrades: [],
     lastSeen: now,
   };
 }
@@ -75,7 +87,11 @@ export function revenuePerCycle(state: State, id: string): number {
   const def = getDef(id);
   const { count } = biz(state, id);
   return Math.min(
-    def.baseRevenue * count * 2 ** milestonesReached(count) * (1 + RECIPE_BONUS * state.recipes),
+    def.baseRevenue *
+      count *
+      2 ** milestonesReached(count) *
+      (1 + RECIPE_BONUS * state.recipes) *
+      upgradeMultiplier(state, id),
     Number.MAX_VALUE,
   );
 }
@@ -199,6 +215,40 @@ export function recipesFor(lifetimeEarned: number): number {
 
 export function pendingRecipes(state: State): number {
   return Math.max(recipesFor(state.lifetimeEarned) - state.recipes, 0);
+}
+
+export function getUpgrade(id: string): UpgradeDef {
+  const def = UPGRADES.find((u) => u.id === id);
+  if (!def) throw new Error(`Mejora desconocida: ${id}`);
+  return def;
+}
+
+/** Producto de los multiplicadores comprados que aplican a este negocio. */
+export function upgradeMultiplier(state: State, bizId: string): number {
+  let m = 1;
+  for (const id of state.upgrades) {
+    const u = getUpgrade(id);
+    if (u.target === 'all' || u.target === bizId) m *= u.multiplier;
+  }
+  return m;
+}
+
+export function canBuyUpgrade(state: State, id: string): boolean {
+  return !state.upgrades.includes(id) && state.money >= getUpgrade(id).cost;
+}
+
+export function buyUpgrade(state: State, id: string): State {
+  if (!canBuyUpgrade(state, id)) return state;
+  return { ...state, money: state.money - getUpgrade(id).cost, upgrades: [...state.upgrades, id] };
+}
+
+/** Las `n` mejoras más baratas sin comprar, de negocios ya abiertos o globales. */
+export function nextUpgrades(state: State, n: number): UpgradeDef[] {
+  return UPGRADES.filter(
+    (u) => !state.upgrades.includes(u.id) && (u.target === 'all' || (state.businesses[u.target]?.count ?? 0) > 0),
+  )
+    .sort((a, b) => a.cost - b.cost)
+    .slice(0, n);
 }
 
 /** Herencia: reinicia la partida y suma las recetas pendientes. */

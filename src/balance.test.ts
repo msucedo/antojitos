@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { BUSINESSES } from './data';
+import { BUSINESSES, UPGRADES } from './data';
 import {
   buy,
+  buyUpgrade,
+  canBuyUpgrade,
   canHireManager,
   costOf,
   getDef,
@@ -44,6 +46,19 @@ function bestAction(s: State): State | null {
       if (!best || score > best.score) best = { score, apply: () => hireManager(s, def.id) };
     }
   }
+  for (const u of UPGRADES) {
+    if (!canBuyUpgrade(s, u.id)) continue;
+    const after = { ...s, upgrades: [...s.upgrades, u.id] };
+    let gain = 0;
+    for (const def of BUSINESSES) {
+      const b = s.businesses[def.id]!;
+      gain +=
+        ((revenuePerCycle(after, def.id) - revenuePerCycle(s, def.id)) * 1000 * efficiency(def.cycleMs, b.manager)) /
+        def.cycleMs;
+    }
+    const score = gain / u.cost;
+    if (!best || score > best.score) best = { score, apply: () => buyUpgrade(s, u.id) };
+  }
   return best ? best.apply() : null;
 }
 
@@ -51,12 +66,13 @@ interface Result {
   firstManagerMs: number | null;
   firstPrestigeMs: number | null;
   unlockMs: Record<string, number>;
+  upgradesBought: number;
 }
 
 function simulate(): Result {
   let s = newState(0);
   const idleSince: Record<string, number> = {};
-  const res: Result = { firstManagerMs: null, firstPrestigeMs: null, unlockMs: {} };
+  const res: Result = { firstManagerMs: null, firstPrestigeMs: null, unlockMs: {}, upgradesBought: 0 };
   for (let t = 0; t <= LIMIT_MS; t += STEP_MS) {
     for (const def of BUSINESSES) {
       const b = s.businesses[def.id]!;
@@ -75,6 +91,7 @@ function simulate(): Result {
         if (b.count > 0) res.unlockMs[def.id] ??= t;
         if (b.manager && res.firstManagerMs === null) res.firstManagerMs = t;
       }
+      res.upgradesBought = s.upgrades.length;
       if (res.firstPrestigeMs === null && pendingRecipes(s) >= 1) {
         res.firstPrestigeMs = t;
         break;
@@ -92,6 +109,7 @@ describe('balance', () => {
     [
       `primer gerente: ${min(r.firstManagerMs)}`,
       `primera herencia: ${min(r.firstPrestigeMs)}`,
+      `mejoras compradas: ${r.upgradesBought}/${UPGRADES.length}`,
       ...BUSINESSES.map((d) => `  ${getDef(d.id).name}: ${min(r.unlockMs[d.id])}`),
     ].join('\n'),
   );

@@ -2,6 +2,11 @@ import { VitePWA } from 'vite-plugin-pwa';
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
+  build: {
+    // El sprite de iconos se usa con <use href>: debe ser un archivo, nunca un data: URI
+    // (los navegadores bloquean <use> hacia data: y la CSP solo permite 'self').
+    assetsInlineLimit: (file) => (file.endsWith('.svg') ? false : undefined),
+  },
   plugins: [
     VitePWA({
       // src/main.ts registra el SW con `virtual:pwa-register`: sin script inline, compatible con la CSP.

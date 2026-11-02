@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buy, newState, type State } from './game';
+import { buy, newState, pendingRecipes, type State } from './game';
 import {
   BACKUP_KEY,
   exportSave,
@@ -131,5 +131,64 @@ describe('export / import', () => {
     expect(importSave('%%%')).toBeNull();
     expect(importSave(btoa('{"a":1}'))).toBeNull();
     expect(importSave('A'.repeat(MAX_IMPORT_CHARS + 1))).toBeNull();
+  });
+});
+
+describe('v2: mejoras', () => {
+  /** Guardado v1 tal como lo escribía el MVP1. */
+  const v1 = {
+    version: 1,
+    money: 1234.5,
+    runEarned: 5000,
+    lifetimeEarned: 9000,
+    recipes: 1,
+    lastSeen: T0,
+    businesses: {
+      elotes: { count: 12, progressMs: 300, running: false, manager: true },
+      aguas: { count: 2, progressMs: 0, running: true, manager: false },
+    },
+  };
+
+  it('migra v1 → v2 sin perder nada', () => {
+    const s = validate(JSON.parse(JSON.stringify(v1)));
+    expect(s).not.toBeNull();
+    expect(s!.version).toBe(2);
+    expect(s!.upgrades).toEqual([]);
+    expect(s!.money).toBe(1234.5);
+    expect(s!.recipes).toBe(1);
+    expect(s!.businesses.elotes).toEqual(v1.businesses.elotes);
+    expect(s!.businesses.aguas).toEqual(v1.businesses.aguas);
+  });
+
+  it('migrar conserva recetas pendientes y la distancia a la siguiente', () => {
+    // Con el divisor de v1 (3e10): 1e11 ganado → floor(sqrt(3.33)) = 1 receta pendiente.
+    const pending = validate({ ...v1, recipes: 0, lifetimeEarned: 1e11 });
+    expect(pendingRecipes(pending!)).toBe(1);
+    // recipes = 3 y 4.7e11 ganado (v1: floor(sqrt(15.7)) = 3): aún sin la 4.ª…
+    const near = validate({ ...v1, recipes: 3, lifetimeEarned: 4.7e11 });
+    expect(pendingRecipes(near!)).toBe(0);
+    // …y con 4.9e11 (v1: floor(sqrt(16.3)) = 4) ya la tiene, igual que en v1.
+    const reached = validate({ ...v1, recipes: 3, lifetimeEarned: 4.9e11 });
+    expect(pendingRecipes(reached!)).toBe(1);
+  });
+
+  it('carga un guardado v1 desde storage', () => {
+    const r = load(memory({ [SAVE_KEY]: JSON.stringify(v1) }), T0);
+    expect(r.source).toBe('save');
+    expect(r.state.upgrades).toEqual([]);
+  });
+
+  it.each([
+    ['no array', 'chile'],
+    ['id desconocido', ['chile', 'hackeo']],
+    ['duplicado', ['chile', 'chile']],
+    ['no string', [1]],
+    ['falta', undefined],
+  ])('rechaza upgrades: %s', (_, upgrades) => {
+    expect(validate({ ...newState(T0), upgrades })).toBeNull();
+  });
+
+  it('acepta mejoras válidas', () => {
+    expect(validate({ ...newState(T0), upgrades: ['chile', 'comal'] })?.upgrades).toEqual(['chile', 'comal']);
   });
 });

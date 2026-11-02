@@ -1,8 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { BUSINESSES, OFFLINE_CAP_MS, RECIPE_DIVISOR } from './data';
+import { BUSINESSES, OFFLINE_CAP_MS, RECIPE_DIVISOR, UPGRADES } from './data';
 import {
   applyOffline,
   buy,
+  buyUpgrade,
+  getUpgrade,
+  nextUpgrades,
+  upgradeMultiplier,
   costOf,
   getDef,
   hireManager,
@@ -168,5 +172,64 @@ describe('desborde', () => {
     expect(Number.isFinite(s.lifetimeEarned)).toBe(true);
     expect(Number.isFinite(s.money)).toBe(true);
     expect(JSON.stringify(s)).not.toContain('null');
+  });
+});
+
+describe('mejoras', () => {
+  const chile = getUpgrade('chile');
+
+  it('comprar descuenta, registra y multiplica solo su negocio', () => {
+    const s0 = { ...withMoney(chile.cost), businesses: { ...newState(T0).businesses } };
+    s0.businesses.aguas = { ...s0.businesses.aguas!, count: 1 };
+    const before = { elotes: revenuePerCycle(s0, 'elotes'), aguas: revenuePerCycle(s0, 'aguas') };
+    const s = buyUpgrade(s0, 'chile');
+    expect(s.money).toBe(0);
+    expect(s.upgrades).toEqual(['chile']);
+    expect(revenuePerCycle(s, 'elotes')).toBe(before.elotes * chile.multiplier);
+    expect(revenuePerCycle(s, 'aguas')).toBe(before.aguas);
+  });
+
+  it('globales multiplican todo y se acumulan', () => {
+    const s = { ...newState(T0), upgrades: ['chile', 'comal'] };
+    expect(upgradeMultiplier(s, 'elotes')).toBe(6);
+    expect(upgradeMultiplier(s, 'cadena')).toBe(2);
+  });
+
+  it('sin dinero o ya comprada no cambia nada', () => {
+    const poor = withMoney(chile.cost - 1);
+    expect(buyUpgrade(poor, 'chile')).toBe(poor);
+    const owned = buyUpgrade(withMoney(chile.cost * 2), 'chile');
+    expect(buyUpgrade(owned, 'chile')).toBe(owned);
+  });
+
+  it('nextUpgrades da las más baratas sin comprar', () => {
+    const s = { ...newState(T0), upgrades: ['chile'] };
+    const next = nextUpgrades(s, 3);
+    expect(next).toHaveLength(3);
+    expect(next.map((u) => u.id)).not.toContain('chile');
+    expect(next[0]!.cost).toBeLessThanOrEqual(next[1]!.cost);
+  });
+
+  it('nextUpgrades no ofrece mejoras de negocios sin abrir', () => {
+    const ids = nextUpgrades(newState(T0), UPGRADES.length).map((u) => u.id);
+    expect(ids).toContain('chile');
+    expect(ids).toContain('comal');
+    expect(ids).not.toContain('hielo');
+  });
+
+  it('la herencia las reinicia', () => {
+    const earned = RECIPE_DIVISOR * 4;
+    const s = { ...withMoney(earned), lifetimeEarned: earned, upgrades: ['chile', 'comal'] };
+    expect(prestige(s, T0).upgrades).toEqual([]);
+  });
+
+  it('catálogo válido: ids únicos y objetivos existentes', () => {
+    const ids = UPGRADES.map((u) => u.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    for (const u of UPGRADES) {
+      expect(u.target === 'all' || BUSINESSES.some((b) => b.id === u.target)).toBe(true);
+      expect(u.cost).toBeGreaterThan(0);
+      expect(u.multiplier).toBeGreaterThan(1);
+    }
   });
 });

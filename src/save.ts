@@ -1,4 +1,4 @@
-import { BUSINESSES } from './data';
+import { BUSINESSES, RECIPE_DIVISOR, UPGRADES } from './data';
 import { newState, SAVE_VERSION, type BizState, type State } from './game';
 
 export const SAVE_KEY = 'antojitos.save';
@@ -17,7 +17,33 @@ const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFin
 const isInt = (v: unknown): v is number => isNum(v) && Number.isInteger(v);
 
 /** Migraciones en cadena: MIGRATIONS[n] convierte un guardado v(n) en v(n+1). */
-const MIGRATIONS: Record<number, (o: Raw) => Raw> = {};
+/** Divisor de recetas con el que se escribieron los guardados v1. */
+const V1_RECIPE_DIVISOR = 3e10;
+
+const MIGRATIONS: Record<number, (o: Raw) => Raw> = {
+  // v2: mejoras, y el divisor de recetas pasó de 3e10 a RECIPE_DIVISOR. Se reescala
+  // lifetimeEarned (solo define recetas) para que recipesFor dé lo mismo que en v1.
+  1: (o) => ({
+    ...o,
+    version: 2,
+    upgrades: [],
+    lifetimeEarned: isNum(o.lifetimeEarned)
+      ? Math.min(o.lifetimeEarned * (RECIPE_DIVISOR / V1_RECIPE_DIVISOR), Number.MAX_VALUE)
+      : o.lifetimeEarned,
+  }),
+};
+
+/** Ids conocidos, sin duplicados; cualquier otra cosa invalida el guardado. */
+function parseUpgrades(raw: unknown): string[] | null {
+  if (!Array.isArray(raw) || raw.length > UPGRADES.length) return null;
+  const known = new Set(UPGRADES.map((u) => u.id));
+  const out: string[] = [];
+  for (const id of raw) {
+    if (typeof id !== 'string' || !known.has(id) || out.includes(id)) return null;
+    out.push(id);
+  }
+  return out;
+}
 
 function migrate(o: Raw): Raw | null {
   let cur = o;
@@ -47,6 +73,8 @@ export function validate(input: unknown): State | null {
   const o = migrate(input);
   if (!o) return null;
   const { money, runEarned, lifetimeEarned, recipes, lastSeen, businesses } = o;
+  const upgrades = parseUpgrades(o.upgrades);
+  if (!upgrades) return null;
   if (!isNum(money) || !isNum(runEarned) || !isNum(lifetimeEarned) || !isInt(recipes) || !isNum(lastSeen)) return null;
   if (!isObj(businesses)) return null;
   const out: Record<string, BizState> = {};
@@ -55,7 +83,7 @@ export function validate(input: unknown): State | null {
     if (!b) return null;
     out[def.id] = b;
   }
-  return { version: SAVE_VERSION, money, runEarned, lifetimeEarned, recipes, lastSeen, businesses: out };
+  return { version: SAVE_VERSION, money, runEarned, lifetimeEarned, recipes, lastSeen, businesses: out, upgrades };
 }
 
 function parseJson(text: string | null): State | null {

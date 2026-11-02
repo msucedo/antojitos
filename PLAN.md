@@ -92,3 +92,54 @@ Fórmulas estándar del género (Kongregate, "The Math of Idle Games"); constant
 - [x] Firefox y Safari: candado, guardado, offline (probado por el user).
 - [ ] Deploy a Vercel + `curl -I` de headers + Manifest sin errores.
 - [ ] iPhone instalado: pantalla completa, sin red, ganancias offline.
+
+## MVP2 — Mejoras, sonido, animaciones e iconos propios (2026-11-01)
+**Alcance:** mejoras de compra única, sonido opcional, animaciones de feedback, iconos SVG propios (cero emojis), UX móvil primero con layout web. Logros, estadísticas y eventos temporales quedan como posible MVP3.
+
+**Mejoras**
+- 20 en `UPGRADES` (`src/data.ts`): 2 por negocio (×3) + 4 globales (×2). Solo se ofrecen las de negocios abiertos y las globales; la franja muestra las 3 más baratas.
+- Se reinician con la herencia. Guardado v2: `upgrades: string[]`, migración v1→v2 automática; ids desconocidos o duplicados invalidan el guardado.
+- Balance re-ajustado con mejoras en la simulación: costos ×10 sobre el borrador y `RECIPE_DIVISOR = 1e12`. Primer gerente 1.4 min, cadena ~30 min, herencia ~83 min, 15/20 mejoras compradas antes de heredar.
+
+**Sonido** (`src/audio.ts`)
+- Web Audio API con síntesis (osciladores + envolvente): sin archivos, sin red, CSP sin cambios.
+- Apagado por defecto. Preferencia por dispositivo en `antojitos.prefs` (no va en el guardado ni en el export).
+- El `AudioContext` solo se crea dentro de un gesto del usuario (requisito de iOS y Chrome). Los ciclos de gerentes no suenan.
+
+**Animaciones** (`src/fx.ts`)
+- Web Animations API, solo `transform`/`opacity`: moneda "+$" al vender, pulse al comprar, confeti al heredar.
+- Tope de 8 monedas simultáneas; los nodos se quitan al terminar. Con `prefers-reduced-motion` no se crea nada.
+
+**Iconos** (`src/assets/icons.svg` + `src/icons.ts`)
+- Sprite SVG propio con `<symbol>`, usado con `<use href>`. Vite lo emite como archivo con hash (nunca `data:`) y el SW lo precachea.
+- Colores de comida en hex fijo y contornos con `currentColor` (siguen el tema). Sin `style`, scripts ni referencias externas: `icons.test.ts` lo comprueba.
+
+**UX**
+- Móvil: selector ×1/×10/Máx y Herencia en barra inferior fija (zona del pulgar); mejoras en franja horizontal con scroll-snap.
+- Web (≥ 900 px): dos columnas, negocios a la izquierda y Doña Chelo + mejoras sticky a la derecha; hover solo con puntero fino.
+- Botones ≥ 44 px; deshabilitado también con borde punteado (no solo color).
+
+**Música de fondo** (`src/music.ts`)
+- Composición original: 8 compases en 3/4 con aire de son (I–IV–V en Do, 100 bpm, loop de ~14 s). Bajo, rasgueo con cuerdas escalonadas y melodía con vibrato leve, todo sintetizado.
+- Scheduler con lookahead (temporizador de 25 ms, notas agendadas 150 ms por delante con el reloj del audio), así no se corta aunque el hilo principal se trabe.
+- Controles separados "Música" y "Efectos de sonido" (`antojitos.prefs = { sound, music }`), ambos apagados por defecto. La música va en su propio bus, más bajo que los efectos, con fade.
+- Pestaña oculta → se suspende el `AudioContext` (sin sonido de fondo ni gasto de batería); al volver se reanuda.
+- El contexto solo se crea con una activación de usuario vigente (`navigator.userActivation`); se escucha `pointerdown`, `click`, `keydown` y `touchend`, así arranca también con teclado y en iOS.
+
+**Correcciones de la revisión independiente**
+- La migración v1→v2 reescala `lifetimeEarned` por 1e12/3e10: las recetas pendientes y la distancia a la siguiente quedan igual que en v1.
+- Bloqueo de 500 ms en las mejoras tras comprar: un doble toque compra una sola.
+- Tras comprar una mejora, el foco va al título "Mejoras" (o al `h1`): no se pierde ni cae sobre otra compra.
+- La detección de ventas manuales vive en `catchUp`, así hay moneda y sonido también al volver a la pestaña.
+- El rebote de confirmación de una mejora se aplica al ingreso de los negocios afectados.
+- En web, el panel lateral sticky tiene altura máxima con scroll propio: no lo tapan ni el header ni la barra inferior en pantallas bajas.
+
+**Estado MVP2**
+- [x] `npm run check`: 71 tests, tsc y eslint en verde.
+- [x] e2e en Chrome con la CSP real: 50/50.
+  - MVP1: 11/11.
+  - Actualización del SW: 9/9.
+  - MVP2: 15/15. Sprite, cero emojis, moneda, sonido, mejoras, reduced-motion, layout web y botones ≥ 44 px.
+  - Correcciones y música: 15/15. La música arranca con un gesto real, agenda notas, se suspende con la pestaña oculta y su preferencia persiste. Teclado desbloquea el audio. Doble toque compra una sola mejora. Foco correcto tras comprar. Sidebar dentro del viewport a 1366×620.
+- [ ] Lighthouse (lo corre el user).
+- [ ] Escucha de la música (gusto: lo valida el user).
