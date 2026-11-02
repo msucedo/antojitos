@@ -1,0 +1,36 @@
+import { VitePWA } from 'vite-plugin-pwa';
+import { defineConfig } from 'vitest/config';
+
+export default defineConfig({
+  plugins: [
+    VitePWA({
+      // src/main.ts registra el SW con `virtual:pwa-register`: sin script inline, compatible con la CSP.
+      registerType: 'prompt',
+      injectRegister: false,
+      includeAssets: ['favicon.svg', 'icons/apple-touch-icon.png'],
+      workbox: {
+        globPatterns: ['**/*.{js,css,html,svg,png,webmanifest}'],
+        cleanupOutdatedCaches: true,
+      },
+      manifest: {
+        name: 'Imperio de Antojitos',
+        short_name: 'Antojitos',
+        lang: 'es-MX',
+        display: 'standalone',
+        orientation: 'portrait',
+        theme_color: '#E4007C',
+        background_color: '#FFF6E5',
+        start_url: '/',
+        scope: '/',
+        icons: [
+          { src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+          { src: '/icons/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+          { src: '/icons/maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+        ],
+      },
+    }),
+  ],
+  test: {
+    environment: 'node',
+  },
+});

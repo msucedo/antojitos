@@ -1,0 +1,172 @@
+import { describe, expect, it } from 'vitest';
+import { BUSINESSES, OFFLINE_CAP_MS, RECIPE_DIVISOR } from './data';
+import {
+  applyOffline,
+  buy,
+  costOf,
+  getDef,
+  hireManager,
+  maxAffordable,
+  newState,
+  pendingRecipes,
+  prestige,
+  revenuePerCycle,
+  startCycle,
+  tick,
+  type State,
+} from './game';
+
+const elotes = getDef('elotes');
+const T0 = 1_700_000_000_000;
+
+function withMoney(money: number, s: State = newState(T0)): State {
+  return { ...s, money };
+}
+
+describe('costos', () => {
+  it('costo de una unidad es geométrico', () => {
+    expect(costOf(elotes, 0, 1)).toBeCloseTo(elotes.baseCost);
+    expect(costOf(elotes, 3, 1)).toBeCloseTo(elotes.baseCost * elotes.growth ** 3);
+  });
+
+  it('compra múltiple = suma de compras individuales', () => {
+    let sum = 0;
+    for (let i = 0; i < 10; i++) sum += costOf(elotes, 5 + i, 1);
+    expect(costOf(elotes, 5, 10)).toBeCloseTo(sum, 6);
+  });
+
+  it('maxAffordable es exacto en el borde', () => {
+    for (const def of BUSINESSES) {
+      for (const owned of [0, 1, 37, 150]) {
+        const exact = costOf(def, owned, 13);
+        expect(maxAffordable(def, owned, exact)).toBe(13);
+        expect(maxAffordable(def, owned, exact * 0.999999)).toBe(12);
+      }
+    }
+  });
+
+  it('maxAffordable con dinero inválido → 0', () => {
+    expect(maxAffordable(elotes, 0, 0)).toBe(0);
+    expect(maxAffordable(elotes, 0, NaN)).toBe(0);
+    expect(maxAffordable(elotes, 0, -5)).toBe(0);
+  });
+});
+
+describe('comprar', () => {
+  it('x1 descuenta y suma', () => {
+    const s = buy(withMoney(100), 'elotes', 1);
+    expect(s.businesses.elotes?.count).toBe(2);
+    expect(s.money).toBeCloseTo(100 - costOf(elotes, 1, 1));
+  });
+
+  it('sin dinero suficiente no cambia nada', () => {
+    const s0 = withMoney(1);
+    expect(buy(s0, 'elotes', 1)).toBe(s0);
+    expect(buy(s0, 'elotes', 10)).toBe(s0);
+  });
+
+  it('max nunca deja dinero negativo', () => {
+    const s = buy(withMoney(123_456), 'elotes', 'max');
+    expect(s.money).toBeGreaterThanOrEqual(0);
+    expect(s.money).toBeLessThan(costOf(elotes, s.businesses.elotes!.count, 1));
+  });
+});
+
+describe('ciclos', () => {
+  it('sin gerente: un ciclo por toque', () => {
+    let s = startCycle(newState(T0), 'elotes');
+    s = tick(s, elotes.cycleMs * 50);
+    expect(s.money).toBeCloseTo(elotes.baseRevenue);
+    expect(s.businesses.elotes?.running).toBe(false);
+  });
+
+  it('sin tocar no gana', () => {
+    expect(tick(newState(T0), 10_000).money).toBe(0);
+  });
+
+  it('con gerente: dt enorme en fórmula cerrada', () => {
+    let s = hireManager(withMoney(elotes.managerCost), 'elotes');
+    expect(s.businesses.elotes?.manager).toBe(true);
+    s = tick(s, elotes.cycleMs * 1e9 + 1);
+    expect(s.money).toBeCloseTo(elotes.baseRevenue * 1e9);
+    expect(s.businesses.elotes?.progressMs).toBeCloseTo(1);
+  });
+
+  it('dt inválido no rompe el estado', () => {
+    const s = newState(T0);
+    expect(tick(s, NaN)).toBe(s);
+    expect(tick(s, -1)).toBe(s);
+    expect(tick(s, Infinity)).toBe(s);
+  });
+
+  it('hitos duplican el ingreso', () => {
+    const s = newState(T0);
+    const at = (count: number) =>
+      revenuePerCycle({ ...s, businesses: { ...s.businesses, elotes: { ...s.businesses.elotes!, count } } }, 'elotes') /
+      count;
+    expect(at(24)).toBe(1);
+    expect(at(25)).toBe(2);
+    expect(at(50)).toBe(4);
+    expect(at(200)).toBe(16);
+  });
+});
+
+describe('offline', () => {
+  const managed = (): State => ({ ...hireManager(withMoney(elotes.managerCost), 'elotes'), lastSeen: T0 });
+
+  it('gana por el tiempo fuera', () => {
+    const { earned } = applyOffline(managed(), T0 + 60_000);
+    expect(earned).toBeCloseTo(60 * elotes.baseRevenue);
+  });
+
+  it('tope de 8 h', () => {
+    const { earned, elapsedMs } = applyOffline(managed(), T0 + OFFLINE_CAP_MS * 10);
+    expect(elapsedMs).toBe(OFFLINE_CAP_MS);
+    expect(earned).toBeCloseTo((OFFLINE_CAP_MS / elotes.cycleMs) * elotes.baseRevenue);
+  });
+
+  it('reloj atrasado → 0', () => {
+    const { earned, state } = applyOffline(managed(), T0 - 1_000_000);
+    expect(earned).toBe(0);
+    expect(state.lastSeen).toBe(T0 - 1_000_000);
+  });
+
+  it('sin gerente no gana offline', () => {
+    expect(applyOffline({ ...newState(T0) }, T0 + 3_600_000).earned).toBe(0);
+  });
+});
+
+describe('herencia', () => {
+  it('sin recetas pendientes no reinicia', () => {
+    const s = withMoney(1e6);
+    expect(prestige(s, T0)).toBe(s);
+  });
+
+  it('reinicia y conserva recetas y ganancia total', () => {
+    const earned = RECIPE_DIVISOR * 4;
+    const s = { ...withMoney(earned), lifetimeEarned: earned, runEarned: earned };
+    expect(pendingRecipes(s)).toBe(2);
+    const p = prestige(s, T0 + 1);
+    expect(p.recipes).toBe(2);
+    expect(p.money).toBe(0);
+    expect(p.lifetimeEarned).toBe(earned);
+    expect(p.businesses.elotes?.count).toBe(1);
+    expect(pendingRecipes(p)).toBe(0);
+  });
+
+  it('recetas suben el ingreso 2% cada una', () => {
+    const s = { ...newState(T0), recipes: 10 };
+    expect(revenuePerCycle(s, 'elotes')).toBeCloseTo(1.2);
+  });
+});
+
+describe('desborde', () => {
+  it('ganancias enormes se topan en MAX_VALUE y el estado sigue serializable', () => {
+    let s = hireManager(withMoney(elotes.managerCost), 'elotes');
+    s = { ...s, lifetimeEarned: 1.797e308, recipes: 5e306 };
+    s = tick(s, 1_000);
+    expect(Number.isFinite(s.lifetimeEarned)).toBe(true);
+    expect(Number.isFinite(s.money)).toBe(true);
+    expect(JSON.stringify(s)).not.toContain('null');
+  });
+});

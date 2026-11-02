@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <defs><clipPath id="cob"><ellipse cx="50" cy="43" rx="13" ry="27"/></clipPath></defs>
+  <rect width="100" height="100" rx="22" fill="#E4007C"/>
+  <circle cx="50" cy="50" r="40" fill="#FFF6E5"/>
+  <ellipse cx="50" cy="43" rx="13" ry="27" fill="#F4C430"/>
+  <path clip-path="url(#cob)" d="M0 16.00H100M0 21.20H100M0 26.40H100M0 31.60H100M0 36.80H100M0 42.00H100M0 47.20H100M0 52.40H100M0 57.60H100M0 62.80H100M0 68.00H100M31.80 0V100M37.00 0V100M42.20 0V100M47.40 0V100M52.60 0V100M57.80 0V100M63.00 0V100M68.20 0V100M73.40 0V100M78.60 0V100M83.80 0V100M89.00 0V100M94.20 0V100M99.40 0V100" stroke="#FFF6E5" stroke-width="1.6"/>
+  <ellipse cx="40.5" cy="61.5" rx="7.5" ry="21.5" transform="rotate(-24 40.5 61.5)" fill="#3A7D44"/>
+  <ellipse cx="59.5" cy="61.5" rx="7.5" ry="21.5" transform="rotate(24 59.5 61.5)" fill="#3A7D44"/>
+</svg>

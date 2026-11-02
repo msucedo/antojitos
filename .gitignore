@@ -1,0 +1,25 @@
+# Dependencias
+node_modules/
+
+# Build
+dist/
+dev-dist/
+*.tsbuildinfo
+
+# Logs
+*.log
+npm-debug.log*
+
+# Entorno / secretos
+.env
+.env.*
+!.env.example
+
+# Vercel
+.vercel/
+
+# Editor / SO
+.DS_Store
+.vscode/*
+!.vscode/extensions.json
+.idea/
