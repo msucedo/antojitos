@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="es-MX">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Hoja de contacto del sprite</title>
+    <!-- Herramienta de desarrollo: solo la sirve `vite` (npm run dev). No entra en el build. -->
+    <link rel="stylesheet" href="/src/style.css" />
+    <style>
+      body {
+        display: block;
+        padding: 16px;
+        background-image: none;
+      }
+      h1 {
+        font-size: 18px;
+        margin: 0 0 12px;
+      }
+      .sheet {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+        gap: 12px;
+      }
+      .cell {
+        display: grid;
+        grid-template-columns: 160px 1fr;
+        gap: 12px;
+        align-items: center;
+        padding: 12px;
+        background: var(--card);
+        border: 2px solid var(--ink);
+        border-radius: 12px;
+      }
+      .cell .big {
+        width: 160px;
+        height: 160px;
+      }
+      .cell .small {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        flex-wrap: wrap;
+      }
+      .cell .i30 {
+        width: 30px;
+        height: 30px;
+      }
+      .cell .i20 {
+        width: 20px;
+        height: 20px;
+      }
+      .cell .name {
+        font-weight: 700;
+        margin: 0 0 8px;
+      }
+      /* Plato tal cual en el juego: sello detrás, icono de 52 con estampa encima. */
+      .sell {
+        --aro: var(--primary);
+      }
+      .refs {
+        margin-top: 24px;
+        display: flex;
+        gap: 12px;
+        overflow-x: auto;
+      }
+      .refs img {
+        height: 220px;
+        border-radius: 8px;
+        border: 2px solid var(--ink);
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Sprite: <span id="count"></span> símbolos</h1>
+    <ul class="sheet" id="sheet"></ul>
+    <h1>Referencias (docs/refs)</h1>
+    <div class="refs" id="refs"></div>
+    <script type="module">
+      const SPRITE = '/src/assets/icons.svg';
+      const svg = (id, cls) =>
+        `<svg class="${cls}" viewBox="0 0 48 48" aria-hidden="true"><use href="${SPRITE}#${id}"></use></svg>`;
+      const text = await (await fetch(SPRITE)).text();
+      const ids = [...text.matchAll(/<symbol id="([^"]+)"/g)].map((m) => m[1]);
+      document.getElementById('count').textContent = ids.length;
+      document.getElementById('sheet').innerHTML = ids
+        .map(
+          (id) => `<li class="cell">
+            ${svg(id, 'icon big')}
+            <div>
+              <p class="name">${id}</p>
+              <div class="small">
+                <span class="sell">${svg('sello', 'icon sello sticker')}${svg(id, 'icon sell-icon sticker')}</span>
+                ${svg(id, 'icon i30')}
+                ${svg(id, 'icon i20')}
+              </div>
+            </div>
+          </li>`,
+        )
+        .join('');
+      const refs = ['estampas1', 'estampas2', 'estampas3', 'estampas4', 'letra'];
+      document.getElementById('refs').innerHTML = refs
+        .map((r) => `<img src="/docs/refs/${r}.png" alt="${r}" />`)
+        .join('');
+    </script>
+  </body>
+</html>

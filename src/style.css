@@ -552,24 +552,6 @@ p {
   cursor: default;
 }
 
-/* Con gerente: su avatar asoma en la esquina del plato. */
-.badge {
-  display: none;
-  position: absolute;
-  right: -6px;
-  bottom: -6px;
-  width: 30px;
-  height: 30px;
-  z-index: 2;
-  border-radius: 50%;
-  background: var(--card);
-  border: 2px solid var(--border);
-}
-
-.card.managed .badge {
-  display: block;
-}
-
 .manager {
   min-height: 44px;
   display: inline-flex;

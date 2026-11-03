@@ -250,11 +250,7 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
     const sell = h(
       'button',
       { class: 'sell', type: 'button', label: `Vender: ${def.name}`, onclick: () => handlers.onStart(def.id) },
-      [
-        icon('sello', 'icon sello sticker'),
-        icon(def.icon, 'icon sell-icon sticker'),
-        icon(def.manager.icon, 'icon badge'),
-      ],
+      [icon('sello', 'icon sello sticker'), icon(def.icon, 'icon sell-icon sticker')],
     );
     const count = h('span', { class: 'count' });
     const fill = h('div', { class: 'fill' });
