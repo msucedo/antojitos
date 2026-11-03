@@ -70,6 +70,21 @@ function setHidden(el: HTMLElement, hidden: boolean): void {
   if (el.hidden !== hidden) el.hidden = hidden;
 }
 
+function setPressed(el: Element, on: boolean): void {
+  const v = String(on);
+  if (el.getAttribute('aria-pressed') !== v) el.setAttribute('aria-pressed', v);
+}
+
+/** Botón del menú lateral (solo visible en web): disco matasellos con icono y etiqueta debajo. */
+function latBtn(label: string, name: IconName, onclick: () => void): { btn: HTMLButtonElement; ic: SVGSVGElement } {
+  const ic = icon(name);
+  const btn = h('button', { class: 'lat-btn', type: 'button', onclick }, [
+    h('span', { class: 'lat-disc' }, [ic]),
+    h('span', { class: 'lat-label', text: label }),
+  ]);
+  return { btn, ic };
+}
+
 interface Card {
   def: BusinessDef;
   root: HTMLElement;
@@ -220,7 +235,33 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
     { class: 'icon-btn', type: 'button', label: 'Música', onclick: () => handlers.onToggleMusic() },
     [musicIcon],
   );
-  const menu = h('button', { class: 'icon-btn', type: 'button', label: 'Menú', onclick: openMenu }, [icon('menu')]);
+  const menu = h('button', { class: 'icon-btn', type: 'button', label: 'Respaldo', onclick: openMenu }, [icon('menu')]);
+
+  // Menú lateral (web): copias de los controles del header y la barra; render() las sincroniza.
+  const mq = window.matchMedia('(min-width: 900px)');
+  const latUp = latBtn('Mejoras', 'upgrade', () => (panelOpen ? closePanel(true) : openPanel()));
+  latUp.btn.setAttribute('aria-expanded', 'false');
+  latUp.btn.setAttribute('aria-controls', 'upgrades');
+  const latHeir = latBtn('Herencia', 'recipe', confirmPrestige);
+  const latHeirBadge = h('span', { class: 'lat-badge', hidden: true });
+  latHeir.btn.firstElementChild?.append(latHeirBadge);
+  const latMenu = latBtn('Respaldo', 'menu', openMenu);
+  const latSound = latBtn('Sonido', 'sound-off', () => handlers.onToggleSound());
+  const latMusic = latBtn('Música', 'music-off', () => handlers.onToggleMusic());
+  /** [botón, icono, canal, icono encendido, icono apagado]: header y lateral, sincronizados en render(). */
+  const audioBtns: [Element, SVGSVGElement, 'sound' | 'music', IconName, IconName][] = [
+    [sound, soundIcon, 'sound', 'sound-on', 'sound-off'],
+    [latSound.btn, latSound.ic, 'sound', 'sound-on', 'sound-off'],
+    [musicBtn, musicIcon, 'music', 'music-on', 'music-off'],
+    [latMusic.btn, latMusic.ic, 'music', 'music-on', 'music-off'],
+  ];
+  const lateral = h('nav', { class: 'lateral', label: 'Menú' }, [
+    latUp.btn,
+    latHeir.btn,
+    latMenu.btn,
+    latSound.btn,
+    latMusic.btn,
+  ]);
 
   const modeButtons = MODES.map((m) => {
     const b = h('button', { class: 'seg', type: 'button', text: modeLabel(m), onclick: () => handlers.onMode(m) });
@@ -265,10 +306,12 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
     const hire = h('button', { class: 'btn hire', type: 'button', onclick: () => handlers.onHire(def.id) }, [
       icon(def.manager.icon, 'icon avatar-sm'),
       h('span', { class: 'stack' }, [
-        h('span', { text: `Contratar a ${def.manager.name}` }),
+        h('span', {}, [h('span', { class: 'hire-pre', text: 'Contratar a ' }), h('span', { text: def.manager.name })]),
         h('span', { class: 'price', text: formatMoney(def.manager.cost) }),
       ]),
     ]);
+    // En web se oculta el prefijo: el nombre accesible no cambia.
+    hire.setAttribute('aria-label', `Contratar a ${def.manager.name} por ${formatMoney(def.manager.cost)}`);
     const manager = h('div', { class: 'manager sticker', hidden: true }, [
       h('span', { class: 'estampa estampa-avatar' }, [
         icon('sello', 'icon sello'),
@@ -334,20 +377,25 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
     ),
   ]);
   upgrades.setAttribute('aria-labelledby', 'upgrades-title');
+  upgrades.id = 'upgrades';
 
   const prestigeBtn = h('button', { class: 'btn heir', type: 'button', onclick: confirmPrestige });
   const picado = papelPicado();
   picado.addEventListener('animationend', () => picado.classList.remove('shake'));
 
+  // Orden: lateral (web), header, tip (en web ocupa la esquina derecha del header), mejoras
+  // (en web, panel deslizante), tarjetas, barra.
   root.replaceChildren(
+    lateral,
     h('header', { class: 'top' }, [
       h('div', { class: 'title-row' }, [appTitle, h('div', {}, [musicBtn, sound, menu])]),
       money,
       h('div', { class: 'sub-row' }, [rate, recipes]),
       picado,
     ]),
+    tipBox,
     h('div', { class: 'layout' }, [
-      h('div', { class: 'col-side' }, [tipBox, upgrades]),
+      upgrades,
       h('div', { class: 'col-main' }, [
         h(
           'ul',
@@ -362,6 +410,44 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
   );
 
   let last: State | null = null;
+
+  // Panel de mejoras (web): no modal, las tarjetas siguen vivas detrás. En móvil la sección está
+  // en línea y .open no tiene reglas: estas funciones solo tocan el booleano.
+  let panelOpen = false;
+  let focusFrame = 0;
+  /** Foco a Mejoras; si está deshabilitado (ya no hay mejoras) o en móvil, al título de la app. */
+  function focusLateral(): void {
+    (mq.matches && !latUp.btn.disabled ? latUp.btn : appTitle).focus({ preventScroll: true });
+  }
+  function openPanel(): void {
+    if (upgrades.hidden) return;
+    panelOpen = true;
+    upgrades.classList.add('open');
+    latUp.btn.setAttribute('aria-expanded', 'true');
+    // Ya es visible (sin retardo al abrir); el frame deja que el navegador lo pinte antes de enfocar.
+    focusFrame = requestAnimationFrame(() => upgradesTitle.focus({ preventScroll: true }));
+  }
+  function closePanel(restore: boolean): void {
+    if (!panelOpen) return;
+    panelOpen = false;
+    cancelAnimationFrame(focusFrame);
+    upgrades.classList.remove('open');
+    latUp.btn.setAttribute('aria-expanded', 'false');
+    // Si el foco seguía dentro del panel (teclado, o Safari que no enfoca al hacer clic), no se pierde.
+    if (restore || upgrades.contains(document.activeElement)) focusLateral();
+  }
+  // Al cruzar los 900 px el panel vuelve al estado en línea / cerrado: nada queda a medias.
+  mq.addEventListener('change', () => closePanel(false));
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape' || !panelOpen || document.querySelector('dialog[open]')) return;
+    closePanel(true);
+  });
+  document.addEventListener('click', (e) => {
+    if (!panelOpen) return;
+    const t = e.target;
+    if (!(t instanceof Element) || upgrades.contains(t) || lateral.contains(t) || t.closest('dialog')) return;
+    closePanel(false); // el clic sigue llegando a su destino
+  });
 
   function confirmPrestige(): void {
     if (!last) return;
@@ -436,7 +522,10 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
   function renderUpgrades(s: State): void {
     const next = nextUpgrades(s, UPGRADE_SLOTS);
     // Solo se muestran cuando ya hay algo ganado: al inicio no distraen del primer toque.
-    setHidden(upgrades, next.length === 0 || s.lifetimeEarned === 0);
+    const off = next.length === 0 || s.lifetimeEarned === 0;
+    setHidden(upgrades, off);
+    setDisabled(latUp.btn, off);
+    if (off) closePanel(false);
     slots.forEach((slot, i) => {
       const u = next[i];
       setHidden(slot.root, !u);
@@ -464,20 +553,13 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
       setHidden(recipes, s.recipes === 0);
       setText(recipesText, `${formatNumber(s.recipes)} recetas (+${formatNumber(s.recipes * 2)}%)`);
 
-      for (const [btn, on] of [
-        [sound, audio.sound],
-        [musicBtn, audio.music],
-      ] as const) {
-        const pressed = String(on);
-        if (btn.getAttribute('aria-pressed') !== pressed) btn.setAttribute('aria-pressed', pressed);
+      for (const [btn, ic, canal, onName, offName] of audioBtns) {
+        const on = audio[canal];
+        setPressed(btn, on);
+        setIcon(ic, on ? onName : offName);
       }
-      setIcon(soundIcon, audio.sound ? 'sound-on' : 'sound-off');
-      setIcon(musicIcon, audio.music ? 'music-on' : 'music-off');
 
-      for (const { m, b } of modeButtons) {
-        const on = String(m === mode);
-        if (b.getAttribute('aria-pressed') !== on) b.setAttribute('aria-pressed', on);
-      }
+      for (const { m, b } of modeButtons) setPressed(b, m === mode);
       const now = performance.now();
       const t = bubbleVisible(now, cheloUntil) ? cheloText : tipFor(s);
       setHidden(tipBox, t === null);
@@ -488,7 +570,8 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
         // El botón comprado ahora muestra otra mejora (o desapareció): el foco va a un
         // lugar estable en vez de perderse o caer sobre una compra que no se pidió.
         refocusAfterUpgrade = false;
-        (upgrades.hidden ? appTitle : upgradesTitle).focus({ preventScroll: true });
+        if (upgrades.hidden) focusLateral();
+        else upgradesTitle.focus({ preventScroll: true });
       }
 
       let lockedShown = false;
@@ -529,9 +612,15 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
       }
 
       const n = pendingRecipes(s);
-      setHidden(prestigeBtn, n === 0 && s.recipes === 0);
-      setText(prestigeBtn, n > 0 ? `Heredar · +${formatNumber(n)} recetas` : 'Herencia: sigue vendiendo');
-      setDisabled(prestigeBtn, n === 0);
+      const heirLabel = n > 0 ? `Heredar · +${formatNumber(n)} recetas` : 'Herencia: sigue vendiendo';
+      for (const b of [prestigeBtn, latHeir.btn]) {
+        setHidden(b, n === 0 && s.recipes === 0);
+        setDisabled(b, n === 0);
+      }
+      setText(prestigeBtn, heirLabel);
+      if (latHeir.btn.getAttribute('aria-label') !== heirLabel) latHeir.btn.setAttribute('aria-label', heirLabel);
+      setHidden(latHeirBadge, n === 0);
+      setText(latHeirBadge, `+${formatNumber(n)}`);
     },
 
     renderBars(s) {

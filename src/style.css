@@ -353,7 +353,6 @@ p {
   margin-top: 12px;
 }
 
-.col-side,
 .col-main {
   display: grid;
   gap: 12px;
@@ -361,11 +360,84 @@ p {
   min-width: 0;
 }
 
+/* ---------- Menú lateral (solo web; ver bloque de 900 px) ---------- */
+.lateral {
+  display: none;
+}
+
+.lat-btn {
+  display: grid;
+  justify-items: center;
+  gap: 3px;
+  width: 64px;
+  padding: 4px 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
+/* Disco matasellos: misma pastilla que los botones, con el icono dentro. */
+.lat-disc {
+  position: relative;
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  border: 2px solid var(--border);
+  background: var(--card);
+  box-shadow: var(--sombra-btn);
+}
+
+.lat-disc .icon {
+  width: 24px;
+  height: 24px;
+}
+
+.lat-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.lat-btn[aria-pressed='true'] .lat-disc,
+.lat-btn[aria-expanded='true'] .lat-disc {
+  background: var(--primary);
+  color: var(--on-primary);
+}
+
+.lat-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.lat-btn:disabled .lat-disc {
+  border-style: dashed;
+  box-shadow: none;
+}
+
+/* "+N recetas" sobre el disco de Herencia. */
+.lat-badge {
+  position: absolute;
+  top: -6px;
+  right: -10px;
+  padding: 0 5px;
+  border-radius: 999px;
+  border: 2px solid var(--ink);
+  background: var(--corn);
+  color: var(--on-corn);
+  font-size: 0.65rem;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
 /* ---------- Bocadillos: Doña Chelo y gerentes ---------- */
 .tip {
   display: flex;
   gap: 10px;
   align-items: center;
+  margin-top: 12px; /* hijo de #app: mismo aire que .layout */
   padding: 10px 12px;
   border-radius: 14px;
   background: var(--corn);
@@ -416,7 +488,7 @@ p {
 .bubble {
   position: absolute;
   top: 10px;
-  left: 98px;
+  left: var(--bubble-x, 98px); /* 2 de borde + 16 de padding + 76 de plato + 4 */
   right: 12px;
   z-index: 1;
   padding: 6px 10px;
@@ -564,18 +636,21 @@ p {
 
 /* Estampilla: la máscara va en .paper, nunca en el li, para que el bocadillo no se recorte. */
 .paper {
+  --plato: 76px; /* tamaño del plato (.sell); --plato-r es el radio de su papel interior */
+  --plato-r: 25px;
   display: flex;
   gap: 12px;
   padding: 16px;
   border-radius: 4px;
   /* Cuatro puntos de esquina como capas del fondo: ni pseudo-elemento ni filter. */
   --punto: radial-gradient(circle 2.2px, var(--marco) 97%, transparent 100%);
+  --esq: 15px; /* distancia del centro de cada punto a la esquina */
   background:
     var(--grano),
-    var(--punto) 15px 15px / 6px 6px no-repeat,
-    var(--punto) calc(100% - 15px) 15px / 6px 6px no-repeat,
-    var(--punto) 15px calc(100% - 15px) / 6px 6px no-repeat,
-    var(--punto) calc(100% - 15px) calc(100% - 15px) / 6px 6px no-repeat,
+    var(--punto) var(--esq) var(--esq) / 6px 6px no-repeat,
+    var(--punto) calc(100% - var(--esq)) var(--esq) / 6px 6px no-repeat,
+    var(--punto) var(--esq) calc(100% - var(--esq)) / 6px 6px no-repeat,
+    var(--punto) calc(100% - var(--esq)) calc(100% - var(--esq)) / 6px 6px no-repeat,
     var(--papel);
   border: 2px solid var(--border);
   /* Línea fina interior, a 10 px del borde: la máscara la recorta y sigue el radio. */
@@ -602,8 +677,8 @@ p {
 .sell {
   position: relative;
   flex: none;
-  width: 76px;
-  height: 76px;
+  width: var(--plato);
+  height: var(--plato);
   display: grid;
   place-items: center;
   padding: 0;
@@ -613,10 +688,10 @@ p {
   /* Papel liso con una línea fina interior, como el marco de una estampilla. */
   background: radial-gradient(
     circle,
-    var(--papel) 0 25px,
-    var(--aro) 25.5px 26.5px,
-    var(--papel) 27px 29px,
-    transparent 29.5px
+    var(--papel) 0 var(--plato-r),
+    var(--aro) calc(var(--plato-r) + 0.5px) calc(var(--plato-r) + 1.5px),
+    var(--papel) calc(var(--plato-r) + 2px) calc(var(--plato-r) + 4px),
+    transparent calc(var(--plato-r) + 4.5px)
   );
   color: var(--text);
   cursor: pointer;
@@ -1016,13 +1091,17 @@ p {
     background: var(--track);
   }
 
+  .lat-btn:not(:disabled):hover .lat-disc {
+    background: var(--track);
+  }
+
   .card.owned .sell:not(:disabled):hover {
     background: radial-gradient(
       circle,
-      var(--track) 0 25px,
-      var(--aro) 25.5px 26.5px,
-      var(--track) 27px 29px,
-      transparent 29.5px
+      var(--track) 0 var(--plato-r),
+      var(--aro) calc(var(--plato-r) + 0.5px) calc(var(--plato-r) + 1.5px),
+      var(--track) calc(var(--plato-r) + 2px) calc(var(--plato-r) + 4px),
+      transparent calc(var(--plato-r) + 4.5px)
     );
   }
 }
@@ -1030,37 +1109,218 @@ p {
 @media (min-width: 900px) {
   :root {
     --picado-h: 28px;
-    --side-top: 168px; /* alto del header sticky con papel picado (165 px) más margen */
-    --bar-desktop-h: 76px; /* barra inferior en una sola fila */
-    --side-gap: 16px;
+    --side-top: 145px; /* header sticky sin icon-btn (129 px) más padding de #app y margen */
+    --bar-h: 76px; /* barra inferior en una sola fila */
+    --side-gap: 8px; /* aire entre la última fila de tarjetas y la barra */
+    --lateral-w: 72px;
+    --panel-w: 360px;
+  }
+
+  /* Menú lateral fijo a la izquierda; #app se centra en el ancho restante. */
+  body {
+    padding-left: var(--lateral-w);
+  }
+
+  .lateral {
+    position: fixed;
+    inset: 0 auto 0 0;
+    width: var(--lateral-w);
+    z-index: 3;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: calc(env(safe-area-inset-top) + 12px) 0 12px;
+    background: var(--grano), var(--card);
+    border-right: 2px solid var(--border);
   }
 
   #app {
     max-width: 1040px;
-    padding-bottom: calc(env(safe-area-inset-bottom) + var(--bar-desktop-h) + var(--side-gap));
+    padding-bottom: calc(env(safe-area-inset-bottom) + var(--bar-h) + var(--side-gap));
   }
 
-  .layout {
-    grid-template-columns: 1fr 340px;
+  /*
+   * Tip de Chelo fijo en la esquina derecha del header (#app no es grid: un hijo sticky de un
+   * grid queda atrapado en su celda y el header dejaría de pegarse). El borde derecho coincide
+   * con el de #app: lateral + lo que sobra a cada lado + padding de 16.
+   */
+  /* Hueco para el tip: el dinero y "N recetas" no quedan debajo. */
+  .title-row,
+  .money,
+  .sub-row {
+    margin-right: 356px;
+  }
+
+  .tip {
+    position: fixed;
+    top: calc(env(safe-area-inset-top) + 12px);
+    right: calc((100vw - var(--lateral-w) - min(1040px, 100vw - var(--lateral-w))) / 2 + 16px);
+    width: 340px;
+    margin: 0;
+    z-index: 3;
+  }
+
+  /* El diálogo se centra en el área de contenido, no en la ventana entera. */
+  .modal {
+    transform: translateX(calc(var(--lateral-w) / 2));
+  }
+
+  .list {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); /* iguales aunque un botón sea largo */
+    gap: 6px;
+    align-items: start; /* el li no se estira: su sombra ::before mide lo que el papel */
+  }
+
+  /*
+   * Tarjeta compacta (~130 px, cuatro filas caben en 800 px de alto): plato a la izquierda con
+   * título, barra e info al lado, y la fila de botones debajo a todo el ancho (así caben
+   * "Comprar" y "Contratar" con precios largos sin saltar de línea). .body se disuelve en el
+   * grid del papel con display: contents.
+   */
+  .paper {
+    --plato: 60px;
+    --plato-r: 20px;
+    display: grid;
+    grid-template-columns: var(--plato) minmax(0, 1fr);
+    column-gap: 12px;
+    row-gap: 4px;
     align-items: start;
+    padding: 11px;
+    outline-offset: -8px;
+    --esq: 11px;
   }
 
-  .col-main {
-    grid-row: 1;
+  .body {
+    display: contents;
+  }
+
+  .row {
+    grid-column: 1 / -1;
+  }
+
+  .sell {
+    grid-row: 1 / 4;
     grid-column: 1;
   }
 
-  .col-side {
-    grid-row: 1;
-    grid-column: 2;
-    position: sticky;
+  .avatar-sm {
+    width: 24px;
+    height: 24px;
+  }
+
+  .sell-icon {
+    width: 42px;
+    height: 42px;
+  }
+
+  .body h2 {
+    line-height: 1.2;
+  }
+
+  .bar {
+    height: 12px;
+    border-radius: 6px;
+  }
+
+  /* Contratar en una línea: "Lupita · $7,500"; el prefijo queda en el aria-label. */
+  .hire-pre {
+    display: none;
+  }
+
+  .hire .stack {
+    display: flex;
+    gap: 4px;
+    align-items: baseline;
+    min-width: 0;
+  }
+
+  .hire .stack > span {
+    white-space: nowrap;
+  }
+
+  /* Si no cabe, se recorta el nombre; el precio nunca. */
+  .hire .stack > span:first-child {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .hire .price {
+    flex: none;
+  }
+
+  .hire .price::before {
+    content: '· ';
+  }
+
+  .row .btn.primary {
+    flex: none;
+    white-space: nowrap;
+  }
+
+  .estampa-avatar {
+    width: 32px;
+    height: 32px;
+    --papel-r: 12px;
+  }
+
+  /* El chip no crece: nombre en una línea con elipsis. */
+  .manager,
+  .manager div {
+    min-width: 0;
+  }
+
+  .manager strong,
+  .manager div > span {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .avatar {
+    width: 24px;
+    height: 24px;
+  }
+
+  .bubble {
+    --bubble-x: 78px; /* 2 + 11 + 60 + 5 */
+    top: 8px;
+  }
+
+  /* Los controles del header y el botón de heredar viven en el lateral. */
+  .title-row > div,
+  .bottom .heir {
+    display: none;
+  }
+
+  /*
+   * Panel de mejoras: fuera de pantalla bajo el lateral; .open lo desliza sobre las tarjetas.
+   * visibility con retardo: cerrado no recibe foco ni lectura, sin inert ni temporizadores.
+   */
+  .upgrades {
+    position: fixed;
     top: var(--side-top);
-    /* Siempre cabe entre el header sticky y la barra inferior; si no, scroll propio. */
-    max-height: calc(100dvh - var(--side-top) - var(--bar-desktop-h) - var(--side-gap));
+    bottom: var(--bar-h);
+    left: var(--lateral-w);
+    width: var(--panel-w);
+    z-index: 2;
     overflow-y: auto;
     overscroll-behavior: contain;
-    padding: 4px; /* que el anillo de foco no se recorte */
-    margin: -4px;
+    padding: 12px 16px;
+    background: var(--grano), var(--card);
+    border-right: 2px solid var(--border);
+    transform: translateX(-100%);
+    visibility: hidden;
+    transition:
+      transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1),
+      visibility 0s linear 0.25s;
+  }
+
+  .upgrades.open {
+    transform: none;
+    visibility: visible;
+    transition-delay: 0s;
   }
 
   .up-list {
@@ -1075,15 +1335,34 @@ p {
     flex: none;
   }
 
+  /*
+   * Contratar se queda en la fila si le quedan al menos 200 px (recorta el nombre, nunca el
+   * precio); si no, baja de línea y la tarjeta crece: nunca se recorta contenido.
+   */
   .row .btn:not(.primary) {
-    flex: none;
+    flex: 1 1 200px;
+    min-width: 0;
+    max-width: max-content;
   }
 
-  .bottom-inner {
-    max-width: 1008px;
-    /* Mismas columnas y gap que .layout: la barra se alinea con las tarjetas. */
-    grid-template-columns: 1fr 340px;
-    column-gap: 12px;
+  .bottom {
+    left: var(--lateral-w);
+  }
+
+  .toast {
+    left: calc(50% + var(--lateral-w) / 2);
+  }
+}
+
+/* Con puntero fino los objetivos bajan a 40 px (excepción documentada en DESIGN.md). */
+@media (min-width: 900px) and (pointer: fine) {
+  .btn {
+    min-height: 40px;
+    padding: 6px 12px;
+  }
+
+  .manager {
+    min-height: 40px;
   }
 }
 
