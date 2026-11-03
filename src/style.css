@@ -653,11 +653,25 @@ p {
     var(--punto) calc(100% - var(--esq)) calc(100% - var(--esq)) / 6px 6px no-repeat,
     var(--papel);
   border: 2px solid var(--border);
-  /* Línea fina interior, a 10 px del borde: la máscara la recorta y sigue el radio. */
-  outline: 1.5px solid var(--marco);
-  outline-offset: -10px;
+  position: relative; /* ancla de la línea interior ::after */
   -webkit-mask: var(--mascara-estampa);
   mask: var(--mascara-estampa);
+}
+
+/*
+ * Línea fina interior de la estampilla, en un pseudo-elemento con borde. Nunca con outline y
+ * offset negativo: sobre un elemento enmascarado obliga a repintar toda la estampilla en cada
+ * frame de las barras (GPU de 10 % a 26 %, medido en Chromium).
+ */
+.paper::after,
+.modal-paper::after {
+  content: '';
+  position: absolute;
+  inset: var(--marco-inset, 10px);
+  border: 1.5px solid var(--marco);
+  border-radius: 2px;
+  pointer-events: none;
+  z-index: -1; /* la máscara crea el contexto de apilamiento: queda sobre el papel y bajo el contenido */
 }
 
 /* Sin abrir: se atenúa el contenido, no la tarjeta (así el fondo no se transparenta). */
@@ -937,8 +951,7 @@ p {
   border-radius: 4px;
   background: var(--grano), var(--card);
   border: 2px solid var(--border);
-  outline: 1.5px solid var(--marco);
-  outline-offset: -10px;
+  position: relative;
   -webkit-mask: var(--mascara-estampa);
   mask: var(--mascara-estampa);
 }
@@ -1188,7 +1201,7 @@ p {
     row-gap: 4px;
     align-items: start;
     padding: 11px;
-    outline-offset: -8px;
+    --marco-inset: 8px;
     --esq: 11px;
   }
 
