@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="160" height="160">
+  <!--
+    Grano de imprenta: azulejo de ruido en tinta (#1B2A3A) con alfa 0.35·ruido − 0.1, así la mayor
+    parte queda transparente y ninguna mota pasa de 0.25. Se usa solo como background-image
+    (se rasteriza una vez y se repite), nunca como filter CSS. Mismas reglas CSP que el sprite:
+    el único url() es la referencia interna al filtro.
+  -->
+  <filter id="g" x="0" y="0" width="100%" height="100%" color-interpolation-filters="sRGB">
+    <feTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="2" seed="3" stitchTiles="stitch"/>
+    <feColorMatrix values="0 0 0 0 0.106  0 0 0 0 0.165  0 0 0 0 0.227  0 0 0 0.35 -0.1"/>
+  </filter>
+  <rect width="160" height="160" filter="url(#g)"/>
+</svg>

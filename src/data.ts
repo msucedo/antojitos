@@ -15,10 +15,16 @@ export interface ManagerDef {
   readonly says: Readonly<Record<ManagerEvent, string>>;
 }
 
+/** Papel de la estampilla de un negocio (tokens --papel-* en style.css). */
+export const PAPELES = ['crema', 'rosa', 'mostaza', 'verde'] as const;
+export type Papel = (typeof PAPELES)[number];
+
 export interface BusinessDef {
   readonly id: string;
   readonly name: string;
   readonly icon: IconName;
+  /** Nunca del mismo matiz que el icono; cada papel dos veces, vecinos distintos (papel.test.ts). */
+  readonly papel: Papel;
   readonly baseCost: number;
   readonly growth: number;
   readonly baseRevenue: number;
@@ -32,6 +38,7 @@ export const BUSINESSES: readonly BusinessDef[] = [
     id: 'elotes',
     name: 'Carrito de elotes',
     icon: 'elote',
+    papel: 'rosa',
     baseCost: 4,
     growth: 1.07,
     baseRevenue: 1,
@@ -51,6 +58,7 @@ export const BUSINESSES: readonly BusinessDef[] = [
     id: 'aguas',
     name: 'Aguas frescas',
     icon: 'agua',
+    papel: 'crema',
     baseCost: 60,
     growth: 1.15,
     baseRevenue: 60,
@@ -70,6 +78,7 @@ export const BUSINESSES: readonly BusinessDef[] = [
     id: 'tacos',
     name: 'Taquería',
     icon: 'taco',
+    papel: 'verde',
     baseCost: 720,
     growth: 1.14,
     baseRevenue: 540,
@@ -89,6 +98,7 @@ export const BUSINESSES: readonly BusinessDef[] = [
     id: 'tortas',
     name: 'Tortería',
     icon: 'torta',
+    papel: 'rosa',
     baseCost: 8_640,
     growth: 1.13,
     baseRevenue: 4_320,
@@ -108,6 +118,7 @@ export const BUSINESSES: readonly BusinessDef[] = [
     id: 'fonda',
     name: 'Fonda',
     icon: 'olla',
+    papel: 'crema',
     baseCost: 103_680,
     growth: 1.12,
     baseRevenue: 51_840,
@@ -127,6 +138,7 @@ export const BUSINESSES: readonly BusinessDef[] = [
     id: 'panaderia',
     name: 'Panadería',
     icon: 'concha',
+    papel: 'mostaza',
     baseCost: 1_244_160,
     growth: 1.11,
     baseRevenue: 622_080,
@@ -146,6 +158,7 @@ export const BUSINESSES: readonly BusinessDef[] = [
     id: 'franquicia',
     name: 'Franquicia',
     icon: 'tienda',
+    papel: 'verde',
     baseCost: 14_929_920,
     growth: 1.1,
     baseRevenue: 7_464_960,
@@ -165,6 +178,7 @@ export const BUSINESSES: readonly BusinessDef[] = [
     id: 'cadena',
     name: 'Cadena nacional',
     icon: 'camion',
+    papel: 'mostaza',
     baseCost: 179_159_040,
     growth: 1.09,
     baseRevenue: 89_579_520,

@@ -14,7 +14,7 @@ export default defineConfig({
       injectRegister: false,
       includeAssets: ['favicon.svg', 'icons/apple-touch-icon.png'],
       workbox: {
-        globPatterns: ['**/*.{js,css,html,svg,png,webmanifest}'],
+        globPatterns: ['**/*.{js,css,html,svg,png,woff2,webmanifest}'],
         cleanupOutdatedCaches: true,
         // Controlar la página desde la primera visita: si no, una actualización que llega
         // en esa misma sesión activa el SW nuevo pero el botón "Recargar" nunca recarga.
@@ -40,5 +40,7 @@ export default defineConfig({
   ],
   test: {
     environment: 'node',
+    // Sin esto vitest sustituye todo .css por una cadena vacía, también con ?raw (paleta.test.ts).
+    css: { include: [/\.css(\?raw)?$/] },
   },
 });

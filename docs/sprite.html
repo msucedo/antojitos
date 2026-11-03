@@ -29,10 +29,7 @@
         grid-template-columns: 160px 1fr;
         gap: 12px;
         align-items: center;
-        padding: 12px;
-        background: var(--card);
-        border: 2px solid var(--ink);
-        border-radius: 12px;
+        padding: 14px;
       }
       .cell .big {
         width: 160px;
@@ -79,22 +76,33 @@
     <h1>Referencias (docs/refs)</h1>
     <div class="refs" id="refs"></div>
     <script type="module">
+      import { BUSINESSES } from '/src/data.ts';
+
       const SPRITE = '/src/assets/icons.svg';
       const svg = (id, cls) =>
         `<svg class="${cls}" viewBox="0 0 48 48" aria-hidden="true"><use href="${SPRITE}#${id}"></use></svg>`;
       const text = await (await fetch(SPRITE)).text();
       const ids = [...text.matchAll(/<symbol id="([^"]+)"/g)].map((m) => m[1]);
+      // Cada negocio y su gerente se pintan sobre el papel real de su tarjeta.
+      const papel = new Map(
+        BUSINESSES.flatMap((b) => [
+          [b.icon, b.papel],
+          [b.manager.icon, b.papel],
+        ]),
+      );
       document.getElementById('count').textContent = ids.length;
       document.getElementById('sheet').innerHTML = ids
         .map(
-          (id) => `<li class="cell">
-            ${svg(id, 'icon big')}
-            <div>
-              <p class="name">${id}</p>
-              <div class="small">
-                <span class="sell">${svg('sello', 'icon sello sticker')}${svg(id, 'icon sell-icon sticker')}</span>
-                ${svg(id, 'icon i30')}
-                ${svg(id, 'icon i20')}
+          (id) => `<li class="card" data-papel="${papel.get(id) ?? ''}">
+            <div class="cell paper">
+              ${svg(id, 'icon big')}
+              <div>
+                <p class="name">${id}${papel.has(id) ? ` · ${papel.get(id)}` : ''}</p>
+                <div class="small">
+                  <span class="sell">${svg('sello', 'icon sello sticker')}${svg(id, 'icon sell-icon sticker')}</span>
+                  ${svg(id, 'icon i30')}
+                  ${svg(id, 'icon i20')}
+                </div>
               </div>
             </div>
           </li>`,

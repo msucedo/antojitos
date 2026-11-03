@@ -1,12 +1,27 @@
 /*
+ * Rótulo: Rye (OFL, solo 400), subconjunto latino de Google Fonts sin modificar, servido desde
+ * public/fonts. Solo título, dinero, h2 de diálogo y títulos de sección; el resto es system-ui.
+ */
+@font-face {
+  font-family: 'Rye';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/rye-v17-latin.woff2') format('woff2');
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC,
+    U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+/*
  * Paleta mercado / papel recortado. Contrastes verificados (WCAG AA ≥ 4.5:1 texto, ≥ 3:1 UI);
  * la tabla con los ratios vive en DESIGN.md. --primary-bright y --cielo son solo decorativos.
  */
 :root {
   color-scheme: light dark;
-  --bg: #cfe6f7; /* azul cielo claro */
-  --card: #ffffff;
-  --text: #1b2a3a; /* 11.9:1 sobre --bg */
+  --bg: #f1e6d0; /* crema de fondo, un paso más oscuro que el papel */
+  --card: #fff6e5; /* papel crema: barra inferior, diálogos */
+  --text: #1b2a3a; /* 11.8:1 sobre --bg */
   --muted: #4a5d70; /* texto secundario */
   --ink: #1b2a3a; /* contornos y sombras duras, como la tinta de los iconos */
   --primary: #c2006a; /* rosa mexicano oscuro, 6.0:1 con blanco */
@@ -18,8 +33,29 @@
   --on-nopal: #ffffff;
   --cielo: #1f7fc2; /* banderines */
   --border: #1b2a3a; /* bordes negros de 2 px, estilo pegatina */
-  --track: #dbe9f3;
-  --shadow: 0 3px 0 var(--ink); /* pegatina sobre papel: dura, sin desenfoque */
+  --track: #e6d9c0;
+  --shadow: 0 3px 0 var(--ink); /* estampa sobre papel: dura, sin desenfoque */
+  --sombra-btn: 0 2px 0 var(--ink); /* matasellos: botones y pastillas */
+  --halo: #ffffff; /* halo troquelado de .sticker; dentro de una estampilla es el papel */
+  /*
+   * Papeles de estampilla y sus tintas. Fijos en claro y oscuro a propósito: una estampa
+   * conserva su papel sobre azul noche (ver DESIGN.md). Contrastes en paleta.test.ts.
+   */
+  --papel-crema: #fff6e5;
+  --papel-rosa: #f6c7cf;
+  --papel-mostaza: #f5c462;
+  --papel-verde: #c5dcc6;
+  --tinta: #1b2a3a; /* texto, bordes y sombra sobre papel */
+  --tinta-suave: #3d4f61; /* secundario sobre papel: 5.2:1 sobre mostaza */
+  --tinta-rosa: #c2006a; /* primario, aro del plato y foco sobre papel */
+  --tinta-nopal: #2a7239; /* barra de progreso y heredar sobre papel */
+  --marco-tinta: rgb(27 42 58 / 0.4); /* línea interior y puntos de esquina sobre papel, decorativo */
+  --marco: var(--marco-tinta); /* en el chrome sigue el tema (claro sobre azul noche) */
+  --on-tinta: #ffffff; /* texto sobre --tinta-rosa y --tinta-nopal */
+  --velo-tinta: rgb(27 42 58 / 0.08); /* tinta translúcida: pistas y chip sobre cualquier papel */
+  /* Grano de imprenta: capa de background-image (nunca filter), ver assets/grano.svg. */
+  --grano: url('./assets/grano.svg') 0 0 / 160px 160px repeat;
+  --fuente-rotulo: 'Rye', Georgia, 'Times New Roman', serif;
   --sombra-estampa: block; /* display del pseudo-elemento de sombra de las estampillas */
   /* Máscara de estampilla: rectángulo interior y medios círculos centrados en cada lado. black solo da alfa. */
   --perf: 12px;
@@ -53,9 +89,50 @@
     --border: #8fb3d1; /* en oscuro el borde es claro: la tinta no se vería sobre azul noche */
     --track: #2f4b68;
     --shadow: none;
+    --sombra-btn: none;
+    --marco: rgb(234 243 251 / 0.35);
+    --grano: none; /* tinta sobre azul noche no se ve: no vale el repintado */
     --sombra-estampa: none; /* en oscuro no hay sombra */
     --focus: #f5b92a;
   }
+}
+
+/*
+ * Isla de papel: dentro de una estampilla los tokens semánticos se re-declaran con la tinta
+ * y el papel de la estampa, y no cambian con el tema. Las reglas hijas (.sell, .estampa,
+ * .manager, .bar, .btn...) siguen leyendo var(--token) y resuelven al papel aquí y al tema fuera.
+ */
+.paper,
+.up-card {
+  --papel: var(--papel-crema);
+  --text: var(--tinta);
+  --muted: var(--tinta-suave);
+  --ink: var(--tinta);
+  --border: var(--tinta);
+  --card: var(--papel);
+  --track: var(--velo-tinta);
+  --marco: var(--marco-tinta);
+  --primary: var(--tinta-rosa);
+  --on-primary: var(--on-tinta);
+  --nopal: var(--tinta-nopal);
+  --on-nopal: var(--on-tinta);
+  --focus: var(--tinta-rosa);
+  --halo: var(--papel);
+  --sombra-btn: 0 2px 0 var(--tinta);
+  color: var(--text);
+  background: var(--papel);
+}
+
+.card[data-papel='rosa'] .paper {
+  --papel: var(--papel-rosa);
+}
+
+.card[data-papel='mostaza'] .paper {
+  --papel: var(--papel-mostaza);
+}
+
+.card[data-papel='verde'] .paper {
+  --papel: var(--papel-verde);
 }
 
 * {
@@ -86,7 +163,9 @@ body {
 
 /* Fondo ilustrado: azulejo propio servido por Vite (img-src 'self'), tenue en claro y oscuro. */
 body {
-  background: var(--bg) url('./assets/fondo.svg') 0 0 / 192px 192px repeat;
+  background:
+    var(--grano),
+    var(--bg) url('./assets/fondo.svg') 0 0 / 192px 192px repeat;
 }
 
 #app {
@@ -118,11 +197,10 @@ p {
 }
 
 /*
- * Estampa: halo blanco troquelado alrededor del icono más sombra dura.
+ * Estampa: halo troquelado en --halo (el papel dentro de una estampilla, blanco fuera) más sombra dura.
  * Son filtros CSS (sin recursos ni url), así que valen para todo el sprite.
  */
 .sticker {
-  --halo: #ffffff;
   filter: drop-shadow(1.5px 0 0 var(--halo)) drop-shadow(-1.5px 0 0 var(--halo)) drop-shadow(0 1.5px 0 var(--halo))
     drop-shadow(0 -1.5px 0 var(--halo)) drop-shadow(2px 2.5px 0 var(--ink));
 }
@@ -140,7 +218,7 @@ p {
   position: sticky;
   top: 0;
   z-index: 2;
-  background: var(--bg);
+  background: var(--grano), var(--bg);
   padding: 8px 0 0;
 }
 
@@ -207,17 +285,34 @@ p {
   justify-content: space-between;
 }
 
+/*
+ * Rótulo: Rye solo tiene 400 (font-synthesis evita la negrita falsa) y line-height fijo para
+ * que el intercambio de fuente no mueva nada en vertical (CLS).
+ */
+.title-row h1,
+.money,
+.section-title,
+.modal h2 {
+  font-family: var(--fuente-rotulo);
+  font-weight: 400;
+  font-synthesis: none;
+  line-height: 1.15;
+}
+
 .title-row h1 {
-  font-size: 1rem;
-  color: var(--muted);
-  font-weight: 600;
+  font-size: 1.15rem;
+  color: var(--text);
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .money {
-  font-size: clamp(1.75rem, 8vw, 2.5rem);
-  font-weight: 900;
-  letter-spacing: -0.01em;
-  font-variant-numeric: tabular-nums;
+  font-size: clamp(1.6rem, 7.5vw, 2.25rem);
+  letter-spacing: 0.01em;
+  font-variant-numeric: tabular-nums; /* Rye no lo trae; evita el baile en la fuente de reserva */
+  color: var(--primary);
   margin-top: 4px;
 }
 
@@ -278,6 +373,8 @@ p {
   font-weight: 600;
   border: 2px solid var(--ink);
   box-shadow: var(--shadow);
+  --papel: var(--papel-crema); /* papel de la estampa de Chelo */
+  --halo: var(--papel);
 }
 
 .chelo {
@@ -285,7 +382,7 @@ p {
   height: 46px;
 }
 
-/* Marco de estampa para personajes: sello ondulado detrás, papel liso de --bg, avatar encima. */
+/* Marco de estampa para personajes: sello ondulado detrás, papel liso (--papel), avatar encima. */
 .estampa {
   position: relative;
   flex: none;
@@ -293,7 +390,7 @@ p {
   place-items: center;
   border-radius: 50%;
   --aro: var(--ink);
-  background: radial-gradient(circle, var(--bg) 0 var(--papel), transparent calc(var(--papel) + 0.5px));
+  background: radial-gradient(circle, var(--papel) 0 var(--papel-r), transparent calc(var(--papel-r) + 0.5px));
 }
 
 .estampa > .icon:not(.sello) {
@@ -304,14 +401,14 @@ p {
 .estampa-chelo {
   width: 64px;
   height: 64px;
-  --papel: 25px;
+  --papel-r: 25px;
   --aro: var(--primary-bright); /* rosa sobre el amarillo del tip, como su rebozo */
 }
 
 .estampa-avatar {
   width: 48px;
   height: 48px;
-  --papel: 18px;
+  --papel-r: 18px;
   --aro: var(--primary);
 }
 
@@ -353,8 +450,7 @@ p {
 
 /* ---------- Mejoras ---------- */
 .section-title {
-  font-size: 0.9rem;
-  font-weight: 700;
+  font-size: 0.95rem;
   color: var(--muted);
   margin-bottom: 8px;
 }
@@ -381,7 +477,7 @@ p {
 }
 
 /*
- * Cupón: estampilla vertical. El li (.up-slot) pone la sombra con filter, que sigue el
+ * Cupón: estampilla vertical. El li (.up-slot) pone la sombra en ::before (abajo), que sigue el
  * perforado; el interior (.up-card) lleva la máscara: un rectángulo interior y una fila de
  * medios círculos centrada en cada lado. black solo aporta alfa a la máscara.
  */
@@ -398,7 +494,8 @@ p {
  * frame cuando algo dentro anima (las barras de progreso).
  */
 .up-slot::before,
-.card::before {
+.card::before,
+.modal::before {
   content: '';
   display: var(--sombra-estampa);
   position: absolute;
@@ -418,7 +515,7 @@ p {
   text-align: center;
   padding: 16px 12px 14px;
   border-radius: 4px;
-  background: var(--card);
+  background: var(--grano), var(--papel);
   border: 2px solid var(--corn);
   -webkit-mask: var(--mascara-estampa);
   mask: var(--mascara-estampa);
@@ -444,14 +541,10 @@ p {
 .up-card .btn {
   width: 100%;
   margin-top: 6px;
-  border-radius: 999px;
-  border-color: var(--ink);
-  box-shadow: 0 2px 0 var(--ink);
   font-size: 0.85rem;
 }
 
 .up-card .btn:disabled {
-  box-shadow: none;
   border-color: var(--primary);
 }
 
@@ -473,10 +566,21 @@ p {
 .paper {
   display: flex;
   gap: 12px;
-  padding: 14px;
+  padding: 16px;
   border-radius: 4px;
-  background: var(--card);
+  /* Cuatro puntos de esquina como capas del fondo: ni pseudo-elemento ni filter. */
+  --punto: radial-gradient(circle 2.2px, var(--marco) 97%, transparent 100%);
+  background:
+    var(--grano),
+    var(--punto) 15px 15px / 6px 6px no-repeat,
+    var(--punto) calc(100% - 15px) 15px / 6px 6px no-repeat,
+    var(--punto) 15px calc(100% - 15px) / 6px 6px no-repeat,
+    var(--punto) calc(100% - 15px) calc(100% - 15px) / 6px 6px no-repeat,
+    var(--papel);
   border: 2px solid var(--border);
+  /* Línea fina interior, a 10 px del borde: la máscara la recorta y sigue el radio. */
+  outline: 1.5px solid var(--marco);
+  outline-offset: -10px;
   -webkit-mask: var(--mascara-estampa);
   mask: var(--mascara-estampa);
 }
@@ -509,9 +613,9 @@ p {
   /* Papel liso con una línea fina interior, como el marco de una estampilla. */
   background: radial-gradient(
     circle,
-    var(--bg) 0 25px,
+    var(--papel) 0 25px,
     var(--aro) 25.5px 26.5px,
-    var(--bg) 27px 29px,
+    var(--papel) 27px 29px,
     transparent 29.5px
   );
   color: var(--text);
@@ -559,6 +663,7 @@ p {
   gap: 8px;
   padding: 2px 10px 2px 2px;
   border-radius: 24px;
+  border: 2px solid var(--border);
   background: var(--track);
   color: var(--text);
   font-size: 0.85rem;
@@ -595,9 +700,10 @@ p {
 }
 
 .bar {
-  height: 12px;
-  border-radius: 6px;
-  background: var(--track);
+  height: 14px;
+  border-radius: 7px;
+  border: 2px solid var(--border);
+  background: var(--card);
   overflow: hidden;
 }
 
@@ -633,14 +739,15 @@ p {
   align-items: center;
   justify-content: center;
   gap: 6px;
-  border-radius: 12px;
-  border: 2px solid var(--primary);
+  border-radius: 999px;
+  border: 2px solid var(--border);
   background: transparent;
   color: var(--text);
   font: inherit;
   font-size: 0.9rem;
   font-weight: 700;
   cursor: pointer;
+  box-shadow: var(--sombra-btn); /* matasellos: pastilla con sombra dura */
 }
 
 .btn.primary {
@@ -649,7 +756,6 @@ p {
 }
 
 .btn.heir {
-  border-color: var(--nopal);
   background: var(--nopal);
   color: var(--on-nopal);
 }
@@ -675,6 +781,7 @@ p {
 .btn:disabled {
   opacity: 0.5;
   border-style: dashed;
+  box-shadow: none;
   cursor: default;
 }
 
@@ -693,7 +800,7 @@ p {
   bottom: 0;
   z-index: 2;
   padding: 10px 16px calc(env(safe-area-inset-bottom) + 10px);
-  background: var(--card);
+  background: var(--grano), var(--card);
   border-top: 2px solid var(--border);
 }
 
@@ -706,9 +813,10 @@ p {
 
 .segmented {
   display: flex;
-  border-radius: 12px;
+  border-radius: 999px;
   overflow: hidden;
-  border: 2px solid var(--primary);
+  border: 2px solid var(--border);
+  box-shadow: var(--sombra-btn);
 }
 
 .seg {
@@ -728,16 +836,36 @@ p {
 }
 
 /* ---------- Diálogos y avisos ---------- */
+/*
+ * Diálogo: estampilla del tema (no de la isla). El dialog pone la sombra; .modal-paper, la máscara.
+ * Conserva el position: fixed del top layer (con relative el diálogo se centraría en el documento,
+ * no en la pantalla). La sombra cabe en los 3 px de padding inferior: el dialog tiene overflow auto
+ * y un pseudo-elemento que sobresalga crearía scroll.
+ */
 .modal {
+  isolation: isolate;
   width: min(92vw, 440px);
-  border: 2px solid var(--border);
-  border-radius: 20px;
-  padding: 20px;
-  background: var(--card);
+  border: 0;
+  padding: 0 0 3px;
+  background: transparent;
   color: var(--text);
-  box-shadow: var(--shadow);
+}
+
+.modal::before {
+  inset: 3px 0 0;
+}
+
+.modal-paper {
   display: grid;
   gap: 12px;
+  padding: 20px;
+  border-radius: 4px;
+  background: var(--grano), var(--card);
+  border: 2px solid var(--border);
+  outline: 1.5px solid var(--marco);
+  outline-offset: -10px;
+  -webkit-mask: var(--mascara-estampa);
+  mask: var(--mascara-estampa);
 }
 
 .modal h2 {

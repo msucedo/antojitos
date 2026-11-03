@@ -184,12 +184,15 @@ function papelPicado(): SVGSVGElement {
 }
 
 function dialog(title: string, body: Node[], actions: HTMLButtonElement[] = []): HTMLDialogElement {
+  // dialog: sombra y marco exterior; .modal-paper: la estampilla con la máscara perforada.
   const d = h('dialog', { class: 'modal' });
   const close = h('button', { class: 'btn', type: 'button', text: 'Cerrar', onclick: () => d.close() });
   d.append(
-    h('h2', {}, [icon('banderin', 'icon flag sticker'), h('span', { text: title })]),
-    ...body,
-    h('div', { class: 'actions' }, [...actions, close]),
+    h('div', { class: 'modal-paper' }, [
+      h('h2', {}, [icon('banderin', 'icon flag sticker'), h('span', { text: title })]),
+      ...body,
+      h('div', { class: 'actions' }, [...actions, close]),
+    ]),
   );
   d.setAttribute('aria-label', title);
   d.addEventListener('close', () => d.remove());
@@ -289,6 +292,7 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
       ]),
       bubble,
     ]);
+    cardRoot.dataset.papel = def.papel;
     return { def, root: cardRoot, sell, count, fill, info, buy, hire, manager, bubble, bubbleUntil: 0 };
   });
 
