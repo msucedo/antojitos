@@ -20,6 +20,7 @@ export const ICON_NAMES = [
   'perez',
   'jefa',
   'banderin',
+  'sello',
   'upgrade',
   'recipe',
   'sound-on',

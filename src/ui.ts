@@ -108,7 +108,7 @@ export function bubbleVisible(now: number, until: number): boolean {
 
 const MODES: readonly BuyMode[] = [1, 10, 'max'];
 const modeLabel = (m: BuyMode) => (m === 'max' ? 'Máx' : `×${m}`);
-const UPGRADE_SLOTS = 3;
+const UPGRADE_SLOTS = 4;
 const UPGRADE_LOCK_MS = 500;
 
 function tipFor(s: State): string | null {
@@ -187,7 +187,7 @@ function dialog(title: string, body: Node[], actions: HTMLButtonElement[] = []):
   const d = h('dialog', { class: 'modal' });
   const close = h('button', { class: 'btn', type: 'button', text: 'Cerrar', onclick: () => d.close() });
   d.append(
-    h('h2', {}, [icon('banderin', 'icon flag'), h('span', { text: title })]),
+    h('h2', {}, [icon('banderin', 'icon flag sticker'), h('span', { text: title })]),
     ...body,
     h('div', { class: 'actions' }, [...actions, close]),
   );
@@ -231,7 +231,13 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
   segmented.setAttribute('role', 'group');
 
   const tip = h('p', { class: 'tip-text' });
-  const tipBox = h('aside', { class: 'tip', hidden: true, label: CHELO.name }, [icon(CHELO.icon, 'icon chelo'), tip]);
+  const tipBox = h('aside', { class: 'tip', hidden: true, label: CHELO.name }, [
+    h('span', { class: 'estampa estampa-chelo' }, [
+      icon('sello', 'icon sello sticker'),
+      icon(CHELO.icon, 'icon chelo'),
+    ]),
+    tip,
+  ]);
   let cheloText = '';
   let cheloUntil = 0;
 
@@ -244,7 +250,11 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
     const sell = h(
       'button',
       { class: 'sell', type: 'button', label: `Vender: ${def.name}`, onclick: () => handlers.onStart(def.id) },
-      [icon(def.icon, 'icon sell-icon'), icon(def.manager.icon, 'icon badge')],
+      [
+        icon('sello', 'icon sello sticker'),
+        icon(def.icon, 'icon sell-icon sticker'),
+        icon(def.manager.icon, 'icon badge'),
+      ],
     );
     const count = h('span', { class: 'count' });
     const fill = h('div', { class: 'fill' });
@@ -260,20 +270,26 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
         h('span', { class: 'price', text: formatMoney(def.manager.cost) }),
       ]),
     ]);
-    const manager = h('div', { class: 'manager', hidden: true }, [
-      icon(def.manager.icon, 'icon avatar'),
+    const manager = h('div', { class: 'manager sticker', hidden: true }, [
+      h('span', { class: 'estampa estampa-avatar' }, [
+        icon('sello', 'icon sello'),
+        icon(def.manager.icon, 'icon avatar'),
+      ]),
       h('div', {}, [h('strong', { text: def.manager.name }), h('span', { text: 'Vende solito' })]),
     ]);
     // Overlay: no entra en el flujo, así la tarjeta no crece ni se mueven los botones.
     const bubble = h('div', { class: 'bubble', hidden: true });
     bubble.setAttribute('aria-hidden', 'true');
+    // li: sombra y ancla del bocadillo; .paper: la estampilla con la máscara perforada.
     const cardRoot = h('li', { class: 'card' }, [
-      sell,
-      h('div', { class: 'body' }, [
-        h('h2', { text: def.name }, [count]),
-        bar,
-        info,
-        h('div', { class: 'row' }, [buy, hire, manager]),
+      h('div', { class: 'paper' }, [
+        sell,
+        h('div', { class: 'body' }, [
+          h('h2', { text: def.name }, [count]),
+          bar,
+          info,
+          h('div', { class: 'row' }, [buy, hire, manager]),
+        ]),
       ]),
       bubble,
     ]);
@@ -286,7 +302,7 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
   let refocusAfterUpgrade = false;
 
   const slots: UpgradeSlot[] = Array.from({ length: UPGRADE_SLOTS }, () => {
-    const art = icon('upgrade', 'icon up-icon');
+    const art = icon('upgrade', 'icon up-icon sticker');
     const name = h('h3', { class: 'up-name' });
     const effect = h('p', { class: 'up-effect' });
     const slot: UpgradeSlot = { root: h('li'), art, name, effect, buy: h('button'), id: null };
@@ -302,7 +318,8 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
         handlers.onUpgrade(slot.id);
       },
     });
-    slot.root = h('li', { class: 'up-card' }, [art, h('div', { class: 'up-body' }, [name, effect]), slot.buy]);
+    // li exterior: lleva la sombra (filter); el interior lleva la máscara perforada.
+    slot.root = h('li', { class: 'up-slot' }, [h('div', { class: 'up-card' }, [art, name, effect, slot.buy])]);
     return slot;
   });
   const upgradesTitle = h('h2', { class: 'section-title', text: 'Mejoras' });

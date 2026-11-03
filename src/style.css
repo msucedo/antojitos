@@ -4,43 +4,56 @@
  */
 :root {
   color-scheme: light dark;
-  --bg: #fbf0e4;
-  --card: #fffaf3;
-  --text: #2a1612; /* 15.3:1 sobre --bg */
-  --muted: #6e574c; /* 6.0:1 sobre --bg, 6.5:1 sobre --card */
+  --bg: #cfe6f7; /* azul cielo claro */
+  --card: #ffffff;
+  --text: #1b2a3a; /* 11.9:1 sobre --bg */
+  --muted: #4a5d70; /* texto secundario */
+  --ink: #1b2a3a; /* contornos y sombras duras, como la tinta de los iconos */
   --primary: #c2006a; /* rosa mexicano oscuro, 6.0:1 con blanco */
   --on-primary: #ffffff;
   --primary-bright: #e4007c; /* rosa mexicano puro: banderines, aros, confeti */
   --corn: #f5b92a;
-  --on-corn: #2a1612;
-  --nopal: #2a7239; /* 5.9:1 con blanco, 4.7:1 sobre --track */
+  --on-corn: #1b2a3a;
+  --nopal: #2a7239; /* 5.9:1 con blanco */
   --on-nopal: #ffffff;
   --cielo: #1f7fc2; /* banderines */
-  --border: #ecd9c0;
-  --track: #f3e3cb;
-  --shadow: 0 3px 0 var(--border); /* papel sobre papel: dura, sin desenfoque */
-  --focus: #c2006a; /* 5.3:1 sobre --bg */
+  --border: #1b2a3a; /* bordes negros de 2 px, estilo pegatina */
+  --track: #dbe9f3;
+  --shadow: 0 3px 0 var(--ink); /* pegatina sobre papel: dura, sin desenfoque */
+  --sombra-estampa: block; /* display del pseudo-elemento de sombra de las estampillas */
+  /* Máscara de estampilla: rectángulo interior y medios círculos centrados en cada lado. black solo da alfa. */
+  --perf: 12px;
+  --dot: radial-gradient(circle 4.5px, black 97%, transparent 100%);
+  --mascara-estampa:
+    var(--dot) center top / var(--perf) var(--perf) repeat-x,
+    var(--dot) center bottom / var(--perf) var(--perf) repeat-x,
+    var(--dot) left center / var(--perf) var(--perf) repeat-y,
+    var(--dot) right center / var(--perf) var(--perf) repeat-y,
+    linear-gradient(black 0 0) 6px 6px / calc(100% - 12px) calc(100% - 12px) no-repeat;
+  --focus: #c2006a;
   --bar-h: 132px; /* alto de la barra inferior, para no tapar contenido */
   --picado-h: 22px;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #1c1210;
-    --card: #2b1d19;
-    --text: #f6ece0;
-    --muted: #cdb9a7;
+    --bg: #15283d; /* azul noche */
+    --card: #223b57;
+    --text: #eaf3fb;
+    --muted: #b7c7d6;
+    --ink: #0b1620;
     --primary: #ff6fb5;
-    --on-primary: #2b1d19;
+    --on-primary: #1b2a3a;
     --primary-bright: #ff6fb5;
     --corn: #f5b92a;
-    --on-corn: #1c1210;
+    --on-corn: #1b2a3a;
     --nopal: #7cc68a;
-    --on-nopal: #1c1210;
+    --on-nopal: #15283d;
     --cielo: #6cc1f0;
-    --border: #4a3832; /* en oscuro el relieve lo da el borde, no la sombra */
-    --track: #3d2e29;
+    --border: #8fb3d1; /* en oscuro el borde es claro: la tinta no se vería sobre azul noche */
+    --track: #2f4b68;
     --shadow: none;
+    --sombra-estampa: none; /* en oscuro no hay sombra */
     --focus: #f5b92a;
   }
 }
@@ -104,6 +117,16 @@ p {
   height: 18px;
 }
 
+/*
+ * Estampa: halo blanco troquelado alrededor del icono más sombra dura.
+ * Son filtros CSS (sin recursos ni url), así que valen para todo el sprite.
+ */
+.sticker {
+  --halo: #ffffff;
+  filter: drop-shadow(1.5px 0 0 var(--halo)) drop-shadow(-1.5px 0 0 var(--halo)) drop-shadow(0 1.5px 0 var(--halo))
+    drop-shadow(0 -1.5px 0 var(--halo)) drop-shadow(2px 2.5px 0 var(--ink));
+}
+
 .avatar-sm {
   width: 28px;
   height: 28px;
@@ -127,7 +150,7 @@ p {
   width: 100%;
   height: var(--picado-h);
   margin-top: 6px;
-  border-top: 2px solid var(--text);
+  border-top: 2px solid var(--border);
   overflow: hidden;
 }
 
@@ -253,25 +276,55 @@ p {
   background: var(--corn);
   color: var(--on-corn);
   font-weight: 600;
-  border: 2px solid var(--on-corn);
+  border: 2px solid var(--ink);
   box-shadow: var(--shadow);
 }
 
 .chelo {
-  width: 44px;
-  height: 44px;
+  width: 46px;
+  height: 46px;
+}
+
+/* Marco de estampa para personajes: sello ondulado detrás, papel liso de --bg, avatar encima. */
+.estampa {
+  position: relative;
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 50%;
+  --aro: var(--ink);
+  background: radial-gradient(circle, var(--bg) 0 var(--papel), transparent calc(var(--papel) + 0.5px));
+}
+
+.estampa > .icon:not(.sello) {
+  position: relative;
+  z-index: 1;
+}
+
+.estampa-chelo {
+  width: 64px;
+  height: 64px;
+  --papel: 25px;
+  --aro: var(--primary-bright); /* rosa sobre el amarillo del tip, como su rebozo */
+}
+
+.estampa-avatar {
+  width: 48px;
+  height: 48px;
+  --papel: 18px;
+  --aro: var(--primary);
 }
 
 /* Overlay sobre título y barra: no desplaza los botones mientras se toca. */
 .bubble {
   position: absolute;
-  top: 8px;
-  left: 84px;
-  right: 10px;
+  top: 10px;
+  left: 98px;
+  right: 12px;
   z-index: 1;
   padding: 6px 10px;
   border-radius: 12px;
-  border: 2px solid var(--text);
+  border: 2px solid var(--ink);
   background: var(--corn);
   color: var(--on-corn);
   font-size: 0.85rem;
@@ -293,8 +346,8 @@ p {
   width: 10px;
   height: 10px;
   background: var(--corn);
-  border-left: 2px solid var(--text);
-  border-bottom: 2px solid var(--text);
+  border-left: 2px solid var(--ink);
+  border-bottom: 2px solid var(--ink);
   transform: rotate(45deg);
 }
 
@@ -304,6 +357,11 @@ p {
   font-weight: 700;
   color: var(--muted);
   margin-bottom: 8px;
+}
+
+/* min-width: 0, si no los cupones de ancho fijo ensanchan la sección y la página. */
+.upgrades {
+  min-width: 0;
 }
 
 .up-list {
@@ -322,50 +380,79 @@ p {
   display: none;
 }
 
-/* Cupón: ticket plano con muescas a los lados (máscara CSS, sin recursos). */
-.up-card {
-  flex: 0 0 min(78%, 260px);
+/*
+ * Cupón: estampilla vertical. El li (.up-slot) pone la sombra con filter, que sigue el
+ * perforado; el interior (.up-card) lleva la máscara: un rectángulo interior y una fila de
+ * medios círculos centrada en cada lado. black solo aporta alfa a la máscara.
+ */
+.up-slot {
+  position: relative;
+  isolation: isolate;
+  flex: 0 0 156px;
   scroll-snap-align: start;
+}
+
+/*
+ * Sombra de estampilla sin filter: un pseudo-elemento de tinta con la misma máscara,
+ * desplazado 3 px. Un filter en el ancestro obligaría a re-renderizar la tarjeta en cada
+ * frame cuando algo dentro anima (las barras de progreso).
+ */
+.up-slot::before,
+.card::before {
+  content: '';
+  display: var(--sombra-estampa);
+  position: absolute;
+  inset: 3px 0 -3px;
+  z-index: -1;
+  background: var(--ink);
+  -webkit-mask: var(--mascara-estampa);
+  mask: var(--mascara-estampa);
+}
+
+.up-card {
+  height: 100%;
   display: grid;
-  grid-template-columns: 40px 1fr;
-  grid-template-rows: auto auto;
-  gap: 8px 10px;
-  align-items: center;
-  padding: 10px 14px;
-  border-radius: 10px;
+  justify-items: center;
+  align-content: start;
+  gap: 6px;
+  text-align: center;
+  padding: 16px 12px 14px;
+  border-radius: 4px;
   background: var(--card);
   border: 2px solid var(--corn);
-  /* black solo aporta alfa a la máscara, no es color de UI. */
-  -webkit-mask-image:
-    radial-gradient(circle at 0 50%, transparent 8px, black 8.5px),
-    radial-gradient(circle at 100% 50%, transparent 8px, black 8.5px);
-  -webkit-mask-composite: source-in;
-  mask-image:
-    radial-gradient(circle at 0 50%, transparent 8px, black 8.5px),
-    radial-gradient(circle at 100% 50%, transparent 8px, black 8.5px);
-  mask-composite: intersect;
+  -webkit-mask: var(--mascara-estampa);
+  mask: var(--mascara-estampa);
 }
 
 .up-icon {
-  width: 40px;
-  height: 40px;
-}
-
-.up-body {
-  min-width: 0;
+  width: 56px;
+  height: 56px;
+  margin-bottom: 4px;
 }
 
 .up-name {
-  font-size: 0.95rem;
+  font-size: 0.9rem;
+  line-height: 1.2;
 }
 
 .up-effect {
-  font-size: 0.85rem;
+  font-size: 0.8rem;
   color: var(--muted);
 }
 
+/* Botón de precio como matasellos: pastilla con borde de tinta y sombra corta. */
 .up-card .btn {
-  grid-column: 1 / -1;
+  width: 100%;
+  margin-top: 6px;
+  border-radius: 999px;
+  border-color: var(--ink);
+  box-shadow: 0 2px 0 var(--ink);
+  font-size: 0.85rem;
+}
+
+.up-card .btn:disabled {
+  box-shadow: none;
+  border-color: var(--primary);
 }
 
 /* ---------- Negocios ---------- */
@@ -379,18 +466,24 @@ p {
 
 .card {
   position: relative;
+  isolation: isolate;
+}
+
+/* Estampilla: la máscara va en .paper, nunca en el li, para que el bocadillo no se recorte. */
+.paper {
   display: flex;
   gap: 12px;
-  padding: 12px;
-  border-radius: 16px;
+  padding: 14px;
+  border-radius: 4px;
   background: var(--card);
   border: 2px solid var(--border);
-  box-shadow: var(--shadow);
+  -webkit-mask: var(--mascara-estampa);
+  mask: var(--mascara-estampa);
 }
 
 /* Sin abrir: se atenúa el contenido, no la tarjeta (así el fondo no se transparenta). */
-.card:not(.owned) {
-  border-style: dashed;
+.card:not(.owned) .paper {
+  border-color: var(--muted);
 }
 
 .card:not(.owned) h2,
@@ -398,30 +491,57 @@ p {
   color: var(--muted);
 }
 
-/* Plato: el aro es el único límite visible del control, así que lleva --primary cuando responde. */
+/*
+ * Plato: sello de estampa postal. El borde ondulado (.sello) va detrás del icono y lleva el
+ * color del aro: --primary cuando responde, --border cuando no. El papel es un círculo liso.
+ */
 .sell {
   position: relative;
   flex: none;
-  width: 64px;
-  height: 64px;
+  width: 76px;
+  height: 76px;
   display: grid;
   place-items: center;
+  padding: 0;
+  border: 0;
   border-radius: 50%;
-  border: 4px solid var(--border);
-  background: var(--bg);
+  --aro: var(--border);
+  /* Papel liso con una línea fina interior, como el marco de una estampilla. */
+  background: radial-gradient(
+    circle,
+    var(--bg) 0 25px,
+    var(--aro) 25.5px 26.5px,
+    var(--bg) 27px 29px,
+    transparent 29.5px
+  );
   color: var(--text);
   cursor: pointer;
   transition: transform 0.1s;
 }
 
 .card.owned .sell:not(:disabled) {
-  border-color: var(--primary);
-  box-shadow: inset 0 0 0 2px var(--corn);
+  --aro: var(--primary);
+}
+
+/* Sin abrir: el sello pasa a segundo plano hasta que el negocio responda. */
+.card:not(.owned) .sell {
+  --aro: var(--muted);
+}
+
+.sello {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  color: var(--aro);
+  z-index: 0;
 }
 
 .sell-icon {
-  width: 40px;
-  height: 40px;
+  position: relative;
+  z-index: 1;
+  width: 52px;
+  height: 52px;
 }
 
 .sell:not(:disabled):active {
@@ -438,11 +558,12 @@ p {
   position: absolute;
   right: -6px;
   bottom: -6px;
-  width: 26px;
-  height: 26px;
+  width: 30px;
+  height: 30px;
+  z-index: 2;
   border-radius: 50%;
   background: var(--card);
-  border: 2px solid var(--text);
+  border: 2px solid var(--border);
 }
 
 .card.managed .badge {
@@ -471,11 +592,8 @@ p {
 }
 
 .avatar {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  background: var(--card);
-  border: 2px solid var(--border);
+  width: 34px;
+  height: 34px;
 }
 
 .body {
@@ -507,6 +625,7 @@ p {
   background: var(--nopal);
   transform-origin: left;
   transform: scaleX(0);
+  will-change: transform; /* capa propia: la barra anima sin repintar la tarjeta */
 }
 
 .info {
@@ -788,7 +907,13 @@ p {
   }
 
   .card.owned .sell:not(:disabled):hover {
-    background: var(--track);
+    background: radial-gradient(
+      circle,
+      var(--track) 0 25px,
+      var(--aro) 25.5px 26.5px,
+      var(--track) 27px 29px,
+      transparent 29.5px
+    );
   }
 }
 
@@ -831,11 +956,12 @@ p {
   .up-list {
     margin: 0;
     padding: 0;
-    flex-direction: column;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
     overflow: visible;
   }
 
-  .up-card {
+  .up-slot {
     flex: none;
   }
 
