@@ -160,6 +160,8 @@ Fórmulas estándar del género (Kongregate, "The Math of Idle Games"); constant
 
 **Iconos** (`src/assets/icons.svg`): 11 redibujados, `banderin` y 8 avatares. Mismas reglas de CSP (`icons.test.ts`).
 
+**Fondo ilustrado** (`src/assets/fondo.svg`): azulejo de 192 px con siluetas de antojitos a 9 % de opacidad como `background-image` del `body`; mismo archivo en claro y oscuro, test de CSP compartido con el sprite. `--muted` sobre el patrón ≥ 5.1:1. Pendiente que el user decida: el color de las tarjetas (`--card`) no le convence.
+
 **Estado MVP2.5**
 - [x] `npm run check`: 85 tests, tsc y eslint en verde. `npm run build` ok (sprite 24 KB, 4 KB gzip).
 - [x] Contraste: 30 pares (claro y oscuro) ≥ AA con el script.

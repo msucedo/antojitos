@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import sprite from './assets/icons.svg?raw';
+import fondo from './assets/fondo.svg?raw';
 import { BUSINESSES } from './data';
 import { ICON_NAMES } from './icons';
 
@@ -17,9 +18,11 @@ describe('sprite de iconos', () => {
     }
   });
 
-  it('compatible con la CSP: sin style, script, handlers ni recursos externos', () => {
-    expect(sprite.replace(/<!--[\s\S]*?-->/g, '')).not.toMatch(
-      /<style|style=|<script|\son\w+=|href=|xlink:|<image|url\(/i,
-    );
+  it('sprite y fondo compatibles con la CSP: sin style, script, handlers ni recursos externos', () => {
+    for (const svg of [sprite, fondo]) {
+      expect(svg.replace(/<!--[\s\S]*?-->/g, '')).not.toMatch(
+        /<style|style=|<script|\son\w+=|href=|xlink:|<image|url\(/i,
+      );
+    }
   });
 });

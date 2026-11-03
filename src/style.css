@@ -54,10 +54,13 @@
   display: none !important;
 }
 
+html {
+  background: var(--bg);
+}
+
 html,
 body {
   margin: 0;
-  background: var(--bg);
   color: var(--text);
   font-family:
     system-ui,
@@ -66,6 +69,11 @@ body {
     Roboto,
     sans-serif;
   -webkit-tap-highlight-color: transparent;
+}
+
+/* Fondo ilustrado: azulejo propio servido por Vite (img-src 'self'), tenue en claro y oscuro. */
+body {
+  background: var(--bg) url('./assets/fondo.svg') 0 0 / 192px 192px repeat;
 }
 
 #app {
@@ -380,8 +388,14 @@ p {
   box-shadow: var(--shadow);
 }
 
+/* Sin abrir: se atenúa el contenido, no la tarjeta (así el fondo no se transparenta). */
 .card:not(.owned) {
-  opacity: 0.85;
+  border-style: dashed;
+}
+
+.card:not(.owned) h2,
+.card:not(.owned) .sell {
+  color: var(--muted);
 }
 
 /* Plato: el aro es el único límite visible del control, así que lleva --primary cuando responde. */

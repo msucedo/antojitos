@@ -79,6 +79,13 @@ Reglas de voz:
 - Los gerentes tratan al jugador de "usted" y nunca usan sustantivos de género ni de rol ("patrón", "jefe", "mija"); lo comprueba `src/characters.test.ts`. Excepción asumida: el "mijo" de Doña Chelo es marca del personaje.
 - Las frases son sabor, no información: lo que importa (dinero, hitos, recetas) siempre va también en números y en `aria-live`.
 
+## Fondo (`src/assets/fondo.svg`)
+
+- Azulejo de 192×192 con siluetas planas de antojitos (elote, chile, concha, taco, limón, flor y banderín) sin contorno, colores de la paleta de ilustración a `fill-opacity` 0.09 (máximo 0.1). Un solo archivo para claro y oscuro.
+- Se aplica en `body` con `background: var(--bg) url('./assets/fondo.svg') 0 0 / 192px 192px repeat`; Vite lo sirve con hash y el SW lo precachea. `html` conserva `--bg` liso para el overscroll. Mismas reglas CSP que el sprite (`icons.test.ts`).
+- Sobre el patrón solo caen títulos de sección y la pantalla de bloqueo; con alpha 0.09 `--muted` sigue ≥ 5.1:1 en ambos temas (5.14 claro, 8.16 oscuro). Todo lo demás va sobre `--card`, header o barra, que son sólidos.
+- Las tarjetas nunca llevan `opacity`: el patrón se transparentaría. Un negocio sin abrir se atenúa con borde punteado y título en `--muted`.
+
 ## Componentes y UX
 
 - Móvil primero (contenedor máx. 560 px); layout web a partir del breakpoint en `style.css`.
