@@ -137,7 +137,7 @@ Fórmulas estándar del género (Kongregate, "The Math of Idle Games"); constant
 **UX**
 
 - Móvil: selector ×1/×10/Máx y Herencia en barra inferior fija (zona del pulgar); mejoras en franja horizontal con scroll-snap.
-- Web (≥ 900 px): menú lateral fijo a la izquierda (Mejoras, Herencia, Respaldo, Sonido, Música), Doña Chelo en la esquina derecha del header, negocios en dos columnas de 4 (las 8 caben en 1280×800) y las mejoras en un panel deslizante no modal que abre desde el menú; hover solo con puntero fino.
+- Web (≥ 900 px): menú lateral fijo a la izquierda (Mejoras, Cantidad ×1/×10/Máx en un botón cíclico, Herencia, Respaldo, Sonido, Música; sin barra inferior), Doña Chelo en la esquina derecha del header, negocios en dos columnas de 4 (las 8 caben en 1280×800) y las mejoras en un panel deslizante no modal que abre desde el menú; hover solo con puntero fino.
 - Botones ≥ 44 px; deshabilitado también con borde punteado (no solo color).
 
 **Música de fondo** (`src/music.ts`)

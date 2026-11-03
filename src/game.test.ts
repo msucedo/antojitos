@@ -14,6 +14,7 @@ import {
   maxAffordable,
   milestonesCrossed,
   newState,
+  nextMode,
   pendingRecipes,
   quantityFor,
   prestige,
@@ -293,5 +294,13 @@ describe('mejoras', () => {
       expect(u.cost).toBeGreaterThan(0);
       expect(u.multiplier).toBeGreaterThan(1);
     }
+  });
+});
+
+describe('nextMode', () => {
+  it('cicla ×1 → ×10 → Máx → ×1', () => {
+    expect(nextMode(1)).toBe(10);
+    expect(nextMode(10)).toBe('max');
+    expect(nextMode('max')).toBe(1);
   });
 });

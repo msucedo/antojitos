@@ -37,6 +37,13 @@ export interface State {
 
 export type BuyMode = 1 | 10 | 'max';
 
+/** Orden del selector de cantidad; el botón del lateral cicla por aquí. */
+export const MODES: readonly BuyMode[] = [1, 10, 'max'];
+
+export function nextMode(m: BuyMode): BuyMode {
+  return MODES[(MODES.indexOf(m) + 1) % MODES.length] ?? 1;
+}
+
 function freshBusinesses(): Record<string, BizState> {
   const out: Record<string, BizState> = {};
   BUSINESSES.forEach((def, i) => {

@@ -7,6 +7,8 @@ import {
   getUpgrade,
   incomePerSecond,
   nextMilestone,
+  MODES,
+  nextMode,
   nextUpgrades,
   pendingRecipes,
   quantityFor,
@@ -16,7 +18,7 @@ import {
 } from './game';
 import { formatDuration, formatMoney, formatNumber } from './format';
 import { icon, setIcon, use, type IconName } from './icons';
-import { coin, confetti, pop, pulse } from './fx';
+import { coin, confetti, flip, pop, pulse } from './fx';
 
 export interface Handlers {
   onStart(id: string): void;
@@ -76,13 +78,16 @@ function setPressed(el: Element, on: boolean): void {
 }
 
 /** Botón del menú lateral (solo visible en web): disco matasellos con icono y etiqueta debajo. */
-function latBtn(label: string, name: IconName, onclick: () => void): { btn: HTMLButtonElement; ic: SVGSVGElement } {
+function latBtn(
+  label: string,
+  name: IconName,
+  onclick: () => void,
+): { btn: HTMLButtonElement; ic: SVGSVGElement; disc: HTMLSpanElement; label: HTMLSpanElement } {
   const ic = icon(name);
-  const btn = h('button', { class: 'lat-btn', type: 'button', onclick }, [
-    h('span', { class: 'lat-disc' }, [ic]),
-    h('span', { class: 'lat-label', text: label }),
-  ]);
-  return { btn, ic };
+  const disc = h('span', { class: 'lat-disc' }, [ic]);
+  const text = h('span', { class: 'lat-label', text: label });
+  const btn = h('button', { class: 'lat-btn', type: 'button', onclick }, [disc, text]);
+  return { btn, ic, disc, label: text };
 }
 
 interface Card {
@@ -121,8 +126,8 @@ export function bubbleVisible(now: number, until: number): boolean {
   return now < until;
 }
 
-const MODES: readonly BuyMode[] = [1, 10, 'max'];
 const modeLabel = (m: BuyMode) => (m === 'max' ? 'Máx' : `×${m}`);
+const modeIcon = (m: BuyMode): IconName => (m === 'max' ? 'costal' : m === 10 ? 'monedas' : 'moneda');
 const UPGRADE_SLOTS = 4;
 const UPGRADE_LOCK_MS = 500;
 
@@ -244,19 +249,24 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
   latUp.btn.setAttribute('aria-controls', 'upgrades');
   const latHeir = latBtn('Herencia', 'recipe', confirmPrestige);
   const latHeirBadge = h('span', { class: 'lat-badge', hidden: true });
-  latHeir.btn.firstElementChild?.append(latHeirBadge);
-  const latMenu = latBtn('Respaldo', 'menu', openMenu);
-  const latSound = latBtn('Sonido', 'sound-off', () => handlers.onToggleSound());
-  const latMusic = latBtn('Música', 'music-off', () => handlers.onToggleMusic());
+  latHeir.disc.append(latHeirBadge);
+  // Cantidad: un solo botón que cicla ×1 → ×10 → Máx; render() lo sincroniza con el segmentado móvil.
+  let currentMode: BuyMode = 1; // mismo arranque que `mode` en main.ts: el primer render no hace flip
+  const latModo = latBtn(modeLabel(currentMode), modeIcon(currentMode), () => handlers.onMode(nextMode(currentMode)));
+  latModo.btn.setAttribute('aria-label', `Cantidad a comprar: ${modeLabel(currentMode)}`);
+  const latMenu = latBtn('Respaldo', 'caja', openMenu);
+  const latSound = latBtn('Sonido', 'bocina-off', () => handlers.onToggleSound());
+  const latMusic = latBtn('Música', 'guitarra-off', () => handlers.onToggleMusic());
   /** [botón, icono, canal, icono encendido, icono apagado]: header y lateral, sincronizados en render(). */
   const audioBtns: [Element, SVGSVGElement, 'sound' | 'music', IconName, IconName][] = [
     [sound, soundIcon, 'sound', 'sound-on', 'sound-off'],
-    [latSound.btn, latSound.ic, 'sound', 'sound-on', 'sound-off'],
+    [latSound.btn, latSound.ic, 'sound', 'bocina', 'bocina-off'],
     [musicBtn, musicIcon, 'music', 'music-on', 'music-off'],
-    [latMusic.btn, latMusic.ic, 'music', 'music-on', 'music-off'],
+    [latMusic.btn, latMusic.ic, 'music', 'guitarra', 'guitarra-off'],
   ];
   const lateral = h('nav', { class: 'lateral', label: 'Menú' }, [
     latUp.btn,
+    latModo.btn,
     latHeir.btn,
     latMenu.btn,
     latSound.btn,
@@ -560,6 +570,13 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
       }
 
       for (const { m, b } of modeButtons) setPressed(b, m === mode);
+      if (mode !== currentMode) {
+        currentMode = mode;
+        setIcon(latModo.ic, modeIcon(mode));
+        setText(latModo.label, modeLabel(mode));
+        latModo.btn.setAttribute('aria-label', `Cantidad a comprar: ${modeLabel(mode)}`);
+        flip(latModo.disc);
+      }
       const now = performance.now();
       const t = bubbleVisible(now, cheloUntil) ? cheloText : tipFor(s);
       setHidden(tipBox, t === null);

@@ -96,3 +96,12 @@ export function confetti(): void {
     confettiActive = false;
   });
 }
+
+/** La cara nueva de un disco entra girando sobre el eje horizontal (el contenido ya cambió). */
+export function flip(el: Element): void {
+  if (reducedMotion()) return;
+  el.animate([{ transform: 'perspective(240px) rotateX(90deg)' }, { transform: 'perspective(240px) rotateX(0)' }], {
+    duration: 220,
+    easing: 'cubic-bezier(0.2, 0.8, 0.2, 1.2)',
+  });
+}
