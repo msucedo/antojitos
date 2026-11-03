@@ -7,13 +7,14 @@ import {
   getDef,
   getUpgrade,
   hireManager,
+  milestonesCrossed,
   prestige,
   revenuePerCycle,
   startCycle,
   type BuyMode,
   type State,
 } from './game';
-import { BUSINESSES } from './data';
+import { BUSINESSES, CHELO } from './data';
 import { createAudio, loadPrefs, savePrefs, type Sound } from './audio';
 import { backup, exportSave, importSave, load, save, type KV } from './save';
 import { createUI, showLocked, type UI } from './ui';
@@ -73,12 +74,38 @@ function start(root: HTMLElement): void {
 
   const ui: UI = createUI(root, {
     onStart: (id) => set(startCycle(state, id)),
-    onBuy: (id) => act(buy(state, id, mode), 'buy', id),
+    onBuy: (id) => {
+      const before = state;
+      if (!act(buy(state, id, mode), 'buy', id)) return;
+      // Al cruzar un hito habla el gerente; si aún no hay, Doña Chelo.
+      if (milestonesCrossed(before, state, id) === 0) return;
+      const { manager } = getDef(id);
+      if (state.businesses[id]?.manager) {
+        ui.say(id, 'milestone');
+        ui.announce(`${manager.name}: ${manager.says.milestone}`);
+      } else {
+        ui.cheloSays('milestone');
+        ui.announce(`${CHELO.name}: ${CHELO.says.milestone}`);
+      }
+    },
     onHire: (id) => {
-      if (act(hireManager(state, id), 'hire', id)) ui.announce(`Contrataste a ${getDef(id).managerName}.`);
+      if (!act(hireManager(state, id), 'hire', id)) return;
+      const { manager } = getDef(id);
+      ui.say(id, 'hire');
+      ui.announce(`Contrataste a ${manager.name}. ${manager.says.hire}`);
     },
     onUpgrade: (id) => {
-      if (act(buyUpgrade(state, id), 'upgrade', id)) ui.announce(`Compraste ${getUpgrade(id).name}.`);
+      if (!act(buyUpgrade(state, id), 'upgrade', id)) return;
+      const { name, target } = getUpgrade(id);
+      if (target !== 'all' && state.businesses[target]?.manager) {
+        const { manager } = getDef(target);
+        ui.say(target, 'upgrade');
+        ui.announce(`Compraste ${name}. ${manager.name}: ${manager.says.upgrade}`);
+      } else {
+        const kind = target === 'all' ? 'upgrade' : 'upgradeOne';
+        ui.cheloSays(kind);
+        ui.announce(`Compraste ${name}. ${CHELO.says[kind]}`);
+      }
     },
     onToggleSound: () => {
       const on = !audio.prefs().sound;
@@ -111,7 +138,8 @@ function start(root: HTMLElement): void {
       backup(kv, state);
       audio.play('prestige');
       ui.celebrate();
-      ui.announce(`Heredaste. Ahora tienes ${next.recipes} recetas.`);
+      ui.cheloSays('prestige');
+      ui.announce(`Heredaste. Ahora tienes ${next.recipes} recetas. ${CHELO.says.prestige}`);
     },
     onImport: (text) => {
       const next = importSave(text);

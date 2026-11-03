@@ -144,3 +144,25 @@ Fórmulas estándar del género (Kongregate, "The Math of Idle Games"); constant
   - Correcciones y música: 15/15. La música arranca con un gesto real, agenda notas, se suspende con la pestaña oculta y su preferencia persiste. Teclado desbloquea el audio. Doble toque compra una sola mejora. Foco correcto tras comprar. Sidebar dentro del viewport a 1366×620.
 - [ ] Lighthouse (lo corre el user).
 - [ ] Escucha de la música (gusto: lo valida el user).
+
+## MVP2.5 — Identidad visual y personajes (2026-11-02)
+**Alcance:** paleta "mercado, más intensa" con modo oscuro cuidado, papel picado real bajo el total, iconos redibujados y carácter para cada gerente (avatar, voz y diálogos de evento). Plan aprobado tras revisión independiente ("aprobar con cambios", 15 hallazgos incorporados).
+
+**Diseño**
+- Una sola apuesta: papel sobre papel. Tarjetas con borde de 2 px y sombra dura, papel picado de 48 banderines en un solo `<svg>` recortado con `preserveAspectRatio="xMinYMin slice"`, estático (solo se sacude al heredar). Tokens nuevos con script de contraste (30 pares, claro y oscuro, todos ≥ AA); `--primary-bright` y `--cielo` solo decorativos.
+- Plato de vender: el aro es el único límite visible del control, así que lleva `--primary` cuando responde y `--border` cuando no. Cupón de mejoras con `mask-image`, sin sombra. Sin mayúsculas forzadas.
+
+**Personajes** (`src/data.ts`)
+- `BusinessDef.manager: ManagerDef { name, cost, icon, says: { hire, milestone, upgrade } }` y `CHELO` con `{ milestone, upgrade, prestige }`. El guardado no cambia (solo usa ids).
+- Reglas de voz en `DESIGN.md`; `characters.test.ts` comprueba longitud, pictogramas y tratamiento de género.
+- Bocadillos como overlay (`.bubble`) que no desplaza botones; visibles 6 s por marca de tiempo en `render` (sin `setTimeout`, determinista con pestaña oculta). Doña Chelo habla en su `<aside>` (sigue legible para lectores de pantalla); los bocadillos de gerente llevan `aria-hidden` y su frase va una sola vez a `aria-live`.
+- Disparadores en `main.ts`: contratar → gerente; hito (`milestonesCrossed`, cuenta varios con Máx) → gerente o Chelo; mejora → gerente del negocio o Chelo; herencia → Chelo + confeti + sacudida.
+
+**Iconos** (`src/assets/icons.svg`): 11 redibujados, `banderin` y 8 avatares. Mismas reglas de CSP (`icons.test.ts`).
+
+**Estado MVP2.5**
+- [x] `npm run check`: 85 tests, tsc y eslint en verde. `npm run build` ok (sprite 24 KB, 4 KB gzip).
+- [x] Contraste: 30 pares (claro y oscuro) ≥ AA con el script.
+- [x] Playwright: capturas 390×844 y 1280×800 en claro y oscuro (`.playwright-mcp/mvp25-*.png`). Contratar, hito, mejora y herencia muestran la frase correcta; el botón "Comprar" no se mueve con el bocadillo (misma `top` antes y después); `.col-side` termina en 528 px con la barra en 550 a 1366×620; foco visible en el cupón; con reduced-motion la sacudida y el pop no animan.
+- [x] Revisión independiente del diff: "listo con cambios menores"; aplicados (frase de Chelo para mejora de un negocio, orden CSS de `.hire`, `span` dentro del botón, `.shake` se reinicia a mano, test a 70 caracteres e incluye "mijo", `as const` en `CHELO`, `--side-top` 168 px).
+- [x] Lighthouse 13.6.0 móvil sobre el build (`npm run preview`): Performance 100, Accesibilidad 100, Best practices 100, SEO 100 (FCP 0.8 s, LCP 0.8 s, TBT 0 ms, CLS 0). Informe en `lighthouse-2026-11-02-mvp25.report.html` (ignorado en git).

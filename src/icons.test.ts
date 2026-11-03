@@ -10,8 +10,11 @@ describe('sprite de iconos', () => {
     expect([...symbols].sort()).toEqual([...ICON_NAMES].sort());
   });
 
-  it('todos los negocios usan un icono existente', () => {
-    for (const b of BUSINESSES) expect(ICON_NAMES).toContain(b.icon);
+  it('todos los negocios y gerentes usan un icono existente', () => {
+    for (const b of BUSINESSES) {
+      expect(ICON_NAMES).toContain(b.icon);
+      expect(ICON_NAMES).toContain(b.manager.icon);
+    }
   });
 
   it('compatible con la CSP: sin style, script, handlers ni recursos externos', () => {

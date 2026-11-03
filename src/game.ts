@@ -78,6 +78,11 @@ export function milestonesReached(count: number): number {
   return MILESTONES.filter((m) => count >= m).length;
 }
 
+/** Hitos cruzados por un negocio entre dos estados (Máx puede cruzar varios de golpe). */
+export function milestonesCrossed(before: State, after: State, id: string): number {
+  return milestonesReached(biz(after, id).count) - milestonesReached(biz(before, id).count);
+}
+
 /** Siguiente hito no alcanzado, o null si ya están todos. */
 export function nextMilestone(count: number): number | null {
   return MILESTONES.find((m) => count < m) ?? null;
@@ -147,13 +152,13 @@ export function startCycle(state: State, id: string): State {
 
 export function canHireManager(state: State, id: string): boolean {
   const b = biz(state, id);
-  return !b.manager && b.count > 0 && state.money >= getDef(id).managerCost;
+  return !b.manager && b.count > 0 && state.money >= getDef(id).manager.cost;
 }
 
 export function hireManager(state: State, id: string): State {
   if (!canHireManager(state, id)) return state;
   const b = biz(state, id);
-  return withBiz({ ...state, money: state.money - getDef(id).managerCost }, id, {
+  return withBiz({ ...state, money: state.money - getDef(id).manager.cost }, id, {
     manager: true,
     running: false,
     progressMs: b.running ? b.progressMs : 0,

@@ -11,6 +11,15 @@ export const ICON_NAMES = [
   'tienda',
   'camion',
   'chelo',
+  'beto',
+  'lupita',
+  'guero',
+  'tere',
+  'chuy',
+  'rosita',
+  'perez',
+  'jefa',
+  'banderin',
   'upgrade',
   'recipe',
   'sound-on',
@@ -26,6 +35,13 @@ export type IconName = (typeof ICON_NAMES)[number];
 
 const NS = 'http://www.w3.org/2000/svg';
 
+/** `<use>` que apunta a un símbolo del sprite. */
+export function use(name: IconName): SVGUseElement {
+  const u = document.createElementNS(NS, 'use');
+  u.setAttribute('href', `${spriteUrl}#${name}`);
+  return u;
+}
+
 /** Icono decorativo: el nombre accesible lo pone el control que lo contiene. */
 export function icon(name: IconName, className = 'icon'): SVGSVGElement {
   const svg = document.createElementNS(NS, 'svg');
@@ -33,9 +49,7 @@ export function icon(name: IconName, className = 'icon'): SVGSVGElement {
   svg.setAttribute('viewBox', '0 0 48 48');
   svg.setAttribute('aria-hidden', 'true');
   svg.setAttribute('focusable', 'false');
-  const use = document.createElementNS(NS, 'use');
-  use.setAttribute('href', `${spriteUrl}#${name}`);
-  svg.append(use);
+  svg.append(use(name));
   return svg;
 }
 

@@ -1,5 +1,20 @@
 import type { IconName } from './icons';
 
+export type ManagerEvent = 'hire' | 'milestone' | 'upgrade';
+export type CheloEvent = 'milestone' | 'upgrade' | 'upgradeOne' | 'prestige';
+
+/**
+ * Gerente de un negocio: nombre, costo, avatar y una frase por evento.
+ * Voz: trata al jugador de "usted" y nunca usa sustantivos de género ni de rol
+ * ("patrón", "jefe"); lo comprueba characters.test.ts.
+ */
+export interface ManagerDef {
+  readonly name: string;
+  readonly cost: number;
+  readonly icon: IconName;
+  readonly says: Readonly<Record<ManagerEvent, string>>;
+}
+
 export interface BusinessDef {
   readonly id: string;
   readonly name: string;
@@ -8,8 +23,7 @@ export interface BusinessDef {
   readonly growth: number;
   readonly baseRevenue: number;
   readonly cycleMs: number;
-  readonly managerCost: number;
-  readonly managerName: string;
+  readonly manager: ManagerDef;
 }
 
 /** Catálogo fijo. El orden es la escalera de progresión. */
@@ -22,8 +36,16 @@ export const BUSINESSES: readonly BusinessDef[] = [
     growth: 1.07,
     baseRevenue: 1,
     cycleMs: 1_000,
-    managerCost: 500,
-    managerName: 'Don Beto',
+    manager: {
+      name: 'Don Beto',
+      cost: 500,
+      icon: 'beto',
+      says: {
+        hire: 'Órale. Usted descanse, que el elote se vende solo.',
+        milestone: '¿Ya vio? Hasta la fila da vuelta a la esquina.',
+        upgrade: 'Con eso ni el chile pica igual. Mejor, pues.',
+      },
+    },
   },
   {
     id: 'aguas',
@@ -33,8 +55,16 @@ export const BUSINESSES: readonly BusinessDef[] = [
     growth: 1.15,
     baseRevenue: 60,
     cycleMs: 3_000,
-    managerCost: 7_500,
-    managerName: 'Lupita',
+    manager: {
+      name: 'Lupita',
+      cost: 7_500,
+      icon: 'lupita',
+      says: {
+        hire: '¡Aguas, aguas! Jamaica, horchata y limón, bien frías.',
+        milestone: '¡Se nos acaba el hielo de tanta gente!',
+        upgrade: 'Pruébela. Esta sí sabe a fruta de verdad.',
+      },
+    },
   },
   {
     id: 'tacos',
@@ -44,8 +74,16 @@ export const BUSINESSES: readonly BusinessDef[] = [
     growth: 1.14,
     baseRevenue: 540,
     cycleMs: 6_000,
-    managerCost: 100_000,
-    managerName: 'El Güero',
+    manager: {
+      name: 'El Güero',
+      cost: 100_000,
+      icon: 'guero',
+      says: {
+        hire: '¿Con todo? Con todo. Aquí nadie se va con hambre.',
+        milestone: '¡Trompo nuevo cada hora! Esto ya es otra liga.',
+        upgrade: 'Esa salsa ya hizo llorar a tres. Buena señal.',
+      },
+    },
   },
   {
     id: 'tortas',
@@ -55,8 +93,16 @@ export const BUSINESSES: readonly BusinessDef[] = [
     growth: 1.13,
     baseRevenue: 4_320,
     cycleMs: 12_000,
-    managerCost: 1_200_000,
-    managerName: 'Doña Tere',
+    manager: {
+      name: 'Doña Tere',
+      cost: 1_200_000,
+      icon: 'tere',
+      says: {
+        hire: 'Aquí las tortas van bien servidas. Ya lo verá.',
+        milestone: 'No me mire así. Le dije que iban a venir.',
+        upgrade: 'Ahora sí hay con qué trabajar. Siga así.',
+      },
+    },
   },
   {
     id: 'fonda',
@@ -66,8 +112,16 @@ export const BUSINESSES: readonly BusinessDef[] = [
     growth: 1.12,
     baseRevenue: 51_840,
     cycleMs: 24_000,
-    managerCost: 15_000_000,
-    managerName: 'Chuy',
+    manager: {
+      name: 'Chuy',
+      cost: 15_000_000,
+      icon: 'chuy',
+      says: {
+        hire: 'Siéntese, que ya casi sale el guisado.',
+        milestone: 'Tuvimos que poner mesas en la banqueta.',
+        upgrade: 'Con sazón nuevo hasta el arroz sabe a domingo.',
+      },
+    },
   },
   {
     id: 'panaderia',
@@ -77,8 +131,16 @@ export const BUSINESSES: readonly BusinessDef[] = [
     growth: 1.11,
     baseRevenue: 622_080,
     cycleMs: 48_000,
-    managerCost: 180_000_000,
-    managerName: 'Rosita',
+    manager: {
+      name: 'Rosita',
+      cost: 180_000_000,
+      icon: 'rosita',
+      says: {
+        hire: 'Hoy salieron esponjaditas. Huela nomás.',
+        milestone: 'Ya no caben las charolas en el mostrador.',
+        upgrade: 'Con el horno nuevo hasta la masa está de buenas.',
+      },
+    },
   },
   {
     id: 'franquicia',
@@ -88,8 +150,16 @@ export const BUSINESSES: readonly BusinessDef[] = [
     growth: 1.1,
     baseRevenue: 7_464_960,
     cycleMs: 96_000,
-    managerCost: 2_000_000_000,
-    managerName: 'Licenciado Pérez',
+    manager: {
+      name: 'Licenciado Pérez',
+      cost: 2_000_000_000,
+      icon: 'perez',
+      says: {
+        hire: 'Según mis proyecciones, esto escala. Confíe en el proceso.',
+        milestone: 'Los indicadores superan lo previsto. Lo llevo a la junta.',
+        upgrade: 'Inversión alineada con la estrategia. Excelente.',
+      },
+    },
   },
   {
     id: 'cadena',
@@ -99,10 +169,30 @@ export const BUSINESSES: readonly BusinessDef[] = [
     growth: 1.09,
     baseRevenue: 89_579_520,
     cycleMs: 192_000,
-    managerCost: 25_000_000_000,
-    managerName: 'La Jefa',
+    manager: {
+      name: 'La Jefa',
+      cost: 25_000_000_000,
+      icon: 'jefa',
+      says: {
+        hire: 'Yo me encargo. Usted no se distraiga.',
+        milestone: 'Bien. Ahora el doble.',
+        upgrade: 'Era lo que faltaba. Siguiente.',
+      },
+    },
   },
 ];
+
+/** Guía del juego: da tips al inicio y habla en los eventos sin gerente. */
+export const CHELO = {
+  name: 'Doña Chelo',
+  icon: 'chelo',
+  says: {
+    milestone: '¡Son muchos puestos, mijo! Ahora venden mucho más.',
+    upgrade: 'Esa mejora le sirve a todos los negocios, mijo.',
+    upgradeOne: 'Esa mejora se nota en el puesto, mijo.',
+    prestige: 'Qué orgullo. Con las recetas de la abuela todo vende más.',
+  },
+} as const satisfies { name: string; icon: IconName; says: Readonly<Record<CheloEvent, string>> };
 
 /** Unidades en las que cada hito duplica el ingreso. */
 export const MILESTONES: readonly number[] = [25, 50, 100, 200];

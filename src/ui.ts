@@ -1,4 +1,4 @@
-import { BUSINESSES, type BusinessDef } from './data';
+import { BUSINESSES, CHELO, type BusinessDef, type CheloEvent, type ManagerEvent } from './data';
 import {
   canBuyUpgrade,
   canHireManager,
@@ -15,8 +15,8 @@ import {
   type State,
 } from './game';
 import { formatDuration, formatMoney, formatNumber } from './format';
-import { icon, setIcon, type IconName } from './icons';
-import { coin, confetti, pulse } from './fx';
+import { icon, setIcon, use, type IconName } from './icons';
+import { coin, confetti, pop, pulse } from './fx';
 
 export interface Handlers {
   onStart(id: string): void;
@@ -79,8 +79,10 @@ interface Card {
   info: HTMLElement;
   buy: HTMLButtonElement;
   hire: HTMLButtonElement;
-  hireText: HTMLElement;
-  hireCheck: SVGSVGElement;
+  manager: HTMLElement;
+  bubble: HTMLElement;
+  /** performance.now() hasta el que se ve el bocadillo (0 = oculto). */
+  bubbleUntil: number;
 }
 
 interface UpgradeSlot {
@@ -90,6 +92,18 @@ interface UpgradeSlot {
   effect: HTMLElement;
   buy: HTMLButtonElement;
   id: string | null;
+}
+
+/** Tiempo que un bocadillo queda a la vista. Sin temporizadores: lo decide render(). */
+export const BUBBLE_MS = 6_000;
+/** Banderines del papel picado: 48 × 24 px cubren hasta 1152 px de ancho. */
+const FLAGS = 48;
+const FLAG_W = 24;
+const FLAG_H = 28;
+const FLAG_COLORS = 4;
+
+export function bubbleVisible(now: number, until: number): boolean {
+  return now < until;
 }
 
 const MODES: readonly BuyMode[] = [1, 10, 'max'];
@@ -104,7 +118,7 @@ function tipFor(s: State): string | null {
     return 'Ya puedes heredar: vuelves a empezar, pero con recetas que suben todas tus ventas.';
   if (s.lifetimeEarned > 0 || s.recipes > 0) {
     if (managers === 0 && canHireManager(s, 'elotes'))
-      return 'Contrata a Don Beto: vende solito, aunque cierres el juego.';
+      return `Contrata a ${getDef('elotes').manager.name}: vende solito, aunque cierres el juego.`;
     if (managers === 0 && (elotes?.count ?? 0) < 5) return 'Compra más carritos: cada uno vende más por vuelta.';
     if (managers === 1 && (s.businesses.aguas?.count ?? 0) === 0)
       return 'Junta para un puesto de aguas frescas; deja más por vuelta.';
@@ -125,6 +139,10 @@ export interface UI {
   render(s: State, mode: BuyMode, audio: { sound: boolean; music: boolean }): void;
   renderBars(s: State): void;
   announce(text: string): void;
+  /** El gerente del negocio dice su frase del evento (bocadillo, 6 s). */
+  say(id: string, kind: ManagerEvent): void;
+  /** Doña Chelo reemplaza su tip por la frase del evento (6 s). */
+  cheloSays(kind: CheloEvent): void;
   /** Efectos de confirmación (sin efecto con reduced-motion). */
   sold(id: string, amount: number): void;
   confirm(kind: 'buy' | 'hire' | 'upgrade', id: string): void;
@@ -146,10 +164,33 @@ export function showLocked(root: HTMLElement): void {
   );
 }
 
+/** Hilera de papel picado: un solo <svg> que se recorta a lo ancho sin deformar los banderines. */
+function papelPicado(): SVGSVGElement {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('class', 'picado');
+  svg.setAttribute('viewBox', `0 0 ${FLAGS * FLAG_W} ${FLAG_H}`);
+  svg.setAttribute('preserveAspectRatio', 'xMinYMin slice');
+  svg.setAttribute('aria-hidden', 'true');
+  svg.setAttribute('focusable', 'false');
+  for (let i = 0; i < FLAGS; i++) {
+    const u = use('banderin');
+    u.setAttribute('x', String(i * FLAG_W));
+    u.setAttribute('width', String(FLAG_W));
+    u.setAttribute('height', String(FLAG_H));
+    u.setAttribute('class', `f${(i % FLAG_COLORS) + 1}`);
+    svg.append(u);
+  }
+  return svg;
+}
+
 function dialog(title: string, body: Node[], actions: HTMLButtonElement[] = []): HTMLDialogElement {
   const d = h('dialog', { class: 'modal' });
   const close = h('button', { class: 'btn', type: 'button', text: 'Cerrar', onclick: () => d.close() });
-  d.append(h('h2', { text: title }), ...body, h('div', { class: 'actions' }, [...actions, close]));
+  d.append(
+    h('h2', {}, [icon('banderin', 'icon flag'), h('span', { text: title })]),
+    ...body,
+    h('div', { class: 'actions' }, [...actions, close]),
+  );
   d.setAttribute('aria-label', title);
   d.addEventListener('close', () => d.remove());
   document.body.append(d);
@@ -190,7 +231,9 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
   segmented.setAttribute('role', 'group');
 
   const tip = h('p', { class: 'tip-text' });
-  const tipBox = h('aside', { class: 'tip', hidden: true }, [icon('chelo', 'icon chelo'), tip]);
+  const tipBox = h('aside', { class: 'tip', hidden: true, label: CHELO.name }, [icon(CHELO.icon, 'icon chelo'), tip]);
+  let cheloText = '';
+  let cheloUntil = 0;
 
   const live = h('p', { class: 'sr-only' });
   live.setAttribute('aria-live', 'polite');
@@ -201,7 +244,7 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
     const sell = h(
       'button',
       { class: 'sell', type: 'button', label: `Vender: ${def.name}`, onclick: () => handlers.onStart(def.id) },
-      [icon(def.icon, 'icon sell-icon')],
+      [icon(def.icon, 'icon sell-icon'), icon(def.manager.icon, 'icon badge')],
     );
     const count = h('span', { class: 'count' });
     const fill = h('div', { class: 'fill' });
@@ -209,22 +252,32 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
     bar.setAttribute('aria-hidden', 'true');
     const info = h('p', { class: 'info' });
     const buy = h('button', { class: 'btn primary', type: 'button', onclick: () => handlers.onBuy(def.id) });
-    const hireText = h('span');
-    const hireCheck = icon('check', 'icon icon-sm');
-    const hire = h('button', { class: 'btn', type: 'button', onclick: () => handlers.onHire(def.id) }, [
-      hireCheck,
-      hireText,
+    // Dos líneas a propósito (nombre y precio), como el chip de gerente que lo sustituye.
+    const hire = h('button', { class: 'btn hire', type: 'button', onclick: () => handlers.onHire(def.id) }, [
+      icon(def.manager.icon, 'icon avatar-sm'),
+      h('span', { class: 'stack' }, [
+        h('span', { text: `Contratar a ${def.manager.name}` }),
+        h('span', { class: 'price', text: formatMoney(def.manager.cost) }),
+      ]),
     ]);
+    const manager = h('div', { class: 'manager', hidden: true }, [
+      icon(def.manager.icon, 'icon avatar'),
+      h('div', {}, [h('strong', { text: def.manager.name }), h('span', { text: 'Vende solito' })]),
+    ]);
+    // Overlay: no entra en el flujo, así la tarjeta no crece ni se mueven los botones.
+    const bubble = h('div', { class: 'bubble', hidden: true });
+    bubble.setAttribute('aria-hidden', 'true');
     const cardRoot = h('li', { class: 'card' }, [
       sell,
       h('div', { class: 'body' }, [
         h('h2', { text: def.name }, [count]),
         bar,
         info,
-        h('div', { class: 'row' }, [buy, hire]),
+        h('div', { class: 'row' }, [buy, hire, manager]),
       ]),
+      bubble,
     ]);
-    return { def, root: cardRoot, sell, count, fill, info, buy, hire, hireText, hireCheck };
+    return { def, root: cardRoot, sell, count, fill, info, buy, hire, manager, bubble, bubbleUntil: 0 };
   });
 
   const appTitle = h('h1', { text: 'Imperio de Antojitos' });
@@ -266,12 +319,15 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
   upgrades.setAttribute('aria-labelledby', 'upgrades-title');
 
   const prestigeBtn = h('button', { class: 'btn heir', type: 'button', onclick: confirmPrestige });
+  const picado = papelPicado();
+  picado.addEventListener('animationend', () => picado.classList.remove('shake'));
 
   root.replaceChildren(
     h('header', { class: 'top' }, [
       h('div', { class: 'title-row' }, [appTitle, h('div', {}, [musicBtn, sound, menu])]),
       money,
       h('div', { class: 'sub-row' }, [rate, recipes]),
+      picado,
     ]),
     h('div', { class: 'layout' }, [
       h('div', { class: 'col-side' }, [tipBox, upgrades]),
@@ -405,7 +461,8 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
         const on = String(m === mode);
         if (b.getAttribute('aria-pressed') !== on) b.setAttribute('aria-pressed', on);
       }
-      const t = tipFor(s);
+      const now = performance.now();
+      const t = bubbleVisible(now, cheloUntil) ? cheloText : tipFor(s);
       setHidden(tipBox, t === null);
       if (t !== null) setText(tip, t);
 
@@ -446,15 +503,12 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
         );
         setDisabled(c.buy, q === 0);
 
-        setHidden(c.hire, !owned);
-        c.hireCheck.style.display = b.manager ? '' : 'none';
-        if (b.manager) {
-          setText(c.hireText, c.def.managerName);
-          setDisabled(c.hire, true);
-        } else {
-          setText(c.hireText, `Contratar a ${c.def.managerName} · ${formatMoney(c.def.managerCost)}`);
-          setDisabled(c.hire, !canHireManager(s, c.def.id));
-        }
+        c.root.classList.toggle('managed', b.manager);
+        setHidden(c.hire, !owned || b.manager);
+        setHidden(c.manager, !b.manager);
+        if (!b.manager) setDisabled(c.hire, !canHireManager(s, c.def.id));
+
+        setHidden(c.bubble, !bubbleVisible(now, c.bubbleUntil));
       }
 
       const n = pendingRecipes(s);
@@ -476,6 +530,23 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
       live.textContent = text;
     },
 
+    say(id, kind) {
+      const c = cards.find((x) => x.def.id === id);
+      if (!c) return;
+      setText(c.bubble, c.def.manager.says[kind]);
+      c.bubbleUntil = performance.now() + BUBBLE_MS;
+      setHidden(c.bubble, false);
+      pop(c.bubble);
+    },
+
+    cheloSays(kind) {
+      cheloText = CHELO.says[kind];
+      cheloUntil = performance.now() + BUBBLE_MS;
+      setText(tip, cheloText);
+      setHidden(tipBox, false);
+      pop(tipBox);
+    },
+
     sold(id, amount) {
       const c = cards.find((x) => x.def.id === id);
       if (c) coin(c.sell, `+${formatMoney(amount)}`);
@@ -490,10 +561,17 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
         return;
       }
       const c = cards.find((x) => x.def.id === id);
-      if (c) pulse(kind === 'buy' ? c.buy : c.hire);
+      if (c) pulse(kind === 'buy' ? c.buy : c.manager);
     },
 
     celebrate() {
+      // La partida se reinicia: ningún bocadillo sobrevive a la herencia.
+      for (const c of cards) c.bubbleUntil = 0;
+      cheloUntil = 0;
+      // Con reduced-motion no hay animationend y la clase se quedaría puesta: se reinicia a mano.
+      picado.classList.remove('shake');
+      void picado.getBoundingClientRect();
+      picado.classList.add('shake');
       confetti();
     },
 

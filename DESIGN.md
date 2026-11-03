@@ -4,34 +4,37 @@ Fuente única de estilo visual. Si algo aquí choca con el código, manda el có
 
 ## Voz visual
 
-Mercado mexicano / papel picado: cálido, alegre, legible. Ilustración **flat** con contorno grueso redondeado, colores de comida saturados sobre fondo papel crema. Sin degradados, sin sombras dentro de los iconos, sin fotos, **cero emojis**.
+Mercado mexicano / papel recortado: cálido, alegre, legible. Una sola apuesta: todo es papel sobre papel. Papel picado colgando del header, tarjetas con borde de 2 px y sombra dura de 3 px sin desenfoque, banderín como motivo repetido (título de los diálogos). Ilustración **flat** con contorno grueso redondeado, colores de comida saturados sobre fondo papel crema. Sin degradados, sin sombras dentro de los iconos, sin fotos, **cero emojis**. El dinero es el héroe del header; el título queda secundario.
 
 ## Paleta (tokens en `src/style.css`)
 
 Contraste mínimo: texto ≥ 4.5:1, UI ≥ 3:1 (WCAG AA). Nunca usar hex sueltos en CSS de UI: usar `var(--token)`.
 
-| Token          | Claro     | Oscuro    | Uso / contraste (claro)              |
-| -------------- | --------- | --------- | ------------------------------------ |
-| `--bg`         | `#fff6e5` | `#1e1412` | fondo papel                          |
-| `--card`       | `#ffffff` | `#2a1f1c` | tarjetas                             |
-| `--text`       | `#2b1b17` | `#f3e9dd` | texto, 15.4:1 sobre `--bg`           |
-| `--muted`      | `#6b5a52` | `#c9b8a8` | texto secundario, 6.1:1 sobre `--bg` |
-| `--primary`    | `#c2006a` | `#ff6fb5` | rosa mexicano, 6.0:1 con blanco      |
-| `--on-primary` | `#ffffff` | `#2a1f1c` | texto sobre primary                  |
-| `--corn`       | `#f4c430` | `#f4c430` | amarillo elote (acento, mejoras)     |
-| `--on-corn`    | `#2b1b17` | `#1e1412` | texto sobre corn                     |
-| `--nopal`      | `#2f6b39` | `#7cc68a` | verde nopal, 6.4:1 con blanco        |
-| `--on-nopal`   | `#ffffff` | `#1e1412` | texto sobre nopal                    |
-| `--border`     | `#f0dcc0` | `#3d2e29` | bordes                               |
-| `--track`      | `#f6e7cd` | `#3d2e29` | fondo de barras de progreso          |
-| `--focus`      | `#c2006a` | `#f4c430` | anillo de foco, 5.6:1 sobre `--bg`   |
+| Token              | Claro                   | Oscuro    | Uso / contraste (claro)                                    |
+| ------------------ | ----------------------- | --------- | ---------------------------------------------------------- |
+| `--bg`             | `#fbf0e4`               | `#1c1210` | fondo papel                                                |
+| `--card`           | `#fffaf3`               | `#2b1d19` | tarjetas, barra inferior, diálogos                         |
+| `--text`           | `#2a1612`               | `#f6ece0` | texto, 15.3:1 sobre `--bg`                                 |
+| `--muted`          | `#6e574c`               | `#cdb9a7` | texto secundario, 6.0:1 sobre `--bg`, 6.5:1 sobre `--card` |
+| `--primary`        | `#c2006a`               | `#ff6fb5` | rosa mexicano oscuro, 6.0:1 con blanco; aro del plato      |
+| `--on-primary`     | `#ffffff`               | `#2b1d19` | texto sobre primary                                        |
+| `--primary-bright` | `#e4007c`               | `#ff6fb5` | solo decorativo: banderines, confeti, banderín de diálogo  |
+| `--corn`           | `#f5b92a`               | `#f5b92a` | amarillo elote: bocadillos, cupones, 9.7:1 con `--on-corn` |
+| `--on-corn`        | `#2a1612`               | `#1c1210` | texto sobre corn                                           |
+| `--nopal`          | `#2a7239`               | `#7cc68a` | verde nopal, 5.9:1 con blanco, 4.7:1 sobre `--track`       |
+| `--on-nopal`       | `#ffffff`               | `#1c1210` | texto sobre nopal                                          |
+| `--cielo`          | `#1f7fc2`               | `#6cc1f0` | solo decorativo: banderines                                |
+| `--border`         | `#ecd9c0`               | `#4a3832` | bordes de 2 px; en oscuro da el relieve                    |
+| `--track`          | `#f3e3cb`               | `#3d2e29` | fondo de barras y del chip de gerente                      |
+| `--shadow`         | `0 3px 0 var(--border)` | `none`    | sombra dura (papel sobre papel); en oscuro no hay          |
+| `--focus`          | `#c2006a`               | `#f5b92a` | anillo de foco, 5.3:1 sobre `--bg`                         |
 
-Cualquier token nuevo necesita par claro/oscuro y ratio comprobado.
+`--primary-bright` y `--cielo` nunca llevan texto encima. Cualquier token nuevo necesita par claro/oscuro y ratio comprobado; `.fx-*` del confeti usan tokens, nunca hex sueltos. Script de comprobación: calcula el ratio WCAG de cada par (texto ≥ 4.5, UI ≥ 3) leyendo `:root` claro y oscuro de `style.css`; se corre antes de cerrar cualquier cambio de paleta.
 
 ## Tipografía
 
 - Familia: `system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif` (sin webfonts: rendimiento y offline).
-- Título: `clamp(1.75rem, 8vw, 2.5rem)`. Cuerpo: `1rem`. Secundario: `0.85rem` a `0.95rem`. Cifras grandes: `2rem`.
+- Dinero: `clamp(1.75rem, 8vw, 2.5rem)`, peso 900. Título de la app: `1rem`, peso 600, `--muted`. Cuerpo: `1rem`. Secundario: `0.85rem` a `0.95rem`. Cifras grandes: `2rem`. Títulos de sección: `0.9rem`, peso 700, sin mayúsculas forzadas.
 
 ## Ilustración e iconos (`src/assets/icons.svg`)
 
@@ -46,13 +49,44 @@ Cualquier token nuevo necesita par claro/oscuro y ratio comprobado.
   - Verdes: `#3A7D44` `#5FA35F`
   - Rojos / rosa: `#E5484D` `#E4007C` `#F25C8F`
   - Agua / cristal: `#9ED8F0`; metal: `#C8C8C8` `#DADADA`
+  - Azul (gorra, cielo): `#1F7FC2`
+  - Pieles: `#8C5A3C` `#B07850` `#D9A15B` `#E8B48A`; pelo: `#2B1B17` `#6B4A3A`, canas `#DADADA`
   - Puntos oscuros: `#2B1B17`; brillos: `#FFF6E5`
-- Reutilizar estos hex antes de añadir nuevos. Formas simples, máximo 6–8 elementos por icono.
+- Reutilizar estos hex antes de añadir nuevos. Formas simples, máximo 10–12 elementos por icono.
+- **Avatares** (busto en el cuadro de 48): cabeza circular centrada en ~(24,20), hombros que tocan el borde inferior, dos ojos de punto, boca de trazo y un objeto o prenda que identifique al personaje. Se usan a 24 px (botón de contratar), 26 px (esquina del plato) y 36 px (chip de gerente).
+- **Banderín** (`banderin`, viewBox `0 0 24 28`): un solo `<path fill="currentColor" fill-rule="evenodd">` con borde inferior festoneado y calados. El color lo pone CSS (`.picado .f1…f4`).
 - **CSP:** prohibido `style`, `<style>`, `<script>`, handlers `on*` y recursos externos dentro del SVG.
+
+## Personajes
+
+Cada negocio tiene un gerente con nombre, avatar y tres frases (`manager.says` en `src/data.ts`: `hire`, `milestone`, `upgrade`). Doña Chelo (`CHELO`) es la guía: da tips al inicio y habla cuando no hay gerente (`milestone`, `upgrade` global, `upgradeOne` de un negocio sin gerente, `prestige`).
+
+| Personaje        | Negocio    | Look                                                        | Voz                        |
+| ---------------- | ---------- | ----------------------------------------------------------- | -------------------------- |
+| Doña Chelo       | guía       | abuela, chongo con canas, lentes redondos, rebozo rosa      | cariñosa, manda con "mijo" |
+| Don Beto         | elotes     | 70 años, sombrero de palma, bigote blanco, camisa a cuadros | calmado, de refranes       |
+| Lupita           | aguas      | trenza con listón rosa, delantal de flores, sonrisa grande  | pregonera, entusiasta      |
+| El Güero         | tacos      | cachucha al revés, playera, cucharón al hombro              | bromista                   |
+| Doña Tere        | tortas     | lentes de media luna, chongo, aretes                        | seria, exigente            |
+| Chuy             | fonda      | gorro de cocinero, bigote, cachetes rojos                   | cálido, consentidor        |
+| Rosita           | panadería  | pañoleta, harina en la mejilla, charola                     | soñadora, dulce            |
+| Licenciado Pérez | franquicia | traje gris, corbata rosa, lentes, gafete                    | corporativo, con cifras    |
+| La Jefa          | cadena     | lentes oscuros, aretes grandes, saco rojo                   | pocas palabras, manda      |
+
+Reglas de voz:
+
+- Español de México, frases de una línea (≤ 70 caracteres), sin emojis ni pictogramas.
+- Los gerentes tratan al jugador de "usted" y nunca usan sustantivos de género ni de rol ("patrón", "jefe", "mija"); lo comprueba `src/characters.test.ts`. Excepción asumida: el "mijo" de Doña Chelo es marca del personaje.
+- Las frases son sabor, no información: lo que importa (dinero, hitos, recetas) siempre va también en números y en `aria-live`.
 
 ## Componentes y UX
 
 - Móvil primero (contenedor máx. 560 px); layout web a partir del breakpoint en `style.css`.
+- **Papel picado** (`.picado`): un solo `<svg>` con 48 `<use>` del `banderin`, `preserveAspectRatio="xMinYMin slice"`: se recorta a lo ancho sin deformar. 22 px en móvil, 28 px en web. Estático; solo se sacude (`.shake`, un nodo, `transform`) al heredar.
+- **Plato** (`.sell`): aro de 4 px. Interactivo: `--primary` con anillo interior `--corn`; bloqueado o con gerente: `--border`. Con gerente, el avatar asoma en la esquina (`.badge`).
+- **Chip de gerente** (`.manager`): sustituye al botón de contratar, misma altura mínima (44 px) para que la fila no cambie.
+- **Bocadillos** (`.bubble`): overlay absoluto sobre título y barra de la tarjeta, `pointer-events: none`, `aria-hidden`; nunca desplazan botones. Duran 6 s por marca de tiempo en `render`, sin temporizadores. El tip de Doña Chelo (`.tip`) comparte el estilo pero sigue siendo un `<aside>` legible.
+- **Cupón** (`.up-card`): borde `--corn`, muescas laterales con `mask-image` (CSS puro), sin sombra.
 - Objetivos táctiles ≥ 44 px.
 - Estado deshabilitado: borde punteado además del color (nunca solo color).
 - Foco visible con `--focus`.

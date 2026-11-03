@@ -43,6 +43,18 @@ export function coin(anchor: Element, text: string): void {
   });
 }
 
+/** Entrada de un bocadillo: aparece con un pequeño salto. */
+export function pop(el: Element): void {
+  if (reducedMotion()) return;
+  el.animate(
+    [
+      { transform: 'scale(0.9)', opacity: 0 },
+      { transform: 'scale(1)', opacity: 1 },
+    ],
+    { duration: 180, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1.2)' },
+  );
+}
+
 /** Rebote corto para confirmar una acción. */
 export function pulse(el: Element): void {
   if (reducedMotion()) return;

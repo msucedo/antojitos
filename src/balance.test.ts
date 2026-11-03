@@ -42,7 +42,7 @@ function bestAction(s: State): State | null {
     }
     if (canHireManager(s, def.id)) {
       const gain = ((revenuePerCycle(s, def.id) * 1000) / def.cycleMs) * (1 - efficiency(def.cycleMs, false));
-      const score = gain / def.managerCost;
+      const score = gain / def.manager.cost;
       if (!best || score > best.score) best = { score, apply: () => hireManager(s, def.id) };
     }
   }

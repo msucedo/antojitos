@@ -12,6 +12,7 @@ import {
   getDef,
   hireManager,
   maxAffordable,
+  milestonesCrossed,
   newState,
   pendingRecipes,
   quantityFor,
@@ -65,11 +66,11 @@ describe('costos', () => {
   });
 
   it('precios fijos (gerentes, mejoras) son enteros y coherentes con dinero fraccionario', () => {
-    for (const def of BUSINESSES) expect(Number.isInteger(def.managerCost)).toBe(true);
+    for (const def of BUSINESSES) expect(Number.isInteger(def.manager.cost)).toBe(true);
     for (const u of UPGRADES) expect(Number.isInteger(u.cost)).toBe(true);
     const s = buy(withMoney(elotes.baseCost), 'elotes', 1);
-    expect(canHireManager({ ...s, money: elotes.managerCost - 1e-9 }, 'elotes')).toBe(false);
-    expect(canHireManager({ ...s, money: elotes.managerCost }, 'elotes')).toBe(true);
+    expect(canHireManager({ ...s, money: elotes.manager.cost - 1e-9 }, 'elotes')).toBe(false);
+    expect(canHireManager({ ...s, money: elotes.manager.cost }, 'elotes')).toBe(true);
   });
 
   it('maxAffordable es exacto en el borde', () => {
@@ -109,6 +110,27 @@ describe('comprar', () => {
   });
 });
 
+describe('hitos', () => {
+  const withCount = (count: number): State => {
+    const s = withMoney(0);
+    return { ...s, businesses: { ...s.businesses, elotes: { ...s.businesses.elotes!, count } } };
+  };
+
+  it('milestonesCrossed cuenta los hitos cruzados entre dos estados', () => {
+    expect(milestonesCrossed(withCount(24), withCount(25), 'elotes')).toBe(1);
+    expect(milestonesCrossed(withCount(20), withCount(60), 'elotes')).toBe(2);
+    expect(milestonesCrossed(withCount(26), withCount(30), 'elotes')).toBe(0);
+    expect(milestonesCrossed(withCount(0), withCount(1), 'elotes')).toBe(0);
+  });
+
+  it('una compra con Máx que salta dos hitos los reporta', () => {
+    const before = withCount(20);
+    const after = buy({ ...before, money: costOf(elotes, 20, 40) }, 'elotes', 'max');
+    expect(after.businesses.elotes!.count).toBe(60);
+    expect(milestonesCrossed(before, after, 'elotes')).toBe(2);
+  });
+});
+
 describe('ciclos', () => {
   it('sin gerente: un ciclo por toque', () => {
     let s = startCycle(newState(T0), 'elotes');
@@ -122,7 +144,7 @@ describe('ciclos', () => {
   });
 
   it('con gerente: dt enorme en fórmula cerrada', () => {
-    let s = hireManager(withMoney(elotes.managerCost), 'elotes');
+    let s = hireManager(withMoney(elotes.manager.cost), 'elotes');
     expect(s.businesses.elotes?.manager).toBe(true);
     s = tick(s, elotes.cycleMs * 1e9 + 1);
     expect(s.money).toBeCloseTo(elotes.baseRevenue * 1e9);
@@ -149,7 +171,7 @@ describe('ciclos', () => {
 });
 
 describe('offline', () => {
-  const managed = (): State => ({ ...hireManager(withMoney(elotes.managerCost), 'elotes'), lastSeen: T0 });
+  const managed = (): State => ({ ...hireManager(withMoney(elotes.manager.cost), 'elotes'), lastSeen: T0 });
 
   it('gana por el tiempo fuera', () => {
     const { earned } = applyOffline(managed(), T0 + 60_000);
@@ -206,7 +228,7 @@ describe('herencia', () => {
 
 describe('desborde', () => {
   it('ganancias enormes se topan en MAX_VALUE y el estado sigue serializable', () => {
-    let s = hireManager(withMoney(elotes.managerCost), 'elotes');
+    let s = hireManager(withMoney(elotes.manager.cost), 'elotes');
     s = { ...s, lifetimeEarned: 1.797e308, recipes: 5e306 };
     s = tick(s, 1_000);
     expect(Number.isFinite(s.lifetimeEarned)).toBe(true);
