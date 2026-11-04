@@ -1314,7 +1314,8 @@ p {
   .upgrades {
     position: fixed;
     top: var(--side-top);
-    bottom: var(--bar-h);
+    /* Alto según contenido; si no cabe entre el header y el borde inferior, scroll propio. */
+    max-height: calc(100dvh - var(--side-top) - var(--bar-h) - var(--side-gap));
     left: var(--lateral-w);
     width: var(--panel-w);
     z-index: 2;
