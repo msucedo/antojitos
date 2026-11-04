@@ -4,8 +4,9 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   build: {
     // El sprite de iconos se usa con <use href>: debe ser un archivo, nunca un data: URI
-    // (los navegadores bloquean <use> hacia data: y la CSP solo permite 'self').
-    assetsInlineLimit: (file) => (file.endsWith('.svg') ? false : undefined),
+    // (los navegadores bloquean <use> hacia data: y la CSP solo permite 'self'). Los retratos
+    // WebP tampoco: img-src 'self' bloquea data:.
+    assetsInlineLimit: (file) => (file.endsWith('.svg') || file.endsWith('.webp') ? false : undefined),
   },
   plugins: [
     VitePWA({
@@ -14,7 +15,7 @@ export default defineConfig({
       injectRegister: false,
       includeAssets: ['favicon.svg', 'icons/apple-touch-icon.png'],
       workbox: {
-        globPatterns: ['**/*.{js,css,html,svg,png,woff2,webmanifest}'],
+        globPatterns: ['**/*.{js,css,html,svg,png,webp,woff2,webmanifest}'],
         cleanupOutdatedCaches: true,
         // Controlar la página desde la primera visita: si no, una actualización que llega
         // en esa misma sesión activa el SW nuevo pero el botón "Recargar" nunca recarga.

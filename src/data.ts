@@ -196,7 +196,14 @@ export const BUSINESSES: readonly BusinessDef[] = [
   },
 ];
 
-/** Guía del juego: da tips al inicio y habla en los eventos sin gerente. */
+/** Pregunta fija del panel de Chelo: con respuesta escrita, o `ahora` (el consejo según la partida). */
+export type CheloFaq = { readonly q: string; readonly a: string } | { readonly q: string; readonly id: 'ahora' };
+
+/**
+ * Guía del juego: su panel muestra el consejo según la partida, habla en los eventos sin gerente
+ * y responde preguntas fijas. Las respuestas (`faq`) pueden llegar a 140 caracteres y sí dan
+ * información: excepción documentada en DESIGN.md.
+ */
 export const CHELO = {
   name: 'Doña Chelo',
   icon: 'chelo',
@@ -206,7 +213,34 @@ export const CHELO = {
     upgradeOne: 'Esa mejora se nota en el puesto, mijo.',
     prestige: 'Qué orgullo. Con las recetas de la abuela todo vende más.',
   },
-} as const satisfies { name: string; icon: IconName; says: Readonly<Record<CheloEvent, string>> };
+  /** Cuando no hay consejo pendiente. */
+  idle: 'Todo en orden, mijo. Sigue vendiendo y yo te aviso.',
+  faq: [
+    { q: '¿Qué hago ahora?', id: 'ahora' },
+    {
+      q: '¿Para qué sirven las mejoras?',
+      a: 'Cada mejora multiplica lo que vende un negocio, o todos. Las compras en Mejoras.',
+    },
+    {
+      q: '¿Qué hace un gerente?',
+      a: 'Vende solito, hasta con el juego cerrado. Se contrata en Personajes, mijo.',
+    },
+    {
+      q: '¿Qué es la herencia?',
+      a: 'Le pasas el negocio a la familia: empiezas de cero con recetas, y cada una suma 2 % a todo.',
+    },
+    {
+      q: '¿Cómo guardo mi partida?',
+      a: 'Se guarda sola en este navegador. En Respaldo copias un código por si cambias de aparato.',
+    },
+  ],
+} as const satisfies {
+  name: string;
+  icon: IconName;
+  says: Readonly<Record<CheloEvent, string>>;
+  idle: string;
+  faq: readonly CheloFaq[];
+};
 
 /** Unidades en las que cada hito duplica el ingreso. */
 export const MILESTONES: readonly number[] = [25, 50, 100, 200];

@@ -19,6 +19,7 @@ import {
 } from './game';
 import { formatDuration, formatMoney, formatNumber } from './format';
 import { icon, setIcon, use, type IconName } from './icons';
+import { portrait } from './characters';
 import { coin, confetti, flip, pop, pulse, stamp } from './fx';
 
 export interface Handlers {
@@ -104,7 +105,7 @@ interface Card {
   info: HTMLElement;
   buy: HTMLButtonElement;
   /** Sello del gerente a todo el alto de la tarjeta; solo se ve con .managed. */
-  mark: SVGSVGElement;
+  mark: Element;
   bubble: HTMLElement;
   /** performance.now() hasta el que se ve el bocadillo (0 = oculto). */
   bubbleUntil: number;
@@ -286,7 +287,15 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
     [musicBtn, musicIcon, 'music', 'music-on', 'music-off'],
     [latMusic.btn, latMusic.ic, 'music', 'guitarra', 'guitarra-off'],
   ];
+  // Doña Chelo: disco con su retrato y punto de "consejo nuevo"; renderChelo() los sincroniza.
+  const latCheloDot = h('span', { class: 'lat-dot', hidden: true });
+  latCheloDot.setAttribute('aria-hidden', 'true');
+  const latChelo = h('button', { class: 'lat-btn', type: 'button', label: CHELO.name, onclick: () => cheloPanel.toggle() }, [
+    h('span', { class: 'lat-disc' }, [portrait(CHELO.icon, 'lat-retrato'), latCheloDot]),
+    h('span', { class: 'lat-label', text: 'Chelo' }),
+  ]);
   const lateral = h('nav', { class: 'lateral', label: 'Menú' }, [
+    latChelo,
     latUp.btn,
     latChars.btn,
     latModo.btn,
@@ -307,19 +316,58 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
   );
   segmented.setAttribute('role', 'group');
 
-  const tip = h('p', { class: 'tip-text' });
-  const tipBox = h('aside', { class: 'tip', hidden: true, label: CHELO.name }, [
-    h('span', { class: 'estampa estampa-chelo' }, [
-      icon('sello', 'icon sello sticker'),
-      icon(CHELO.icon, 'icon chelo'),
-    ]),
-    tip,
-  ]);
-  let cheloText = '';
-  let cheloUntil = 0;
-
   const live = h('p', { class: 'sr-only' });
   live.setAttribute('aria-live', 'polite');
+
+  // Doña Chelo: panel propio. renderChelo() decide el texto: frase de evento (6 s) > respuesta
+  // elegida > consejo según la partida > reposo. Sin aria-live: announce() ya lee eventos y respuestas.
+  let eventText = '';
+  let eventUntil = 0;
+  let answer: string | null = null;
+  let lastTip: string | null = null;
+  let unread = false;
+  let autoCloseAt = 0; // panel abierto por un evento: se cierra solo salvo clic dentro
+  let welcomed = false;
+  let guiaDialogTitle: HTMLElement | null = null;
+  const guiaTexto = h('p', { class: 'guia-texto' });
+  const guiaFaq = h(
+    'ul',
+    { class: 'guia-faq' },
+    CHELO.faq.map((f) =>
+      h('li', {}, [
+        h('button', {
+          class: 'btn',
+          type: 'button',
+          text: f.q,
+          onclick: () => {
+            eventUntil = 0; // la pregunta manda sobre la frase de evento en curso
+            if ('id' in f) answer = null;
+            else {
+              answer = f.a;
+              live.textContent = f.a;
+            }
+          },
+        }),
+      ]),
+    ),
+  );
+  const guiaBody = h('div', { class: 'guia-body' }, [portrait(CHELO.icon, 'guia-retrato'), guiaTexto, guiaFaq]);
+  const guiaTitle = h('h2', { class: 'section-title', text: CHELO.name });
+  guiaTitle.id = 'chelo-title';
+  guiaTitle.tabIndex = -1;
+  const guia = h('section', { class: 'guia panel' }, [guiaTitle, guiaBody]);
+  guia.setAttribute('aria-labelledby', 'chelo-title');
+  guia.id = 'chelo';
+  // Clic o foco dentro (teclado): el jugador lo quiere ver, ya no se cierra solo.
+  guia.addEventListener('click', () => (autoCloseAt = 0));
+  guia.addEventListener('focusin', () => (autoCloseAt = 0));
+  // Móvil: botón en la barra inferior que abre la guía en un diálogo.
+  const guiaBtnDot = h('span', { class: 'lat-dot', hidden: true });
+  guiaBtnDot.setAttribute('aria-hidden', 'true');
+  const guiaBtn = h('button', { class: 'guia-btn', type: 'button', label: CHELO.name, onclick: openGuia }, [
+    portrait(CHELO.icon, 'lat-retrato'),
+    guiaBtnDot,
+  ]);
   const toast = h('div', { class: 'toast', hidden: true });
   toast.setAttribute('role', 'status');
 
@@ -336,7 +384,7 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
     const info = h('p', { class: 'info' });
     const buy = h('button', { class: 'btn primary', type: 'button', onclick: () => handlers.onBuy(def.id) });
     // Sello del gerente: va al final del papel para quedar bajo el contenido (z-index -1 en la máscara).
-    const mark = icon(def.manager.icon, 'icon card-mark');
+    const mark = portrait(def.manager.icon, 'icon card-mark');
     // Overlay: no entra en el flujo, así la tarjeta no crece ni se mueven los botones.
     const bubble = h('div', { class: 'bubble', hidden: true });
     bubble.setAttribute('aria-hidden', 'true');
@@ -405,7 +453,7 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
     const state = h('p', { class: 'char-state', text: 'Vende solito', hidden: true });
     const root = h('li', { class: 'up-slot' }, [
       h('div', { class: 'up-card char-card' }, [
-        icon(def.manager.icon, 'icon char-portrait'),
+        portrait(def.manager.icon, 'icon char-portrait'),
         h('h3', { class: 'up-name', text: def.manager.name }),
         h('p', { class: 'up-effect', text: def.name }),
         buy,
@@ -430,8 +478,8 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
   const picado = papelPicado();
   picado.addEventListener('animationend', () => picado.classList.remove('shake'));
 
-  // Orden: lateral (web), header, tip (en web ocupa la esquina derecha del header), mejoras
-  // (en web, panel deslizante), tarjetas, barra.
+  // Orden: lateral (web), header, guía de Chelo, mejoras y personajes (en web, paneles
+  // deslizantes), tarjetas, barra.
   root.replaceChildren(
     lateral,
     h('header', { class: 'top' }, [
@@ -440,8 +488,8 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
       h('div', { class: 'sub-row' }, [rate, recipes]),
       picado,
     ]),
-    tipBox,
     h('div', { class: 'layout' }, [
+      guia,
       upgrades,
       chars,
       h('div', { class: 'col-main' }, [
@@ -452,7 +500,9 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
         ),
       ]),
     ]),
-    h('footer', { class: 'bottom' }, [h('div', { class: 'bottom-inner' }, [segmented, prestigeBtn])]),
+    h('footer', { class: 'bottom' }, [
+      h('div', { class: 'bottom-inner' }, [h('div', { class: 'bottom-row' }, [guiaBtn, segmented]), prestigeBtn]),
+    ]),
     live,
     toast,
   );
@@ -464,7 +514,7 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
   interface Panel {
     section: HTMLElement;
     toggle(): void;
-    open(): void;
+    open(focus?: boolean): void;
     close(restore: boolean): void;
   }
   let activePanel: Panel | null = null;
@@ -477,14 +527,15 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
     const panel: Panel = {
       section,
       toggle: () => (activePanel === panel ? panel.close(true) : panel.open()),
-      open() {
+      open(focus = true) {
         if (section.hidden || activePanel === panel) return;
         activePanel?.close(false); // el que cierra sale mientras este entra
         activePanel = panel;
         section.classList.add('open');
         btn.setAttribute('aria-expanded', 'true');
         // Ya es visible (sin retardo al abrir); el frame deja que el navegador lo pinte antes de enfocar.
-        focusFrame = requestAnimationFrame(() => title.focus({ preventScroll: true }));
+        // Una apertura automática (Chelo habla) no mueve el foco del jugador.
+        if (focus) focusFrame = requestAnimationFrame(() => title.focus({ preventScroll: true }));
       },
       close(restore) {
         if (activePanel !== panel) return;
@@ -501,6 +552,23 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
     return panel;
   }
   const upPanel = sidePanel(upgrades, latUp.btn, upgradesTitle);
+  const cheloPanel = sidePanel(guia, latChelo, guiaTitle);
+
+  function openGuia(): void {
+    if (guiaDialogTitle) return;
+    const d = dialog(CHELO.name, [guiaBody]);
+    const title = d.querySelector('h2');
+    if (title) {
+      title.tabIndex = -1;
+      title.focus({ preventScroll: true });
+      d.scrollTop = 0;
+    }
+    guiaDialogTitle = title;
+    d.addEventListener('close', () => {
+      guiaTitle.after(guiaBody);
+      guiaDialogTitle = null;
+    });
+  }
   const charsPanel = sidePanel(chars, latChars.btn, charsTitle);
 
   // Personajes en móvil: la misma lista se mueve al diálogo y vuelve a su sección al cerrar.
@@ -528,10 +596,12 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
   mq.addEventListener('change', () => {
     activePanel?.close(false);
     charsDialogTitle?.closest('dialog')?.close();
+    guiaDialogTitle?.closest('dialog')?.close();
   });
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape' || !activePanel || document.querySelector('dialog[open]')) return;
-    activePanel.close(true);
+    // Panel abierto solo (Chelo) con el foco fuera: Esc lo cierra sin mover el foco.
+    activePanel.close(autoCloseAt === 0);
   });
   document.addEventListener('click', (e) => {
     if (!activePanel) return;
@@ -673,6 +743,46 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
     }
   }
 
+  function renderChelo(s: State, now: number): void {
+    const abierto = activePanel === cheloPanel || guiaDialogTitle !== null;
+    if (abierto) unread = false;
+    else {
+      answer = null; // la respuesta elegida dura lo que el panel
+      autoCloseAt = 0;
+    }
+    if (autoCloseAt && now >= autoCloseAt) {
+      autoCloseAt = 0;
+      cheloPanel.close(false);
+    }
+    const consejo = tipFor(s);
+    const tip = consejo ?? CHELO.idle;
+    // Punto solo con consejo nuevo de verdad: ni en el primer render, ni al volver de un evento,
+    // ni al quedarse sin consejo (reposo).
+    if (lastTip !== null && tip !== lastTip && !abierto && consejo !== null) unread = true;
+    lastTip = tip;
+    const text = bubbleVisible(now, eventUntil) ? eventText : (answer ?? tip);
+    if (guiaTexto.textContent !== text) {
+      guiaTexto.textContent = text;
+      if (abierto) pop(guiaTexto);
+    }
+    const label = unread ? `${CHELO.name}: consejo nuevo` : CHELO.name;
+    for (const [btn, dot] of [
+      [latChelo, latCheloDot],
+      [guiaBtn, guiaBtnDot],
+    ] as const) {
+      setHidden(dot, !unread);
+      setAttr(btn, 'aria-label', label);
+    }
+    // Bienvenida: en partida nueva el primer consejo se muestra sin que haya que buscarlo.
+    if (!welcomed) {
+      welcomed = true;
+      if (s.lifetimeEarned === 0 && s.recipes === 0) {
+        if (mq.matches) cheloPanel.open(false);
+        else if (!document.querySelector('dialog[open]')) openGuia(); // nunca dos modales
+      }
+    }
+  }
+
   return {
     render(s, mode, audio) {
       last = s;
@@ -697,9 +807,7 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
         flip(latModo.disc);
       }
       const now = performance.now();
-      const t = bubbleVisible(now, cheloUntil) ? cheloText : tipFor(s);
-      setHidden(tipBox, t === null);
-      if (t !== null) setText(tip, t);
+      renderChelo(s, now);
 
       renderUpgrades(s);
       if (refocusAfterUpgrade) {
@@ -780,11 +888,24 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
     },
 
     cheloSays(kind) {
-      cheloText = CHELO.says[kind];
-      cheloUntil = performance.now() + BUBBLE_MS;
-      setText(tip, cheloText);
-      setHidden(tipBox, false);
-      pop(tipBox);
+      eventText = CHELO.says[kind];
+      eventUntil = performance.now() + BUBBLE_MS;
+      answer = null;
+      if (activePanel === cheloPanel || guiaDialogTitle !== null) return;
+      // Web: se abre solo si no tapa otro panel y sin robar el foco; se cierra con la frase.
+      // Móvil: el diálogo es modal, así que solo se avisa con el punto (announce lee la frase).
+      if (mq.matches && activePanel === null && !document.querySelector('dialog[open]')) {
+        // Un frame después: el evento llega dentro del clic que lo causó y el cierre por
+        // "clic fuera" cerraría el panel en ese mismo instante.
+        requestAnimationFrame(() => {
+          if (activePanel !== null || document.querySelector('dialog[open]')) {
+            unread = true;
+            return;
+          }
+          cheloPanel.open(false);
+          autoCloseAt = eventUntil;
+        });
+      } else unread = true;
     },
 
     sold(id, amount) {
@@ -819,7 +940,9 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
     celebrate() {
       // La partida se reinicia: ningún bocadillo sobrevive a la herencia.
       for (const c of cards) c.bubbleUntil = 0;
-      cheloUntil = 0;
+      eventUntil = 0;
+      answer = null;
+      autoCloseAt = 0;
       // Con reduced-motion no hay animationend y la clase se quedaría puesta: se reinicia a mano.
       picado.classList.remove('shake');
       void picado.getBoundingClientRect();
