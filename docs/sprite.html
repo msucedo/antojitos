@@ -49,6 +49,16 @@
         width: 20px;
         height: 20px;
       }
+      /* Retrato como en el cupón (120) y en el disco del lateral (36, recorte circular). */
+      .cell .i120 {
+        width: 120px;
+        height: 120px;
+      }
+      .cell .i36 {
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+      }
       .cell .name {
         font-weight: 700;
         margin: 0 0 8px;
@@ -73,23 +83,21 @@
   <body>
     <h1>Sprite: <span id="count"></span> símbolos</h1>
     <ul class="sheet" id="sheet"></ul>
+    <h1>Retratos: <span id="count-retratos"></span> personajes (src/assets/personajes)</h1>
+    <ul class="sheet" id="retratos"></ul>
     <h1>Referencias (docs/refs)</h1>
     <div class="refs" id="refs"></div>
     <script type="module">
-      import { BUSINESSES } from '/src/data.ts';
+      import { PORTRAITS } from '/src/characters.ts';
+      import { BUSINESSES, CHELO } from '/src/data.ts';
 
       const SPRITE = '/src/assets/icons.svg';
       const svg = (id, cls) =>
         `<svg class="${cls}" viewBox="0 0 48 48" aria-hidden="true"><use href="${SPRITE}#${id}"></use></svg>`;
       const text = await (await fetch(SPRITE)).text();
       const ids = [...text.matchAll(/<symbol id="([^"]+)"/g)].map((m) => m[1]);
-      // Cada negocio y su gerente se pintan sobre el papel real de su tarjeta.
-      const papel = new Map(
-        BUSINESSES.flatMap((b) => [
-          [b.icon, b.papel],
-          [b.manager.icon, b.papel],
-        ]),
-      );
+      // Cada negocio se pinta sobre el papel real de su tarjeta.
+      const papel = new Map(BUSINESSES.map((b) => [b.icon, b.papel]));
       document.getElementById('count').textContent = ids.length;
       document.getElementById('sheet').innerHTML = ids
         .map(
@@ -102,6 +110,27 @@
                   <span class="sell">${svg('sello', 'icon sello sticker')}${svg(id, 'icon sell-icon sticker')}</span>
                   ${svg(id, 'icon i30')}
                   ${svg(id, 'icon i20')}
+                </div>
+              </div>
+            </div>
+          </li>`,
+        )
+        .join('');
+      // Retratos raster: cada gerente sobre el papel de su negocio; Chelo sobre el papel base.
+      const papelDe = new Map(BUSINESSES.map((b) => [b.manager.id, b.papel]));
+      const nombre = new Map([[CHELO.id, CHELO.name], ...BUSINESSES.map((b) => [b.manager.id, b.manager.name])]);
+      const retratos = Object.entries(PORTRAITS);
+      document.getElementById('count-retratos').textContent = retratos.length;
+      document.getElementById('retratos').innerHTML = retratos
+        .map(
+          ([id, src]) => `<li class="card" data-papel="${papelDe.get(id) ?? ''}">
+            <div class="cell paper">
+              <img class="icon big" src="${src}" alt="" />
+              <div>
+                <p class="name">${id} · ${nombre.get(id)}${papelDe.has(id) ? ` · ${papelDe.get(id)}` : ''}</p>
+                <div class="small">
+                  <img class="icon i120" src="${src}" alt="" />
+                  <img class="icon i36" src="${src}" alt="" />
                 </div>
               </div>
             </div>

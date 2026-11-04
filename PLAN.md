@@ -69,16 +69,16 @@ Fórmulas estándar del género (Kongregate, "The Math of Idle Games"); constant
 ## UI y accesibilidad
 
 - Mobile-first, una columna, `lang="es-MX"`.
-- Paleta papel picado (rosa mexicano, amarillo maíz, verde nopal) con contraste AA verificado. Iconos emoji; sin assets externos.
+- Paleta papel picado (rosa mexicano, amarillo maíz, verde nopal) con contraste AA verificado. Iconos emoji (desde MVP2.5, sprite SVG propio); sin assets externos.
 - Dinero: dígitos completos por debajo de 1e6; después escala larga española con singular/plural (millón, mil millones, billón = 1e12…).
 - Cantidades: los precios son enteros desde la lógica (`costOf` redondea hacia arriba, como Cookie Clicker) y la vista siempre trunca con una sola función (`formatMoney`). Bajo 1e6, "alcanza" ⇔ precio mostrado ≤ dinero mostrado; arriba de eso, dos cifras pueden verse iguales y el estado del botón decide. Lo ganado se calcula directo, nunca restando dineros.
-- Toggle de compra x1/x10/Max; modal "Mientras no estabas ganaste…"; Doña Chelo con tips en los primeros pasos.
+- Toggle de compra x1/x10/Max; modal "Mientras no estabas ganaste…"; Doña Chelo con panel propio (consejo según la partida, frases de evento y preguntas fijas).
 - `<button>` reales, áreas táctiles ≥ 44 px, `prefers-reduced-motion`, modal con foco atrapado + `Esc`, `aria-live="polite"` solo para eventos.
 - Render: el DOM se crea una vez; el texto se actualiza a ~10 Hz y las barras en cada rAF.
 
 ## Archivos
 
-`index.html`, `src/style.css`, `src/data.ts`, `src/game.ts`, `src/format.ts`, `src/save.ts`, `src/ui.ts`, `src/main.ts`, tests (`game`, `format`, `save`, `balance`), `vite.config.ts`, `vercel.json`, `eslint.config.js`, `.nvmrc`, `public/icons/*`.
+`index.html`, `src/style.css`, `src/data.ts`, `src/game.ts`, `src/format.ts`, `src/save.ts`, `src/ui.ts`, `src/main.ts`, `src/characters.ts` (retratos raster), `src/assets/personajes/*.webp`, `scripts/retrato.py`, tests (`game`, `format`, `save`, `balance`, `characters`, `icons`, `paleta`, `papel`, `fuente`), `vite.config.ts`, `vercel.json`, `eslint.config.js`, `.nvmrc`, `public/icons/*`.
 
 ## División del trabajo
 
@@ -184,7 +184,7 @@ Fórmulas estándar del género (Kongregate, "The Math of Idle Games"); constant
 - Bocadillos como overlay (`.bubble`) que no desplaza botones; visibles 6 s por marca de tiempo en `render` (sin `setTimeout`, determinista con pestaña oculta). Doña Chelo habla en su `<aside>` (sigue legible para lectores de pantalla); los bocadillos de gerente llevan `aria-hidden` y su frase va una sola vez a `aria-live`.
 - Disparadores en `main.ts`: contratar → gerente; hito (`milestonesCrossed`, cuenta varios con Máx) → gerente o Chelo; mejora → gerente del negocio o Chelo; herencia → Chelo + confeti + sacudida.
 
-**Iconos** (`src/assets/icons.svg`): 11 redibujados, `banderin` y 8 avatares. Mismas reglas de CSP (`icons.test.ts`).
+**Iconos** (`src/assets/icons.svg`): 11 redibujados, `banderin` y 8 avatares (los avatares salieron del sprite al llegar los retratos raster, ver MVP2.6). Mismas reglas de CSP (`icons.test.ts`).
 
 **Paleta azul cielo e iconos caricatura (2026-11-02, noche):** el user pidió contornos negros fijos (en oscuro `currentColor` salía blanco), estilo caricatura y fondo azul; eligió "azul cielo claro". `--bg` `#cfe6f7`/`#15283d`, tarjetas blancas con borde `--ink` y sombra dura (pegatina); en oscuro borde claro `#8fb3d1` y sin sombra. Nuevo token `--ink`. Iconos ilustrados con `stroke="#1B2A3A"` de 3 px y brillo blanco; avatares conservan el dibujo. Contraste re-verificado (script, 34 pares). `npm run check` 85 tests; capturas `.playwright-mcp/azul-*.png` (móvil y web, claro y oscuro); Lighthouse móvil 100/100/100/100 sobre el build.
 
@@ -199,3 +199,30 @@ Fórmulas estándar del género (Kongregate, "The Math of Idle Games"); constant
 - [x] Playwright: capturas 390×844 y 1280×800 en claro y oscuro (`.playwright-mcp/mvp25-*.png`). Contratar, hito, mejora y herencia muestran la frase correcta; el botón "Comprar" no se mueve con el bocadillo (misma `top` antes y después); `.col-side` (layout de MVP2.5, hoy panel lateral) termina en 528 px con la barra en 550 a 1366×620; foco visible en el cupón; con reduced-motion la sacudida y el pop no animan.
 - [x] Revisión independiente del diff: "listo con cambios menores"; aplicados (frase de Chelo para mejora de un negocio, orden CSS de `.hire`, `span` dentro del botón, `.shake` se reinicia a mano, test a 70 caracteres e incluye "mijo", `as const` en `CHELO`, `--side-top` 168 px).
 - [x] Lighthouse 13.6.0 móvil sobre el build (`npm run preview`): Performance 100, Accesibilidad 100, Best practices 100, SEO 100 (FCP 0.8 s, LCP 0.8 s, TBT 0 ms, CLS 0). Informe en `lighthouse-2026-11-02-mvp25.report.html` (ignorado en git).
+
+## MVP2.6 — Menú Personajes y panel de Chelo (2026-11-03 y 04)
+
+**Alcance:** la contratación de gerentes sale de las tarjetas a un menú propio; Doña Chelo deja la cajita de consejos y gana un panel con retrato grande, consejo, frases de evento y preguntas fijas; primer retrato raster en estilo "estampilla ilustrada" con proceso reutilizable. Commits del user: `d0b2bdc` (panel de mejoras a su alto), `4a04033` (menú Personajes), `2faf538` (panel de Chelo). Ambos planes validados por un agente independiente antes de implementar y revisados por otro al final; hallazgos incorporados.
+
+**Menú Personajes** (`src/ui.ts`, `src/style.css`, `DESIGN.md` "Personajes")
+
+- `sidePanel()` generaliza el panel de mejoras: un solo `activePanel`, abrir uno cierra el otro, Esc y clic fuera cierran, `open(focus)` para aperturas automáticas. CSS `.panel` compartido (`z-index` 1 cerrado, 2 abierto).
+- 8 cupones (`.up-card.char-card`, retrato 120 px): "Sin abrir" (atenuado por color), "Contratar · $precio" (habilitado si alcanza) o "Vende solito". Badge con los contratables (`hireableIds` en `game.ts`, con test) y conteo en el `aria-label`.
+- Móvil: icono `gente` en el header abre un `dialog` al que se **mueve** la misma lista; vuelve a la sección al cerrar.
+- Tarjeta sin botón ni chip: contratado, el gerente queda como sello tenue a todo el alto (`.card-mark`, `opacity .1`, `rotate(-6deg)`, bajo el contenido) que entra con `stamp` (`fx.ts`).
+- Bugs corregidos al verificar: clase `locked` chocaba con la pantalla de bloqueo (renombrada `cerrado`); el header móvil no admitía un cuarto icono a 44 px (40 px y rótulo con `clamp`); el diálogo abría desplazado porque `showModal` enfocaba "Cerrar" (foco al `h2`).
+
+**Panel de Chelo** (`DESIGN.md` "Panel de Chelo" y "Retratos raster")
+
+- `section.guia.panel`, primera en el lateral con su retrato en el disco; en móvil botón en la barra inferior junto al segmentado. Retrato `25dvh` (máx. 300), bocadillo y 5 preguntas (`CHELO.faq`; respuestas hasta 140 caracteres, excepción documentada) más `CHELO.idle`.
+- Texto decidido en `renderChelo()`: evento 6 s > respuesta elegida > `tipFor` > reposo. Punto "consejo nuevo" solo con consejo real. Auto-apertura en web solo por evento, sin otro panel ni diálogo, sin mover el foco y **diferida un frame** (el clic que dispara el evento la cerraría por "clic fuera"); se cierra sola a los 6 s salvo clic o foco dentro. Móvil nunca auto-abre (modal). Bienvenida en partida nueva.
+- Retrato: el user generó `docs/refs/chelo-v1.jpeg` con el prompt de `docs/retratos-prompt.md`; `scripts/retrato.py` → `src/assets/personajes/chelo.webp` (480×480, alfa, 35 KB); `PORTRAITS`/`portrait()` en `src/characters.ts` con el símbolo SVG como respaldo (respaldo retirado al completar los 9, ver abajo); `vite.config.ts` no inlinea `.webp` y lo precachea; test de cabecera VP8X. Descartados dos rediseños SVG de Chelo (contorno 3 px adulto y plano sin contorno): el user prefirió el estilo de `docs/refs/caracter1-3.png`.
+
+**Estado MVP2.6**
+
+- [x] `npm run lint`, `tsc`, `npm test` 138, `npm run build` (WebP con hash en `dist/assets`, precache 21 entradas).
+- [x] Playwright web 1280×800 y 1080, móvil 390×844, claro y oscuro: paneles, contratación con sello, diálogo móvil, evento con auto-apertura y cierre, evento con otro panel abierto (solo punto), bienvenida. Capturas `.playwright-mcp/p-*.png` y `g-*.png`.
+- [x] Revisión independiente final: sin críticos; corregidos punto falso al pasar a reposo, preguntas durante un evento, auto-cierre con teclado, Esc sin mover el foco, dos modales en bienvenida, rutas y PNG con alfa en el script.
+- [x] Retratos de los 8 gerentes (2026-11-04): el user generó las imágenes con `docs/retratos-prompt.md` (varias salieron como estampilla con marco, texto o varias variantes); `scripts/retrato.py` ganó `--version`, `--recorte L,T,R,B` y `--sujeto` (recorte de figura con Vision de macOS, `scripts/recorta.swift`) y `--abajo`. Puro personaje, sin fondo ni disco añadido (decisión del user). Capturas `.playwright-mcp/<id>-web-*.png`.
+- [x] Avatares SVG fuera del sprite: 38 → 29 símbolos, `icons.svg` 35,4 KB / 6,5 KB gzip → 21,6 KB / 4,6 KB gzip. `ManagerDef.id` y `CHELO.id` tipados `CharacterId = keyof typeof PORTRAITS`; `portrait()` ya no tiene respaldo. Tests: retratos = gerentes + Chelo sin huérfanos, cada clave apunta a su `.webp`, el sprite no contiene ids de personaje. `npm test` 139, precache 29 entradas (401 KiB).
+- [x] `openGuia`/`openChars` comparten `openInDialog(title, body, anchor, onClose)` (foco al `h2`, `scrollTop` 0, el bloque vuelve a su ancla al cerrar).

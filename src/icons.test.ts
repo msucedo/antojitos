@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import sprite from './assets/icons.svg?raw';
 import fondo from './assets/fondo.svg?raw';
 import grano from './assets/grano.svg?raw';
+import { PORTRAITS } from './characters';
 import { BUSINESSES } from './data';
 import { ICON_NAMES } from './icons';
 
@@ -12,11 +13,12 @@ describe('sprite de iconos', () => {
     expect([...symbols].sort()).toEqual([...ICON_NAMES].sort());
   });
 
-  it('todos los negocios y gerentes usan un icono existente', () => {
-    for (const b of BUSINESSES) {
-      expect(ICON_NAMES).toContain(b.icon);
-      expect(ICON_NAMES).toContain(b.manager.icon);
-    }
+  it('todos los negocios usan un icono existente', () => {
+    for (const b of BUSINESSES) expect(ICON_NAMES).toContain(b.icon);
+  });
+
+  it('los personajes viven en los retratos raster, no en el sprite', () => {
+    for (const id of Object.keys(PORTRAITS)) expect(symbols).not.toContain(id);
   });
 
   it('sprite, fondo y grano compatibles con la CSP: sin style, script, handlers ni recursos externos', () => {

@@ -1,17 +1,18 @@
+import type { CharacterId } from './characters';
 import type { IconName } from './icons';
 
 export type ManagerEvent = 'hire' | 'milestone' | 'upgrade';
 export type CheloEvent = 'milestone' | 'upgrade' | 'upgradeOne' | 'prestige';
 
 /**
- * Gerente de un negocio: nombre, costo, avatar y una frase por evento.
+ * Gerente de un negocio: nombre, costo, retrato y una frase por evento.
  * Voz: trata al jugador de "usted" y nunca usa sustantivos de género ni de rol
  * ("patrón", "jefe"); lo comprueba characters.test.ts.
  */
 export interface ManagerDef {
   readonly name: string;
   readonly cost: number;
-  readonly icon: IconName;
+  readonly id: CharacterId;
   readonly says: Readonly<Record<ManagerEvent, string>>;
 }
 
@@ -46,7 +47,7 @@ export const BUSINESSES: readonly BusinessDef[] = [
     manager: {
       name: 'Don Beto',
       cost: 500,
-      icon: 'beto',
+      id: 'beto',
       says: {
         hire: 'Órale. Usted descanse, que el elote se vende solo.',
         milestone: '¿Ya vio? Hasta la fila da vuelta a la esquina.',
@@ -66,7 +67,7 @@ export const BUSINESSES: readonly BusinessDef[] = [
     manager: {
       name: 'Lupita',
       cost: 7_500,
-      icon: 'lupita',
+      id: 'lupita',
       says: {
         hire: '¡Aguas, aguas! Jamaica, horchata y limón, bien frías.',
         milestone: '¡Se nos acaba el hielo de tanta gente!',
@@ -86,7 +87,7 @@ export const BUSINESSES: readonly BusinessDef[] = [
     manager: {
       name: 'El Güero',
       cost: 100_000,
-      icon: 'guero',
+      id: 'guero',
       says: {
         hire: '¿Con todo? Con todo. Aquí nadie se va con hambre.',
         milestone: '¡Trompo nuevo cada hora! Esto ya es otra liga.',
@@ -106,7 +107,7 @@ export const BUSINESSES: readonly BusinessDef[] = [
     manager: {
       name: 'Doña Tere',
       cost: 1_200_000,
-      icon: 'tere',
+      id: 'tere',
       says: {
         hire: 'Aquí las tortas van bien servidas. Ya lo verá.',
         milestone: 'No me mire así. Le dije que iban a venir.',
@@ -126,7 +127,7 @@ export const BUSINESSES: readonly BusinessDef[] = [
     manager: {
       name: 'Chuy',
       cost: 15_000_000,
-      icon: 'chuy',
+      id: 'chuy',
       says: {
         hire: 'Siéntese, que ya casi sale el guisado.',
         milestone: 'Tuvimos que poner mesas en la banqueta.',
@@ -146,7 +147,7 @@ export const BUSINESSES: readonly BusinessDef[] = [
     manager: {
       name: 'Rosita',
       cost: 180_000_000,
-      icon: 'rosita',
+      id: 'rosita',
       says: {
         hire: 'Hoy salieron esponjaditas. Huela nomás.',
         milestone: 'Ya no caben las charolas en el mostrador.',
@@ -166,7 +167,7 @@ export const BUSINESSES: readonly BusinessDef[] = [
     manager: {
       name: 'Licenciado Pérez',
       cost: 2_000_000_000,
-      icon: 'perez',
+      id: 'perez',
       says: {
         hire: 'Según mis proyecciones, esto escala. Confíe en el proceso.',
         milestone: 'Los indicadores superan lo previsto. Lo llevo a la junta.',
@@ -186,7 +187,7 @@ export const BUSINESSES: readonly BusinessDef[] = [
     manager: {
       name: 'La Jefa',
       cost: 25_000_000_000,
-      icon: 'jefa',
+      id: 'jefa',
       says: {
         hire: 'Yo me encargo. Usted no se distraiga.',
         milestone: 'Bien. Ahora el doble.',
@@ -206,7 +207,7 @@ export type CheloFaq = { readonly q: string; readonly a: string } | { readonly q
  */
 export const CHELO = {
   name: 'Doña Chelo',
-  icon: 'chelo',
+  id: 'chelo',
   says: {
     milestone: '¡Son muchos puestos, mijo! Ahora venden mucho más.',
     upgrade: 'Esa mejora le sirve a todos los negocios, mijo.',
@@ -236,7 +237,7 @@ export const CHELO = {
   ],
 } as const satisfies {
   name: string;
-  icon: IconName;
+  id: CharacterId;
   says: Readonly<Record<CheloEvent, string>>;
   idle: string;
   faq: readonly CheloFaq[];

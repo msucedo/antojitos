@@ -98,7 +98,7 @@ export function confetti(): void {
 }
 
 /**
- * Golpe de sello: el avatar del gerente cae sobre la tarjeta (más grande y girado, luego asienta).
+ * Golpe de sello: el retrato del gerente cae sobre la tarjeta (más grande y girado, luego asienta).
  * Termina en los valores del CSS de .card-mark para que no salte al soltar.
  */
 export function stamp(el: Element): void {

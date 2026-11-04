@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { PORTRAITS } from './characters';
 import { BUSINESSES, CHELO } from './data';
-import { ICON_NAMES } from './icons';
 import { bubbleVisible } from './ui';
 
 const MAX_LEN = 70;
@@ -12,11 +11,11 @@ const GENDERED = /\b(patrón|patrona|jefe|jefa|mijo|mija|señor|señora)\b/i;
 describe('personajes', () => {
   const managers = BUSINESSES.map((b) => b.manager);
 
-  it('cada negocio tiene gerente con nombre único y avatar en el sprite', () => {
+  it('cada gerente tiene nombre único, y los retratos son exactamente los gerentes más Chelo', () => {
     const names = managers.map((m) => m.name);
     expect(new Set(names).size).toBe(names.length);
-    for (const m of managers) expect(ICON_NAMES).toContain(m.icon);
-    expect(ICON_NAMES).toContain(CHELO.icon);
+    const ids = [CHELO.id, ...managers.map((m) => m.id)];
+    expect(Object.keys(PORTRAITS).sort()).toEqual([...ids].sort());
   });
 
   it('las frases son cortas, sin pictogramas y sin tratamiento de género', () => {
@@ -58,7 +57,8 @@ describe('retratos raster', () => {
   it('cada retrato es WebP 480×480 con alfa y pesa como máximo 80 KB', async () => {
     const fs = await import('node:fs/promises');
     const ascii = (b: Uint8Array, from: number) => String.fromCharCode(...b.subarray(from, from + 4));
-    for (const id of Object.keys(PORTRAITS)) {
+    for (const [id, url] of Object.entries(PORTRAITS)) {
+      expect(url).toMatch(new RegExp(`/${id}\\.webp$`)); // cada clave apunta a su propio archivo
       const bytes = await fs.readFile(new URL(`./assets/personajes/${id}.webp`, import.meta.url));
       expect(bytes.length).toBeLessThanOrEqual(80 * 1024);
       expect(ascii(bytes, 0)).toBe('RIFF');

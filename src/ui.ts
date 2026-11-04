@@ -236,6 +236,27 @@ function dialog(title: string, body: Node[], actions: HTMLButtonElement[] = []):
   return d;
 }
 
+/**
+ * Mueve `body` a un diálogo modal y enfoca su h2: sin eso showModal enfoca "Cerrar" (o el primer
+ * botón habilitado) y el diálogo abre desplazado al final. Al cerrar, `body` vuelve detrás de
+ * `anchor` (su sitio en línea) y se avisa con `onClose`. Devuelve el h2, que el llamador guarda
+ * como "diálogo abierto" y usa para el foco.
+ */
+function openInDialog(title: string, body: HTMLElement, anchor: HTMLElement, onClose: () => void): HTMLElement | null {
+  const d = dialog(title, [body]);
+  const h2 = d.querySelector('h2');
+  if (h2) {
+    h2.tabIndex = -1;
+    h2.focus({ preventScroll: true });
+    d.scrollTop = 0;
+  }
+  d.addEventListener('close', () => {
+    anchor.after(body);
+    onClose();
+  });
+  return h2;
+}
+
 export function createUI(root: HTMLElement, handlers: Handlers): UI {
   const money = h('p', { class: 'money' });
   const rate = h('p', { class: 'rate' });
@@ -291,7 +312,7 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
   const latCheloDot = h('span', { class: 'lat-dot', hidden: true });
   latCheloDot.setAttribute('aria-hidden', 'true');
   const latChelo = h('button', { class: 'lat-btn', type: 'button', label: CHELO.name, onclick: () => cheloPanel.toggle() }, [
-    h('span', { class: 'lat-disc' }, [portrait(CHELO.icon, 'lat-retrato'), latCheloDot]),
+    h('span', { class: 'lat-disc' }, [portrait(CHELO.id, 'lat-retrato'), latCheloDot]),
     h('span', { class: 'lat-label', text: 'Chelo' }),
   ]);
   const lateral = h('nav', { class: 'lateral', label: 'Menú' }, [
@@ -351,7 +372,7 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
       ]),
     ),
   );
-  const guiaBody = h('div', { class: 'guia-body' }, [portrait(CHELO.icon, 'guia-retrato'), guiaTexto, guiaFaq]);
+  const guiaBody = h('div', { class: 'guia-body' }, [portrait(CHELO.id, 'guia-retrato'), guiaTexto, guiaFaq]);
   const guiaTitle = h('h2', { class: 'section-title', text: CHELO.name });
   guiaTitle.id = 'chelo-title';
   guiaTitle.tabIndex = -1;
@@ -365,7 +386,7 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
   const guiaBtnDot = h('span', { class: 'lat-dot', hidden: true });
   guiaBtnDot.setAttribute('aria-hidden', 'true');
   const guiaBtn = h('button', { class: 'guia-btn', type: 'button', label: CHELO.name, onclick: openGuia }, [
-    portrait(CHELO.icon, 'lat-retrato'),
+    portrait(CHELO.id, 'lat-retrato'),
     guiaBtnDot,
   ]);
   const toast = h('div', { class: 'toast', hidden: true });
@@ -384,7 +405,7 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
     const info = h('p', { class: 'info' });
     const buy = h('button', { class: 'btn primary', type: 'button', onclick: () => handlers.onBuy(def.id) });
     // Sello del gerente: va al final del papel para quedar bajo el contenido (z-index -1 en la máscara).
-    const mark = portrait(def.manager.icon, 'icon card-mark');
+    const mark = portrait(def.manager.id, 'icon card-mark', true);
     // Overlay: no entra en el flujo, así la tarjeta no crece ni se mueven los botones.
     const bubble = h('div', { class: 'bubble', hidden: true });
     bubble.setAttribute('aria-hidden', 'true');
@@ -453,7 +474,7 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
     const state = h('p', { class: 'char-state', text: 'Vende solito', hidden: true });
     const root = h('li', { class: 'up-slot' }, [
       h('div', { class: 'up-card char-card' }, [
-        portrait(def.manager.icon, 'icon char-portrait'),
+        portrait(def.manager.id, 'icon char-portrait', true),
         h('h3', { class: 'up-name', text: def.manager.name }),
         h('p', { class: 'up-effect', text: def.name }),
         buy,
@@ -556,16 +577,7 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
 
   function openGuia(): void {
     if (guiaDialogTitle) return;
-    const d = dialog(CHELO.name, [guiaBody]);
-    const title = d.querySelector('h2');
-    if (title) {
-      title.tabIndex = -1;
-      title.focus({ preventScroll: true });
-      d.scrollTop = 0;
-    }
-    guiaDialogTitle = title;
-    d.addEventListener('close', () => {
-      guiaTitle.after(guiaBody);
+    guiaDialogTitle = openInDialog(CHELO.name, guiaBody, guiaTitle, () => {
       guiaDialogTitle = null;
     });
   }
@@ -576,18 +588,7 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
   let charsDialogTitle: HTMLElement | null = null;
   function openChars(): void {
     if (charsDialogTitle) return;
-    const d = dialog('Personajes', [charList]);
-    const title = d.querySelector('h2');
-    if (title) {
-      // Sin esto showModal enfoca "Cerrar" (los botones de la lista están deshabilitados o no) y
-      // el diálogo abre desplazado al final.
-      title.tabIndex = -1;
-      title.focus({ preventScroll: true });
-      d.scrollTop = 0;
-    }
-    charsDialogTitle = title;
-    d.addEventListener('close', () => {
-      charsTitle.after(charList);
+    charsDialogTitle = openInDialog('Personajes', charList, charsTitle, () => {
       charsDialogTitle = null;
     });
   }
