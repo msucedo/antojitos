@@ -100,7 +100,7 @@
 /*
  * Isla de papel: dentro de una estampilla los tokens semánticos se re-declaran con la tinta
  * y el papel de la estampa, y no cambian con el tema. Las reglas hijas (.sell, .estampa,
- * .manager, .bar, .btn...) siguen leyendo var(--token) y resuelven al papel aquí y al tema fuera.
+ * .bar, .btn...) siguen leyendo var(--token) y resuelven al papel aquí y al tema fuera.
  */
 .paper,
 .up-card {
@@ -205,14 +205,6 @@ p {
     drop-shadow(0 -1.5px 0 var(--halo)) drop-shadow(2px 2.5px 0 var(--ink));
 }
 
-.avatar-sm {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  background: var(--card);
-  border: 2px solid var(--border);
-}
-
 /* ---------- Header ---------- */
 .top {
   position: sticky;
@@ -300,7 +292,7 @@ p {
 }
 
 .title-row h1 {
-  font-size: 1.15rem;
+  font-size: clamp(1rem, 4.5vw, 1.15rem); /* en 390 px cabe entero junto a los cuatro iconos */
   color: var(--text);
   min-width: 0;
   white-space: nowrap;
@@ -331,6 +323,7 @@ p {
 }
 
 .icon-btn {
+  position: relative; /* ancla del badge de Personajes */
   min-width: 44px;
   min-height: 44px;
   display: inline-grid;
@@ -344,6 +337,17 @@ p {
 
 .icon-btn[aria-pressed='true'] {
   color: var(--primary);
+}
+
+/* Cuatro iconos en el header móvil: a 44 px el rótulo se recorta en 390 px; a 40 cabe (excepción en DESIGN.md). */
+.title-row .icon-btn {
+  min-width: 40px;
+}
+
+/* El grupo de iconos no se encoge ni se parte: el que cede es el rótulo, con elipsis. */
+.title-row > div {
+  display: flex;
+  flex: none;
 }
 
 /* ---------- Layout: una columna en móvil, dos en web ---------- */
@@ -417,7 +421,7 @@ p {
   box-shadow: none;
 }
 
-/* "+N recetas" sobre el disco de Herencia. */
+/* "+N recetas" sobre el disco de Herencia; "N" por contratar sobre Personajes. */
 .lat-badge {
   position: absolute;
   top: -6px;
@@ -477,11 +481,10 @@ p {
   --aro: var(--primary-bright); /* rosa sobre el amarillo del tip, como su rebozo */
 }
 
-.estampa-avatar {
-  width: 48px;
-  height: 48px;
-  --papel-r: 18px;
-  --aro: var(--primary);
+/* Retrato de gerente (menú Personajes): el personaje es el motivo de la estampilla, con su propio disco de fondo. */
+.char-portrait {
+  width: 120px;
+  height: 120px;
 }
 
 /* Overlay sobre título y barra: no desplaza los botones mientras se toca. */
@@ -530,6 +533,11 @@ p {
 /* min-width: 0, si no los cupones de ancho fijo ensanchan la sección y la página. */
 .upgrades {
   min-width: 0;
+}
+
+/* Personajes: en móvil la sección solo guarda la lista (se abre en un diálogo); en web es panel. */
+.personajes {
+  display: none;
 }
 
 .up-list {
@@ -618,6 +626,50 @@ p {
 
 .up-card .btn:disabled {
   border-color: var(--primary);
+}
+
+/* "Vende solito": ocupa el lugar del botón para que el cupón no cambie de alto. */
+.char-state {
+  width: 100%;
+  min-height: 44px;
+  margin-top: 6px;
+  display: grid;
+  place-items: center;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--nopal);
+}
+
+/* Negocio sin abrir: se atenúa por color y el avatar en gris; nunca opacity en el li (arrastra la sombra ::before). */
+.up-slot.cerrado .up-card {
+  border-color: var(--muted);
+}
+
+.up-slot.cerrado .up-name {
+  color: var(--muted);
+}
+
+.up-slot.cerrado .char-portrait {
+  filter: grayscale(1);
+  opacity: 0.6;
+}
+
+.up-slot.cerrado .btn:disabled {
+  border-color: var(--muted);
+}
+
+/* La lista dentro del diálogo móvil: rejilla, sin el scroll horizontal ni los márgenes negativos. */
+.modal .up-list {
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  overflow: visible;
+  scroll-snap-type: none;
+}
+
+.modal .up-slot {
+  flex: none;
 }
 
 /* ---------- Negocios ---------- */
@@ -745,31 +797,27 @@ p {
   cursor: default;
 }
 
-.manager {
-  min-height: 44px;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 2px 10px 2px 2px;
-  border-radius: 24px;
-  border: 2px solid var(--border);
-  background: var(--track);
-  color: var(--text);
-  font-size: 0.85rem;
-  line-height: 1.2;
+/*
+ * Sello del gerente: el avatar a todo el alto, pegado a la derecha, tenue y ladeado como un
+ * sello de tinta. z-index -1 dentro de la máscara: sobre el papel, bajo el contenido (como ::after).
+ * Sin filter: la barra de progreso anima dentro de la misma tarjeta.
+ */
+.card-mark {
+  display: none;
+  position: absolute;
+  top: 0;
+  right: 0;
+  height: 100%;
+  width: auto;
+  aspect-ratio: 1;
+  opacity: 0.1;
+  transform: rotate(-6deg);
+  pointer-events: none;
+  z-index: -1;
 }
 
-.manager div {
-  display: grid;
-}
-
-.manager span {
-  color: var(--muted);
-}
-
-.avatar {
-  width: 34px;
-  height: 34px;
+.card.managed .card-mark {
+  display: block;
 }
 
 .body {
@@ -815,11 +863,6 @@ p {
   flex-wrap: wrap;
 }
 
-/* En móvil el botón de contratar ocupa el ancho libre: nombre y precio en una línea. */
-.row .btn:not(.primary) {
-  flex: 1 1 auto;
-}
-
 /* ---------- Botones ---------- */
 .btn {
   min-height: 44px;
@@ -847,23 +890,6 @@ p {
 .btn.heir {
   background: var(--nopal);
   color: var(--on-nopal);
-}
-
-/* Botón de contratar: avatar más nombre y precio apilados (va después de .btn para ganar). */
-.btn.hire {
-  justify-content: flex-start;
-  gap: 8px;
-  text-align: left;
-  line-height: 1.2;
-}
-
-.hire .stack {
-  display: grid;
-}
-
-.hire .price {
-  font-size: 0.85rem;
-  font-weight: 600;
 }
 
 /* Deshabilitado: además del color, borde punteado (no depende solo del color). */
@@ -1188,9 +1214,8 @@ p {
 
   /*
    * Tarjeta compacta (~130 px, cuatro filas caben en 800 px de alto): plato a la izquierda con
-   * título, barra e info al lado, y la fila de botones debajo a todo el ancho (así caben
-   * "Comprar" y "Contratar" con precios largos sin saltar de línea). .body se disuelve en el
-   * grid del papel con display: contents.
+   * título, barra e info al lado, y la fila de botones debajo a todo el ancho. .body se disuelve
+   * en el grid del papel con display: contents.
    */
   .paper {
     --plato: 60px;
@@ -1218,11 +1243,6 @@ p {
     grid-column: 1;
   }
 
-  .avatar-sm {
-    width: 24px;
-    height: 24px;
-  }
-
   .sell-icon {
     width: 42px;
     height: 42px;
@@ -1237,64 +1257,9 @@ p {
     border-radius: 6px;
   }
 
-  /* Contratar en una línea: "Lupita · $7,500"; el prefijo queda en el aria-label. */
-  .hire-pre {
-    display: none;
-  }
-
-  .hire .stack {
-    display: flex;
-    gap: 4px;
-    align-items: baseline;
-    min-width: 0;
-  }
-
-  .hire .stack > span {
-    white-space: nowrap;
-  }
-
-  /* Si no cabe, se recorta el nombre; el precio nunca. */
-  .hire .stack > span:first-child {
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .hire .price {
-    flex: none;
-  }
-
-  .hire .price::before {
-    content: '· ';
-  }
-
   .row .btn.primary {
     flex: none;
     white-space: nowrap;
-  }
-
-  .estampa-avatar {
-    width: 32px;
-    height: 32px;
-    --papel-r: 12px;
-  }
-
-  /* El chip no crece: nombre en una línea con elipsis. */
-  .manager,
-  .manager div {
-    min-width: 0;
-  }
-
-  .manager strong,
-  .manager div > span {
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .avatar {
-    width: 24px;
-    height: 24px;
   }
 
   .bubble {
@@ -1308,17 +1273,18 @@ p {
   }
 
   /*
-   * Panel de mejoras: fuera de pantalla bajo el lateral; .open lo desliza sobre las tarjetas.
-   * visibility con retardo: cerrado no recibe foco ni lectura, sin inert ni temporizadores.
+   * Paneles (Mejoras, Personajes): fuera de pantalla bajo el lateral; .open los desliza sobre
+   * las tarjetas. visibility con retardo: cerrado no recibe foco ni lectura, sin inert ni
+   * temporizadores. El abierto va por encima del que está saliendo.
    */
-  .upgrades {
+  .panel {
     position: fixed;
     top: var(--side-top);
     /* Alto según contenido; si no cabe entre el header y el borde inferior, scroll propio. */
-    max-height: calc(100dvh - var(--side-top) - var(--bar-h) - var(--side-gap));
+    max-height: calc(100dvh - var(--side-top) - env(safe-area-inset-bottom) - var(--bar-h) - var(--side-gap));
     left: var(--lateral-w);
     width: var(--panel-w);
-    z-index: 2;
+    z-index: 1;
     overflow-y: auto;
     overscroll-behavior: contain;
     padding: 12px 16px;
@@ -1331,10 +1297,15 @@ p {
       visibility 0s linear 0.25s;
   }
 
-  .upgrades.open {
+  .panel.open {
+    z-index: 2;
     transform: none;
     visibility: visible;
     transition-delay: 0s;
+  }
+
+  .personajes {
+    display: block;
   }
 
   .up-list {
@@ -1347,16 +1318,6 @@ p {
 
   .up-slot {
     flex: none;
-  }
-
-  /*
-   * Contratar se queda en la fila si le quedan al menos 200 px (recorta el nombre, nunca el
-   * precio); si no, baja de línea y la tarjeta crece: nunca se recorta contenido.
-   */
-  .row .btn:not(.primary) {
-    flex: 1 1 200px;
-    min-width: 0;
-    max-width: max-content;
   }
 
   .bottom {
@@ -1375,7 +1336,7 @@ p {
     padding: 6px 12px;
   }
 
-  .manager {
+  .char-state {
     min-height: 40px;
   }
 }

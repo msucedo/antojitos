@@ -27,6 +27,8 @@ export const ICON_NAMES = [
   'monedas',
   'costal',
   'caja',
+  'personajes',
+  'gente',
   'bocina',
   'bocina-off',
   'guitarra',

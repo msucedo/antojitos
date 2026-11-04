@@ -11,6 +11,7 @@ import {
   costOf,
   getDef,
   hireManager,
+  hireableIds,
   maxAffordable,
   milestonesCrossed,
   newState,
@@ -108,6 +109,20 @@ describe('comprar', () => {
     const s = buy(withMoney(123_456), 'elotes', 'max');
     expect(s.money).toBeGreaterThanOrEqual(0);
     expect(s.money).toBeLessThan(costOf(elotes, s.businesses.elotes!.count, 1));
+  });
+});
+
+describe('contratar', () => {
+  it('hireableIds: solo negocios abiertos, sin gerente y con dinero', () => {
+    // El carrito ya viene abierto: se contrata a su gerente y se prueba con las aguas.
+    const aguas = getDef('aguas');
+    const base = hireManager(withMoney(elotes.manager.cost), 'elotes');
+    expect(hireableIds(withMoney(aguas.manager.cost, base))).toEqual([]);
+    const abierto = buy(withMoney(aguas.baseCost, base), 'aguas', 1);
+    expect(hireableIds(withMoney(aguas.manager.cost - 1, abierto))).toEqual([]);
+    const conDinero = withMoney(aguas.manager.cost, abierto);
+    expect(hireableIds(conDinero)).toEqual(['aguas']);
+    expect(hireableIds(hireManager(conDinero, 'aguas'))).toEqual([]);
   });
 });
 

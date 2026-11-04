@@ -5,6 +5,7 @@ import {
   costOf,
   getDef,
   getUpgrade,
+  hireableIds,
   incomePerSecond,
   nextMilestone,
   MODES,
@@ -18,7 +19,7 @@ import {
 } from './game';
 import { formatDuration, formatMoney, formatNumber } from './format';
 import { icon, setIcon, use, type IconName } from './icons';
-import { coin, confetti, flip, pop, pulse } from './fx';
+import { coin, confetti, flip, pop, pulse, stamp } from './fx';
 
 export interface Handlers {
   onStart(id: string): void;
@@ -77,6 +78,10 @@ function setPressed(el: Element, on: boolean): void {
   if (el.getAttribute('aria-pressed') !== v) el.setAttribute('aria-pressed', v);
 }
 
+function setAttr(el: Element, name: string, value: string): void {
+  if (el.getAttribute(name) !== value) el.setAttribute(name, value);
+}
+
 /** Botón del menú lateral (solo visible en web): disco matasellos con icono y etiqueta debajo. */
 function latBtn(
   label: string,
@@ -98,8 +103,8 @@ interface Card {
   fill: HTMLElement;
   info: HTMLElement;
   buy: HTMLButtonElement;
-  hire: HTMLButtonElement;
-  manager: HTMLElement;
+  /** Sello del gerente a todo el alto de la tarjeta; solo se ve con .managed. */
+  mark: SVGSVGElement;
   bubble: HTMLElement;
   /** performance.now() hasta el que se ve el bocadillo (0 = oculto). */
   bubbleUntil: number;
@@ -112,6 +117,14 @@ interface UpgradeSlot {
   effect: HTMLElement;
   buy: HTMLButtonElement;
   id: string | null;
+}
+
+/** Cupón de un gerente en el menú Personajes: ahí se contrata, no en la tarjeta. */
+interface CharSlot {
+  def: BusinessDef;
+  root: HTMLElement;
+  buy: HTMLButtonElement;
+  state: HTMLElement;
 }
 
 /** Tiempo que un bocadillo queda a la vista. Sin temporizadores: lo decide render(). */
@@ -138,7 +151,7 @@ function tipFor(s: State): string | null {
     return 'Ya puedes heredar: vuelves a empezar, pero con recetas que suben todas tus ventas.';
   if (s.lifetimeEarned > 0 || s.recipes > 0) {
     if (managers === 0 && canHireManager(s, 'elotes'))
-      return `Contrata a ${getDef('elotes').manager.name}: vende solito, aunque cierres el juego.`;
+      return `En Personajes contrata a ${getDef('elotes').manager.name}: vende solito aunque cierres.`;
     if (managers === 0 && (elotes?.count ?? 0) < 5) return 'Compra más carritos: cada uno vende más por vuelta.';
     if (managers === 1 && (s.businesses.aguas?.count ?? 0) === 0)
       return 'Junta para un puesto de aguas frescas; deja más por vuelta.';
@@ -241,12 +254,21 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
     [musicIcon],
   );
   const menu = h('button', { class: 'icon-btn', type: 'button', label: 'Respaldo', onclick: openMenu }, [icon('menu')]);
+  // Personajes en móvil: icono en el header que abre la lista en un diálogo.
+  const charsBadge = h('span', { class: 'lat-badge', hidden: true });
+  charsBadge.setAttribute('aria-hidden', 'true');
+  const charsBtn = h('button', { class: 'icon-btn', type: 'button', label: 'Personajes', onclick: openChars }, [
+    icon('gente'),
+    charsBadge,
+  ]);
 
   // Menú lateral (web): copias de los controles del header y la barra; render() las sincroniza.
   const mq = window.matchMedia('(min-width: 900px)');
-  const latUp = latBtn('Mejoras', 'upgrade', () => (panelOpen ? closePanel(true) : openPanel()));
-  latUp.btn.setAttribute('aria-expanded', 'false');
-  latUp.btn.setAttribute('aria-controls', 'upgrades');
+  const latUp = latBtn('Mejoras', 'upgrade', () => upPanel.toggle());
+  const latChars = latBtn('Personajes', 'personajes', () => charsPanel.toggle());
+  const latCharsBadge = h('span', { class: 'lat-badge', hidden: true });
+  latCharsBadge.setAttribute('aria-hidden', 'true');
+  latChars.disc.append(latCharsBadge);
   const latHeir = latBtn('Herencia', 'recipe', confirmPrestige);
   const latHeirBadge = h('span', { class: 'lat-badge', hidden: true });
   latHeir.disc.append(latHeirBadge);
@@ -266,6 +288,7 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
   ];
   const lateral = h('nav', { class: 'lateral', label: 'Menú' }, [
     latUp.btn,
+    latChars.btn,
     latModo.btn,
     latHeir.btn,
     latMenu.btn,
@@ -312,23 +335,8 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
     bar.setAttribute('aria-hidden', 'true');
     const info = h('p', { class: 'info' });
     const buy = h('button', { class: 'btn primary', type: 'button', onclick: () => handlers.onBuy(def.id) });
-    // Dos líneas a propósito (nombre y precio), como el chip de gerente que lo sustituye.
-    const hire = h('button', { class: 'btn hire', type: 'button', onclick: () => handlers.onHire(def.id) }, [
-      icon(def.manager.icon, 'icon avatar-sm'),
-      h('span', { class: 'stack' }, [
-        h('span', {}, [h('span', { class: 'hire-pre', text: 'Contratar a ' }), h('span', { text: def.manager.name })]),
-        h('span', { class: 'price', text: formatMoney(def.manager.cost) }),
-      ]),
-    ]);
-    // En web se oculta el prefijo: el nombre accesible no cambia.
-    hire.setAttribute('aria-label', `Contratar a ${def.manager.name} por ${formatMoney(def.manager.cost)}`);
-    const manager = h('div', { class: 'manager sticker', hidden: true }, [
-      h('span', { class: 'estampa estampa-avatar' }, [
-        icon('sello', 'icon sello'),
-        icon(def.manager.icon, 'icon avatar'),
-      ]),
-      h('div', {}, [h('strong', { text: def.manager.name }), h('span', { text: 'Vende solito' })]),
-    ]);
+    // Sello del gerente: va al final del papel para quedar bajo el contenido (z-index -1 en la máscara).
+    const mark = icon(def.manager.icon, 'icon card-mark');
     // Overlay: no entra en el flujo, así la tarjeta no crece ni se mueven los botones.
     const bubble = h('div', { class: 'bubble', hidden: true });
     bubble.setAttribute('aria-hidden', 'true');
@@ -340,13 +348,14 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
           h('h2', { text: def.name }, [count]),
           bar,
           info,
-          h('div', { class: 'row' }, [buy, hire, manager]),
+          h('div', { class: 'row' }, [buy]),
         ]),
+        mark,
       ]),
       bubble,
     ]);
     cardRoot.dataset.papel = def.papel;
-    return { def, root: cardRoot, sell, count, fill, info, buy, hire, manager, bubble, bubbleUntil: 0 };
+    return { def, root: cardRoot, sell, count, fill, info, buy, mark, bubble, bubbleUntil: 0 };
   });
 
   const appTitle = h('h1', { text: 'Imperio de Antojitos' });
@@ -378,7 +387,7 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
   const upgradesTitle = h('h2', { class: 'section-title', text: 'Mejoras' });
   upgradesTitle.id = 'upgrades-title';
   upgradesTitle.tabIndex = -1;
-  const upgrades = h('section', { class: 'upgrades', hidden: true }, [
+  const upgrades = h('section', { class: 'upgrades panel', hidden: true }, [
     upgradesTitle,
     h(
       'ul',
@@ -389,6 +398,34 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
   upgrades.setAttribute('aria-labelledby', 'upgrades-title');
   upgrades.id = 'upgrades';
 
+  // Personajes: los 8 gerentes siempre, en cupones como las mejoras. render() pone el estado.
+  let refocusAfterHire = false;
+  const charSlots: CharSlot[] = BUSINESSES.map((def) => {
+    const buy = h('button', { class: 'btn primary', type: 'button', onclick: () => handlers.onHire(def.id) });
+    const state = h('p', { class: 'char-state', text: 'Vende solito', hidden: true });
+    const root = h('li', { class: 'up-slot' }, [
+      h('div', { class: 'up-card char-card' }, [
+        icon(def.manager.icon, 'icon char-portrait'),
+        h('h3', { class: 'up-name', text: def.manager.name }),
+        h('p', { class: 'up-effect', text: def.name }),
+        buy,
+        state,
+      ]),
+    ]);
+    return { def, root, buy, state };
+  });
+  const charList = h(
+    'ul',
+    { class: 'up-list' },
+    charSlots.map((x) => x.root),
+  );
+  const charsTitle = h('h2', { class: 'section-title', text: 'Personajes' });
+  charsTitle.id = 'personajes-title';
+  charsTitle.tabIndex = -1;
+  const chars = h('section', { class: 'personajes panel' }, [charsTitle, charList]);
+  chars.setAttribute('aria-labelledby', 'personajes-title');
+  chars.id = 'personajes';
+
   const prestigeBtn = h('button', { class: 'btn heir', type: 'button', onclick: confirmPrestige });
   const picado = papelPicado();
   picado.addEventListener('animationend', () => picado.classList.remove('shake'));
@@ -398,7 +435,7 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
   root.replaceChildren(
     lateral,
     h('header', { class: 'top' }, [
-      h('div', { class: 'title-row' }, [appTitle, h('div', {}, [musicBtn, sound, menu])]),
+      h('div', { class: 'title-row' }, [appTitle, h('div', {}, [musicBtn, sound, charsBtn, menu])]),
       money,
       h('div', { class: 'sub-row' }, [rate, recipes]),
       picado,
@@ -406,6 +443,7 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
     tipBox,
     h('div', { class: 'layout' }, [
       upgrades,
+      chars,
       h('div', { class: 'col-main' }, [
         h(
           'ul',
@@ -421,42 +459,85 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
 
   let last: State | null = null;
 
-  // Panel de mejoras (web): no modal, las tarjetas siguen vivas detrás. En móvil la sección está
-  // en línea y .open no tiene reglas: estas funciones solo tocan el booleano.
-  let panelOpen = false;
-  let focusFrame = 0;
-  /** Foco a Mejoras; si está deshabilitado (ya no hay mejoras) o en móvil, al título de la app. */
-  function focusLateral(): void {
-    (mq.matches && !latUp.btn.disabled ? latUp.btn : appTitle).focus({ preventScroll: true });
+  // Paneles laterales (web): no modales, las tarjetas siguen vivas detrás; solo uno abierto a la
+  // vez. En móvil las secciones están en línea u ocultas y .open no tiene reglas: solo tocan el estado.
+  interface Panel {
+    section: HTMLElement;
+    toggle(): void;
+    open(): void;
+    close(restore: boolean): void;
   }
-  function openPanel(): void {
-    if (upgrades.hidden) return;
-    panelOpen = true;
-    upgrades.classList.add('open');
-    latUp.btn.setAttribute('aria-expanded', 'true');
-    // Ya es visible (sin retardo al abrir); el frame deja que el navegador lo pinte antes de enfocar.
-    focusFrame = requestAnimationFrame(() => upgradesTitle.focus({ preventScroll: true }));
+  let activePanel: Panel | null = null;
+  /** Foco al botón del lateral; si está deshabilitado o en móvil, al título de la app. */
+  function focusLateral(btn: HTMLButtonElement): void {
+    (mq.matches && !btn.disabled ? btn : appTitle).focus({ preventScroll: true });
   }
-  function closePanel(restore: boolean): void {
-    if (!panelOpen) return;
-    panelOpen = false;
-    cancelAnimationFrame(focusFrame);
-    upgrades.classList.remove('open');
-    latUp.btn.setAttribute('aria-expanded', 'false');
-    // Si el foco seguía dentro del panel (teclado, o Safari que no enfoca al hacer clic), no se pierde.
-    if (restore || upgrades.contains(document.activeElement)) focusLateral();
+  function sidePanel(section: HTMLElement, btn: HTMLButtonElement, title: HTMLElement): Panel {
+    let focusFrame = 0;
+    const panel: Panel = {
+      section,
+      toggle: () => (activePanel === panel ? panel.close(true) : panel.open()),
+      open() {
+        if (section.hidden || activePanel === panel) return;
+        activePanel?.close(false); // el que cierra sale mientras este entra
+        activePanel = panel;
+        section.classList.add('open');
+        btn.setAttribute('aria-expanded', 'true');
+        // Ya es visible (sin retardo al abrir); el frame deja que el navegador lo pinte antes de enfocar.
+        focusFrame = requestAnimationFrame(() => title.focus({ preventScroll: true }));
+      },
+      close(restore) {
+        if (activePanel !== panel) return;
+        activePanel = null;
+        cancelAnimationFrame(focusFrame);
+        section.classList.remove('open');
+        btn.setAttribute('aria-expanded', 'false');
+        // Si el foco seguía dentro del panel (teclado, o Safari que no enfoca al hacer clic), no se pierde.
+        if (restore || section.contains(document.activeElement)) focusLateral(btn);
+      },
+    };
+    btn.setAttribute('aria-expanded', 'false');
+    btn.setAttribute('aria-controls', section.id);
+    return panel;
   }
-  // Al cruzar los 900 px el panel vuelve al estado en línea / cerrado: nada queda a medias.
-  mq.addEventListener('change', () => closePanel(false));
+  const upPanel = sidePanel(upgrades, latUp.btn, upgradesTitle);
+  const charsPanel = sidePanel(chars, latChars.btn, charsTitle);
+
+  // Personajes en móvil: la misma lista se mueve al diálogo y vuelve a su sección al cerrar.
+  // Un solo DOM: render() sigue escribiendo en los mismos nodos mientras está abierto.
+  let charsDialogTitle: HTMLElement | null = null;
+  function openChars(): void {
+    if (charsDialogTitle) return;
+    const d = dialog('Personajes', [charList]);
+    const title = d.querySelector('h2');
+    if (title) {
+      // Sin esto showModal enfoca "Cerrar" (los botones de la lista están deshabilitados o no) y
+      // el diálogo abre desplazado al final.
+      title.tabIndex = -1;
+      title.focus({ preventScroll: true });
+      d.scrollTop = 0;
+    }
+    charsDialogTitle = title;
+    d.addEventListener('close', () => {
+      charsTitle.after(charList);
+      charsDialogTitle = null;
+    });
+  }
+
+  // Al cruzar los 900 px todo vuelve al estado en línea / cerrado: nada queda a medias.
+  mq.addEventListener('change', () => {
+    activePanel?.close(false);
+    charsDialogTitle?.closest('dialog')?.close();
+  });
   document.addEventListener('keydown', (e) => {
-    if (e.key !== 'Escape' || !panelOpen || document.querySelector('dialog[open]')) return;
-    closePanel(true);
+    if (e.key !== 'Escape' || !activePanel || document.querySelector('dialog[open]')) return;
+    activePanel.close(true);
   });
   document.addEventListener('click', (e) => {
-    if (!panelOpen) return;
+    if (!activePanel) return;
     const t = e.target;
-    if (!(t instanceof Element) || upgrades.contains(t) || lateral.contains(t) || t.closest('dialog')) return;
-    closePanel(false); // el clic sigue llegando a su destino
+    if (!(t instanceof Element) || activePanel.section.contains(t) || lateral.contains(t) || t.closest('dialog')) return;
+    activePanel.close(false); // el clic sigue llegando a su destino
   });
 
   function confirmPrestige(): void {
@@ -535,7 +616,7 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
     const off = next.length === 0 || s.lifetimeEarned === 0;
     setHidden(upgrades, off);
     setDisabled(latUp.btn, off);
-    if (off) closePanel(false);
+    if (off) upPanel.close(false);
     slots.forEach((slot, i) => {
       const u = next[i];
       setHidden(slot.root, !u);
@@ -552,6 +633,44 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
       slot.buy.setAttribute('aria-label', `Comprar ${u.name} por ${formatMoney(u.cost)}`);
       setDisabled(slot.buy, !canBuyUpgrade(s, u.id));
     });
+  }
+
+  function renderPersonajes(s: State): void {
+    for (const slot of charSlots) {
+      const b = s.businesses[slot.def.id];
+      const owned = (b?.count ?? 0) > 0;
+      const managed = b?.manager === true;
+      const m = slot.def.manager;
+      slot.root.classList.toggle('cerrado', !owned);
+      setHidden(slot.buy, managed);
+      setHidden(slot.state, !managed);
+      if (managed) continue;
+      if (owned) {
+        setText(slot.buy, `Contratar · ${formatMoney(m.cost)}`);
+        setAttr(slot.buy, 'aria-label', `Contratar a ${m.name} por ${formatMoney(m.cost)}`);
+        setDisabled(slot.buy, !canHireManager(s, slot.def.id));
+      } else {
+        setText(slot.buy, 'Sin abrir');
+        setAttr(slot.buy, 'aria-label', `Abre ${slot.def.name} para contratar a ${m.name}`);
+        setDisabled(slot.buy, true);
+      }
+    }
+    // Badge: cuántos se pueden contratar ahora; el conteo va al nombre accesible, no al badge.
+    const n = hireableIds(s).length;
+    const label = n > 0 ? `Personajes: ${n} por contratar` : 'Personajes';
+    for (const [btn, badge] of [
+      [latChars.btn, latCharsBadge],
+      [charsBtn, charsBadge],
+    ] as const) {
+      setAttr(btn, 'aria-label', label);
+      setHidden(badge, n === 0);
+      setText(badge, String(n));
+    }
+    if (refocusAfterHire) {
+      // El botón recién pulsado se ocultó: el foco va al título del diálogo (móvil) o del panel.
+      refocusAfterHire = false;
+      (charsDialogTitle ?? charsTitle).focus({ preventScroll: true });
+    }
   }
 
   return {
@@ -587,9 +706,10 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
         // El botón comprado ahora muestra otra mejora (o desapareció): el foco va a un
         // lugar estable en vez de perderse o caer sobre una compra que no se pidió.
         refocusAfterUpgrade = false;
-        if (upgrades.hidden) focusLateral();
+        if (upgrades.hidden) focusLateral(latUp.btn);
         else upgradesTitle.focus({ preventScroll: true });
       }
+      renderPersonajes(s);
 
       let lockedShown = false;
       for (const c of cards) {
@@ -621,9 +741,6 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
         setDisabled(c.buy, q === 0);
 
         c.root.classList.toggle('managed', b.manager);
-        setHidden(c.hire, !owned || b.manager);
-        setHidden(c.manager, !b.manager);
-        if (!b.manager) setDisabled(c.hire, !canHireManager(s, c.def.id));
 
         setHidden(c.bubble, !bubbleVisible(now, c.bubbleUntil));
       }
@@ -684,7 +801,19 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
         return;
       }
       const c = cards.find((x) => x.def.id === id);
-      if (c) pulse(kind === 'buy' ? c.buy : c.manager);
+      if (!c) return;
+      if (kind === 'buy') {
+        pulse(c.buy);
+        return;
+      }
+      // Contratado: el sello cae sobre la tarjeta (se ve desde el render que pone .managed) y el
+      // cupón del gerente cambia a "Vende solito".
+      stamp(c.mark);
+      const slot = charSlots.find((x) => x.def.id === id);
+      if (slot) {
+        if (slot.buy === document.activeElement) refocusAfterHire = true;
+        pop(slot.state);
+      }
     },
 
     celebrate() {

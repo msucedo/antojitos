@@ -18,6 +18,9 @@ npm-debug.log*
 # Vercel
 .vercel/
 
+# img refs
+docs/refs/
+
 # Editor / SO
 .DS_Store
 .vscode/*

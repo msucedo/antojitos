@@ -97,6 +97,22 @@ export function confetti(): void {
   });
 }
 
+/**
+ * Golpe de sello: el avatar del gerente cae sobre la tarjeta (más grande y girado, luego asienta).
+ * Termina en los valores del CSS de .card-mark para que no salte al soltar.
+ */
+export function stamp(el: Element): void {
+  if (reducedMotion()) return;
+  const opacity = getComputedStyle(el).opacity;
+  el.animate(
+    [
+      { transform: 'rotate(-14deg) scale(1.35)', opacity: 0 },
+      { transform: 'rotate(-6deg) scale(1)', opacity },
+    ],
+    { duration: 220, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)' },
+  );
+}
+
 /** La cara nueva de un disco entra girando sobre el eje horizontal (el contenido ya cambió). */
 export function flip(el: Element): void {
   if (reducedMotion()) return;

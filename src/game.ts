@@ -162,6 +162,11 @@ export function canHireManager(state: State, id: string): boolean {
   return !b.manager && b.count > 0 && state.money >= getDef(id).manager.cost;
 }
 
+/** Negocios cuyo gerente se puede contratar ahora mismo (badge del menú Personajes). */
+export function hireableIds(state: State): string[] {
+  return BUSINESSES.filter((d) => canHireManager(state, d.id)).map((d) => d.id);
+}
+
 export function hireManager(state: State, id: string): State {
   if (!canHireManager(state, id)) return state;
   const b = biz(state, id);
