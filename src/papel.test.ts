@@ -11,11 +11,11 @@ const PROHIBIDOS: Readonly<Partial<Record<IconName, readonly Papel[]>>> = {
   elote: ['mostaza'],
   agua: ['rosa'],
   taco: ['crema', 'mostaza'],
-  torta: ['crema'],
+  torta: ['crema', 'mostaza'],
   olla: ['mostaza'],
   concha: ['rosa'],
   tienda: ['crema', 'rosa'],
-  camion: ['rosa'],
+  camion: ['rosa', 'crema'],
 };
 
 describe('papel de estampilla por negocio', () => {

@@ -1,4 +1,5 @@
 import type { Sound } from './audio';
+import { plato } from './platos';
 import { BUSINESSES, CHELO, type BusinessDef, type CheloEvent, type ManagerEvent } from './data';
 import {
   canBuyUpgrade,
@@ -106,7 +107,11 @@ interface Card {
   sell: HTMLButtonElement;
   count: HTMLElement;
   fill: HTMLElement;
-  info: HTMLElement;
+  /** Línea bajo la barra: cuánto deja cada vuelta y el siguiente hito. */
+  meta: HTMLElement;
+  gana: HTMLElement;
+  por: HTMLElement;
+  hito: HTMLElement;
   buy: HTMLButtonElement;
   /** Sello del gerente a todo el alto de la tarjeta; solo se ve con .managed. */
   mark: Element;
@@ -412,13 +417,16 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
     const sell = h(
       'button',
       { class: 'sell', type: 'button', label: `Vender: ${def.name}`, onclick: () => handlers.onStart(def.id) },
-      [icon('sello', 'icon sello sticker'), icon(def.icon, 'icon sell-icon sticker')],
+      [icon('sello', 'icon sello sticker'), plato(def.icon, 'icon sell-icon')],
     );
     const count = h('span', { class: 'count' });
     const fill = h('div', { class: 'fill' });
     const bar = h('div', { class: 'bar' }, [fill]);
     bar.setAttribute('aria-hidden', 'true');
-    const info = h('p', { class: 'info' });
+    const gana = h('strong', { class: 'gana' });
+    const por = h('span', { class: 'por' });
+    const hito = h('span', { class: 'hito' });
+    const meta = h('p', { class: 'meta' }, [gana, por, hito]);
     const buy = h('button', { class: 'btn primary', type: 'button', onclick: () => handlers.onBuy(def.id) });
     // Sello del gerente: va al final del papel para quedar bajo el contenido (z-index -1 en la máscara).
     const mark = portrait(def.manager.id, 'icon card-mark', true);
@@ -430,9 +438,9 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
       h('div', { class: 'paper' }, [
         sell,
         h('div', { class: 'body' }, [
-          h('h2', { text: def.name }, [count]),
+          h('h2', {}, [h('span', { class: 'nombre', text: def.name }), document.createTextNode(' '), count]),
           bar,
-          info,
+          meta,
           h('div', { class: 'row' }, [buy]),
         ]),
         mark,
@@ -440,7 +448,7 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
       bubble,
     ]);
     cardRoot.dataset.papel = def.papel;
-    return { def, root: cardRoot, sell, count, fill, info, buy, mark, bubble, bubbleUntil: 0 };
+    return { def, root: cardRoot, sell, count, fill, meta, gana, por, hito, buy, mark, bubble, bubbleUntil: 0 };
   });
 
   const appTitle = h('h1', { text: 'Imperio de Antojitos' });
@@ -881,14 +889,14 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
 
         const owned = b.count > 0;
         c.root.classList.toggle('owned', owned);
-        setText(c.count, owned ? ` · ${formatNumber(b.count)}` : '');
+        setText(c.count, owned ? `×${formatNumber(b.count)}` : '');
         setDisabled(c.sell, !owned || b.running || b.manager);
 
+        // "$10 por vuelta · ×2 a las 25": la barra ya enseña el ritmo, el tiempo no se escribe.
         const next = nextMilestone(b.count);
-        const per = owned
-          ? `${formatMoney(revenuePerCycle(s, c.def.id))} cada ${formatDuration(c.def.cycleMs)}`
-          : 'Bloqueado';
-        setText(c.info, next !== null && owned ? `${per} · ×2 a las ${next}` : per);
+        setText(c.gana, owned ? formatMoney(revenuePerCycle(s, c.def.id)) : '');
+        setText(c.por, owned ? ' por vuelta' : 'Sin abrir');
+        setText(c.hito, owned && next !== null ? `· ×2 a las ${formatNumber(next)}` : '');
 
         const q = quantityFor(s, c.def.id, mode);
         const k = q > 0 ? q : mode === 'max' ? 1 : mode;
@@ -967,7 +975,7 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
       if (kind === 'upgrade') {
         // Se anima lo que cambió de verdad: el ingreso de los negocios afectados.
         const { target } = getUpgrade(id);
-        for (const c of cards) if (!c.root.hidden && (target === 'all' || c.def.id === target)) pulse(c.info);
+        for (const c of cards) if (!c.root.hidden && (target === 'all' || c.def.id === target)) pulse(c.meta);
         if (slots.some((x) => x.buy === document.activeElement)) refocusAfterUpgrade = true;
         return;
       }

@@ -53,6 +53,7 @@
   --marco: var(--marco-tinta); /* en el chrome sigue el tema (claro sobre azul noche) */
   --on-tinta: #ffffff; /* texto sobre --tinta-rosa y --tinta-nopal */
   --velo-tinta: rgb(27 42 58 / 0.08); /* tinta translúcida: pistas y chip sobre cualquier papel */
+  --brillo: rgb(255 255 255 / 0.35); /* brillo de la barra de progreso, sobre el relleno --nopal */
   /* Grano de imprenta: capa de background-image (nunca filter), ver assets/grano.svg. */
   --grano: url('./assets/grano.svg') 0 0 / 160px 160px repeat;
   --fuente-rotulo: 'Rye', Georgia, 'Times New Roman', serif;
@@ -861,6 +862,17 @@ p {
   height: 52px;
 }
 
+/* Plato raster: trae contorno y sombra, va sin .sticker y un poco más grande que el símbolo. */
+img.sell-icon {
+  width: 56px;
+  height: 56px;
+}
+
+.card:not(.owned) img.sell-icon {
+  filter: grayscale(1); /* hoja del árbol: no es ancestro de la barra */
+  opacity: 0.6;
+}
+
 .sell:not(:disabled):active {
   transform: scale(0.92);
 }
@@ -899,36 +911,110 @@ p {
   gap: 6px;
 }
 
+/* Título en una línea: la elipsis cae en el nombre, la ficha de cantidad siempre se ve. */
 .body h2 {
-  font-size: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-size: 1.1rem;
+  font-weight: 800;
 }
 
+.body h2 .nombre {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Cantidad como ficha pegada al título; vacía (sin abrir) no se pinta. */
 .count {
-  color: var(--muted);
-  font-weight: 600;
+  flex: none;
+  padding: 0 7px;
+  border: 1.5px solid var(--border);
+  border-radius: 999px;
+  background: var(--papel);
+  color: var(--text);
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 17px;
+  font-variant-numeric: tabular-nums;
 }
 
+.count:empty {
+  display: none;
+}
+
+/* Barra: pista de papel hundida (sombra interior, nunca filter) y relleno con brillo arriba. */
 .bar {
-  height: 14px;
-  border-radius: 7px;
+  height: 20px;
+  border-radius: 10px;
   border: 2px solid var(--border);
   background: var(--card);
+  box-shadow: inset 0 2px 0 var(--velo-tinta);
   overflow: hidden;
 }
 
 .fill {
+  position: relative;
   height: 100%;
-  border-radius: 6px;
+  border-radius: 9px;
   background: var(--nopal);
   transform-origin: left;
   transform: scaleX(0);
   will-change: transform; /* capa propia: la barra anima sin repintar la tarjeta */
 }
 
-.info {
+/* Brillo y línea de sombra viajan en la capa del relleno; se estiran con él (es una barra). */
+.fill::before {
+  content: '';
+  position: absolute;
+  inset: 2px 3px auto 3px;
+  height: 35%;
+  border-radius: 999px;
+  background: var(--brillo);
+}
+
+.fill::after {
+  content: '';
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 1.5px;
+  background: var(--marco-tinta);
+}
+
+/* "$10 por vuelta · ×2 a las 25" o "Sin abrir". */
+.meta {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
   font-size: 0.85rem;
   color: var(--muted);
   font-variant-numeric: tabular-nums;
+}
+
+.gana {
+  color: var(--text);
+  font-size: 0.95rem;
+}
+
+.gana:empty {
+  display: none;
+}
+
+.por {
+  flex: 1;
+  white-space: nowrap;
+}
+
+.hito {
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+.hito:empty {
+  display: none;
 }
 
 .row {
@@ -1310,13 +1396,22 @@ p {
     height: 42px;
   }
 
+  img.sell-icon {
+    width: 50px;
+    height: 50px;
+  }
+
   .body h2 {
     line-height: 1.2;
   }
 
   .bar {
-    height: 12px;
-    border-radius: 6px;
+    height: 16px;
+    border-radius: 8px;
+  }
+
+  .fill {
+    border-radius: 7px;
   }
 
   .row .btn.primary {

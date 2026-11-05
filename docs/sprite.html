@@ -83,12 +83,15 @@
   <body>
     <h1>Sprite: <span id="count"></span> símbolos</h1>
     <ul class="sheet" id="sheet"></ul>
+    <h1>Platos raster: <span id="count-platos"></span> (src/assets/platos)</h1>
+    <ul class="sheet" id="platos"></ul>
     <h1>Retratos: <span id="count-retratos"></span> personajes (src/assets/personajes)</h1>
     <ul class="sheet" id="retratos"></ul>
     <h1>Referencias (docs/refs)</h1>
     <div class="refs" id="refs"></div>
     <script type="module">
       import { PORTRAITS } from '/src/characters.ts';
+      import { PLATOS } from '/src/platos.ts';
       import { BUSINESSES, CHELO } from '/src/data.ts';
 
       const SPRITE = '/src/assets/icons.svg';
@@ -116,6 +119,25 @@
           </li>`,
         )
         .join('');
+      // Platos raster: cada uno sobre el papel de su negocio, a 160, en el plato real (56 móvil, 50 web) y a 30.
+      const platos = Object.entries(PLATOS);
+      document.getElementById('count-platos').textContent = platos.length;
+      document.getElementById('platos').innerHTML = platos
+        .map(
+          ([id, src]) => `<li class="card owned" data-papel="${papel.get(id) ?? ''}">
+            <div class="cell paper">
+              <img class="icon big" src="${src}" alt="" />
+              <div>
+                <p class="name">${id} · ${papel.get(id) ?? ''}</p>
+                <div class="small">
+                  <span class="sell">${svg('sello', 'icon sello sticker')}<img class="icon sell-icon" src="${src}" alt="" /></span>
+                  <img class="icon i30" src="${src}" alt="" />
+                </div>
+              </div>
+            </div>
+          </li>`,
+        )
+        .join('');
       // Retratos raster: cada gerente sobre el papel de su negocio; Chelo sobre el papel base.
       const papelDe = new Map(BUSINESSES.map((b) => [b.manager.id, b.papel]));
       const nombre = new Map([[CHELO.id, CHELO.name], ...BUSINESSES.map((b) => [b.manager.id, b.manager.name])]);
@@ -137,7 +159,16 @@
           </li>`,
         )
         .join('');
-      const refs = ['estampas1', 'estampas2', 'estampas3', 'estampas4', 'letra'];
+      const refs = [
+        'estampas1',
+        'estampas2',
+        'estampas3',
+        'estampas4',
+        'letra',
+        'iconos-tarjetas1',
+        'iconos-tarjetas2',
+        'iconos-tarjetas3',
+      ];
       document.getElementById('refs').innerHTML = refs
         .map((r) => `<img src="/docs/refs/${r}.png" alt="${r}" />`)
         .join('');
