@@ -33,3 +33,4 @@ docs/refs/
 
 # Playwright MCP (capturas y snapshots)
 .playwright-mcp/
+capturas/

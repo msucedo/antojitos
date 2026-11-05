@@ -63,9 +63,11 @@
         font-weight: 700;
         margin: 0 0 8px;
       }
-      /* Plato tal cual en el juego: sello detrás, icono de 52 con estampa encima. */
-      .sell {
-        --aro: var(--primary);
+      /* Muestra del botón de vender: en el juego mide lo que el cuerpo de la tarjeta; aquí, 56 px. */
+      .cell .sell {
+        align-self: auto;
+        width: 56px;
+        height: 56px;
       }
       .refs {
         margin-top: 24px;
@@ -110,7 +112,7 @@
               <div>
                 <p class="name">${id}${papel.has(id) ? ` · ${papel.get(id)}` : ''}</p>
                 <div class="small">
-                  <span class="sell">${svg('sello', 'icon sello sticker')}${svg(id, 'icon sell-icon sticker')}</span>
+                  <span class="sell">${svg(id, 'icon sell-icon sticker')}</span>
                   ${svg(id, 'icon i30')}
                   ${svg(id, 'icon i20')}
                 </div>
@@ -119,7 +121,7 @@
           </li>`,
         )
         .join('');
-      // Platos raster: cada uno sobre el papel de su negocio, a 160, en el plato real (56 móvil, 50 web) y a 30.
+      // Platos raster: cada uno sobre el papel de su negocio, a 160, como botón de vender (muestra de 56) y a 30.
       const platos = Object.entries(PLATOS);
       document.getElementById('count-platos').textContent = platos.length;
       document.getElementById('platos').innerHTML = platos
@@ -130,7 +132,7 @@
               <div>
                 <p class="name">${id} · ${papel.get(id) ?? ''}</p>
                 <div class="small">
-                  <span class="sell">${svg('sello', 'icon sello sticker')}<img class="icon sell-icon" src="${src}" alt="" /></span>
+                  <span class="sell"><img class="icon sell-icon" src="${src}" alt="" /></span>
                   <img class="icon i30" src="${src}" alt="" />
                 </div>
               </div>

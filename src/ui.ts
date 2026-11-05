@@ -417,7 +417,7 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
     const sell = h(
       'button',
       { class: 'sell', type: 'button', label: `Vender: ${def.name}`, onclick: () => handlers.onStart(def.id) },
-      [icon('sello', 'icon sello sticker'), plato(def.icon, 'icon sell-icon')],
+      [plato(def.icon, 'icon sell-icon')],
     );
     const count = h('span', { class: 'count' });
     const fill = h('div', { class: 'fill' });
@@ -430,10 +430,11 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
     const buy = h('button', { class: 'btn primary', type: 'button', onclick: () => handlers.onBuy(def.id) });
     // Sello del gerente: va al final del papel para quedar bajo el contenido (z-index -1 en la máscara).
     const mark = portrait(def.manager.id, 'icon card-mark', true);
-    // Overlay: no entra en el flujo, así la tarjeta no crece ni se mueven los botones.
+    // Overlay anclado al cuerpo: no entra en el flujo, así la tarjeta no crece ni se mueven los
+    // botones, y se coloca solo sobre el título sea cual sea el ancho del icono.
     const bubble = h('div', { class: 'bubble', hidden: true });
     bubble.setAttribute('aria-hidden', 'true');
-    // li: sombra y ancla del bocadillo; .paper: la estampilla con la máscara perforada.
+    // li: sombra; .paper: la estampilla con la máscara perforada.
     const cardRoot = h('li', { class: 'card' }, [
       h('div', { class: 'paper' }, [
         sell,
@@ -442,10 +443,10 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
           bar,
           meta,
           h('div', { class: 'row' }, [buy]),
+          bubble,
         ]),
         mark,
       ]),
-      bubble,
     ]);
     cardRoot.dataset.papel = def.papel;
     return { def, root: cardRoot, sell, count, fill, meta, gana, por, hito, buy, mark, bubble, bubbleUntil: 0 };

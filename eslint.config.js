@@ -35,7 +35,7 @@ export default defineConfig(
     },
   },
   {
-    files: ['eslint.config.js', '*.config.ts'],
+    files: ['eslint.config.js', '*.config.ts', 'scripts/**/*.mjs'],
     languageOptions: { globals: { ...globals.node } },
   },
 );

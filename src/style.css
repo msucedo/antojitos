@@ -560,12 +560,12 @@ p {
   height: 120px;
 }
 
-/* Overlay sobre título y barra: no desplaza los botones mientras se toca. */
+/* Overlay sobre título y barra, anclado a .body: no desplaza los botones mientras se toca. */
 .bubble {
   position: absolute;
-  top: 10px;
-  left: var(--bubble-x, 98px); /* 2 de borde + 16 de padding + 76 de plato + 4 */
-  right: 12px;
+  top: -6px;
+  left: 0;
+  right: 0;
   z-index: 1;
   padding: 6px 10px;
   border-radius: 12px;
@@ -582,7 +582,7 @@ p {
   pointer-events: none;
 }
 
-/* Cola del bocadillo apuntando al plato del negocio. */
+/* Cola del bocadillo apuntando al icono del negocio. */
 .bubble::before {
   content: '';
   position: absolute;
@@ -759,10 +759,9 @@ p {
   isolation: isolate;
 }
 
-/* Estampilla: la máscara va en .paper, nunca en el li, para que el bocadillo no se recorte. */
+/* Estampilla: la máscara va en .paper, nunca en el li, para que la sombra ::before no se recorte. */
 .paper {
-  --plato: 76px; /* tamaño del plato (.sell); --plato-r es el radio de su papel interior */
-  --plato-r: 25px;
+  --icono: clamp(6.5rem, 30vw, 8rem); /* lado del icono de vender: crece con la pantalla, con tope */
   display: flex;
   gap: 12px;
   padding: 16px;
@@ -804,68 +803,36 @@ p {
   border-color: var(--muted);
 }
 
-.card:not(.owned) h2,
-.card:not(.owned) .sell {
+.card:not(.owned) h2 {
   color: var(--muted);
 }
 
 /*
- * Plato: sello de estampa postal. El borde ondulado (.sello) va detrás del icono y lleva el
- * color del aro: --primary cuando responde, --border cuando no. El papel es un círculo liso.
+ * Icono del negocio (.sell, botón de vender): sin plato ni sello, solo el raster, que trae su
+ * contorno y su sombra. Su lado es el token --icono (fluido, en rem y vw; ver .paper) y el cuerpo
+ * reparte sus filas en ese alto (align-content: space-between); si el cuerpo crece más (precio
+ * largo en dos líneas), el icono queda centrado. Sin píxeles: todo sale del token.
  */
 .sell {
   position: relative;
   flex: none;
-  width: var(--plato);
-  height: var(--plato);
+  align-self: center;
+  width: var(--icono);
+  height: var(--icono);
   display: grid;
   place-items: center;
   padding: 0;
   border: 0;
-  border-radius: 50%;
-  --aro: var(--border);
-  /* Papel liso con una línea fina interior, como el marco de una estampilla. */
-  background: radial-gradient(
-    circle,
-    var(--papel) 0 var(--plato-r),
-    var(--aro) calc(var(--plato-r) + 0.5px) calc(var(--plato-r) + 1.5px),
-    var(--papel) calc(var(--plato-r) + 2px) calc(var(--plato-r) + 4px),
-    transparent calc(var(--plato-r) + 4.5px)
-  );
+  border-radius: 12px;
+  background: none;
   color: var(--text);
   cursor: pointer;
   transition: transform 0.1s;
 }
 
-.card.owned .sell:not(:disabled) {
-  --aro: var(--primary);
-}
-
-/* Sin abrir: el sello pasa a segundo plano hasta que el negocio responda. */
-.card:not(.owned) .sell {
-  --aro: var(--muted);
-}
-
-.sello {
-  position: absolute;
-  inset: 0;
+.sell-icon {
   width: 100%;
   height: 100%;
-  color: var(--aro);
-  z-index: 0;
-}
-
-.sell-icon {
-  position: relative;
-  z-index: 1;
-  width: 52px;
-  height: 52px;
-}
-
-/* Plato raster: trae contorno y sombra, va sin .sticker y un poco más grande que el símbolo. */
-img.sell-icon {
-  width: 56px;
-  height: 56px;
 }
 
 .card:not(.owned) img.sell-icon {
@@ -905,10 +872,12 @@ img.sell-icon {
 }
 
 .body {
+  position: relative; /* ancla del bocadillo */
   flex: 1;
   min-width: 0;
   display: grid;
   gap: 6px;
+  align-content: space-between; /* ocupa el alto del icono repartiendo el hueco entre filas */
 }
 
 /* Título en una línea: la elipsis cae en el nombre, la ficha de cantidad siempre se ve. */
@@ -1304,13 +1273,7 @@ img.sell-icon {
   }
 
   .card.owned .sell:not(:disabled):hover {
-    background: radial-gradient(
-      circle,
-      var(--track) 0 var(--plato-r),
-      var(--aro) calc(var(--plato-r) + 0.5px) calc(var(--plato-r) + 1.5px),
-      var(--track) calc(var(--plato-r) + 2px) calc(var(--plato-r) + 4px),
-      transparent calc(var(--plato-r) + 4.5px)
-    );
+    transform: scale(1.05);
   }
 }
 
@@ -1361,44 +1324,18 @@ img.sell-icon {
   }
 
   /*
-   * Tarjeta compacta (~130 px, cuatro filas caben en 800 px de alto): plato a la izquierda con
-   * título, barra e info al lado, y la fila de botones debajo a todo el ancho. .body se disuelve
-   * en el grid del papel con display: contents.
+   * Tarjeta compacta (~130 px, cuatro filas caben en 800 px de alto): mismo flex que en móvil
+   * (icono a la izquierda, cuerpo al lado) con padding y huecos más cortos.
    */
   .paper {
-    --plato: 60px;
-    --plato-r: 20px;
-    display: grid;
-    grid-template-columns: var(--plato) minmax(0, 1fr);
-    column-gap: 12px;
-    row-gap: 4px;
-    align-items: start;
+    --icono: 6.75rem; /* 108: con padding y bordes, cuatro tarjetas caben en 800 de alto */
     padding: 11px;
     --marco-inset: 8px;
     --esq: 11px;
   }
 
   .body {
-    display: contents;
-  }
-
-  .row {
-    grid-column: 1 / -1;
-  }
-
-  .sell {
-    grid-row: 1 / 4;
-    grid-column: 1;
-  }
-
-  .sell-icon {
-    width: 42px;
-    height: 42px;
-  }
-
-  img.sell-icon {
-    width: 50px;
-    height: 50px;
+    gap: 4px;
   }
 
   .body h2 {
@@ -1417,11 +1354,6 @@ img.sell-icon {
   .row .btn.primary {
     flex: none;
     white-space: nowrap;
-  }
-
-  .bubble {
-    --bubble-x: 78px; /* 2 + 11 + 60 + 5 */
-    top: 8px;
   }
 
   /* Los controles del header y el botón de heredar viven en el lateral. */
