@@ -28,7 +28,7 @@ describe('efectos de sonido', () => {
 
 /** AudioContext falso: registra osciladores y automatizaciones; vitest corre en node. */
 type Call = { param: string; method: string; args: number[] };
-function fakeContext(calls: Call[], oscillators: { freq: number }[]) {
+function fakeContext(calls: Call[], oscillators: { freq: number }[], created: { ctx: { state: string } | null }) {
   const param = (name: string) => {
     const p = { value: 0 } as Record<string, unknown>;
     for (const m of ['setValueAtTime', 'exponentialRampToValueAtTime', 'linearRampToValueAtTime']) {
@@ -41,6 +41,9 @@ function fakeContext(calls: Call[], oscillators: { freq: number }[]) {
     state = 'running';
     currentTime = 10;
     destination = {};
+    constructor() {
+      created.ctx = this;
+    }
     createGain() {
       return node({ gain: param('gain') });
     }
@@ -50,6 +53,7 @@ function fakeContext(calls: Call[], oscillators: { freq: number }[]) {
       return osc;
     }
     resume() {
+      this.state = 'running';
       return Promise.resolve();
     }
   };
@@ -58,11 +62,13 @@ function fakeContext(calls: Call[], oscillators: { freq: number }[]) {
 describe('play()', () => {
   const calls: Call[] = [];
   const oscillators: { freq: number }[] = [];
+  const created: { ctx: { state: string } | null } = { ctx: null };
   let now = 1_000;
   beforeEach(() => {
     calls.length = 0;
     oscillators.length = 0;
-    vi.stubGlobal('window', { AudioContext: fakeContext(calls, oscillators) });
+    created.ctx = null;
+    vi.stubGlobal('window', { AudioContext: fakeContext(calls, oscillators, created) });
     vi.spyOn(performance, 'now').mockImplementation(() => now);
   });
   afterEach(() => {
@@ -100,6 +106,18 @@ describe('play()', () => {
     const gain = calls.filter((c) => c.param === 'gain' && c.method !== 'setValueAtTime');
     expect(gain.map((c) => c.method)).toEqual(['exponentialRampToValueAtTime', 'linearRampToValueAtTime']);
     expect(gain[0]?.args[0]).toBe(n?.level);
+  });
+
+  it('con el contexto suspendido y la pestaña visible, reanuda y toca al resolver', async () => {
+    const audio = audioOn();
+    const c = created.ctx;
+    if (!c) throw new Error('sin contexto');
+    c.state = 'suspended';
+    audio.play('welcome');
+    expect(oscillators.length).toBe(0);
+    await Promise.resolve();
+    expect(oscillators.length).toBe(SOUNDS.welcome.length);
+    expect(c.state).toBe('running');
   });
 
   it('sin barrido la caída sigue siendo exponencial', () => {

@@ -90,6 +90,12 @@ export function milestonesCrossed(before: State, after: State, id: string): numb
   return milestonesReached(biz(after, id).count) - milestonesReached(biz(before, id).count);
 }
 
+/** Sonido de una compra que ya pasó: hito si cruzó uno, abrir si el negocio nacía, si no compra. */
+export function buySound(before: State, after: State, id: string): 'buy' | 'open' | 'milestone' {
+  if (milestonesCrossed(before, after, id) > 0) return 'milestone';
+  return biz(before, id).count === 0 ? 'open' : 'buy';
+}
+
 /** Siguiente hito no alcanzado, o null si ya están todos. */
 export function nextMilestone(count: number): number | null {
   return MILESTONES.find((m) => count < m) ?? null;

@@ -1,3 +1,4 @@
+import type { Sound } from './audio';
 import { BUSINESSES, CHELO, type BusinessDef, type CheloEvent, type ManagerEvent } from './data';
 import {
   canBuyUpgrade,
@@ -32,8 +33,8 @@ export interface Handlers {
   onPrestige(): void;
   onToggleSound(): void;
   onToggleMusic(): void;
-  /** Un panel del lateral se desliza (abre o cierra); main.ts le pone sonido. */
-  onSlide(open: boolean): void;
+  /** Sonidos que nacen en la UI (paneles, diálogos, preguntas, punto de Chelo); main.ts los toca. */
+  onSound(kind: Sound): void;
   onImport(text: string): boolean;
   getExport(): string;
 }
@@ -220,47 +221,51 @@ function papelPicado(): SVGSVGElement {
   return svg;
 }
 
-function dialog(title: string, body: Node[], actions: HTMLButtonElement[] = []): HTMLDialogElement {
-  // dialog: sombra y marco exterior; .modal-paper: la estampilla con la máscara perforada.
-  const d = h('dialog', { class: 'modal' });
-  const close = h('button', { class: 'btn', type: 'button', text: 'Cerrar', onclick: () => d.close() });
-  d.append(
-    h('div', { class: 'modal-paper' }, [
-      h('h2', {}, [icon('banderin', 'icon flag sticker'), h('span', { text: title })]),
-      ...body,
-      h('div', { class: 'actions' }, [...actions, close]),
-    ]),
-  );
-  d.setAttribute('aria-label', title);
-  d.addEventListener('close', () => d.remove());
-  document.body.append(d);
-  // <dialog> nativo: atrapa el foco, inerte el fondo y cierra con Esc.
-  d.showModal();
-  return d;
-}
-
-/**
- * Mueve `body` a un diálogo modal y enfoca su h2: sin eso showModal enfoca "Cerrar" (o el primer
- * botón habilitado) y el diálogo abre desplazado al final. Al cerrar, `body` vuelve detrás de
- * `anchor` (su sitio en línea) y se avisa con `onClose`. Devuelve el h2, que el llamador guarda
- * como "diálogo abierto" y usa para el foco.
- */
-function openInDialog(title: string, body: HTMLElement, anchor: HTMLElement, onClose: () => void): HTMLElement | null {
-  const d = dialog(title, [body]);
-  const h2 = d.querySelector('h2');
-  if (h2) {
-    h2.tabIndex = -1;
-    h2.focus({ preventScroll: true });
-    d.scrollTop = 0;
-  }
-  d.addEventListener('close', () => {
-    anchor.after(body);
-    onClose();
-  });
-  return h2;
-}
-
 export function createUI(root: HTMLElement, handlers: Handlers): UI {
+  function dialog(title: string, body: Node[], actions: HTMLButtonElement[] = []): HTMLDialogElement {
+    // dialog: sombra y marco exterior; .modal-paper: la estampilla con la máscara perforada.
+    const d = h('dialog', { class: 'modal' });
+    const close = h('button', { class: 'btn', type: 'button', text: 'Cerrar', onclick: () => d.close() });
+    d.append(
+      h('div', { class: 'modal-paper' }, [
+        h('h2', {}, [icon('banderin', 'icon flag sticker'), h('span', { text: title })]),
+        ...body,
+        h('div', { class: 'actions' }, [...actions, close]),
+      ]),
+    );
+    d.setAttribute('aria-label', title);
+    d.addEventListener('close', () => {
+      d.remove();
+      handlers.onSound('dialogClose');
+    });
+    document.body.append(d);
+    // <dialog> nativo: atrapa el foco, inerte el fondo y cierra con Esc.
+    d.showModal();
+    handlers.onSound('dialogOpen');
+    return d;
+  }
+
+  /**
+   * Mueve `body` a un diálogo modal y enfoca su h2: sin eso showModal enfoca "Cerrar" (o el primer
+   * botón habilitado) y el diálogo abre desplazado al final. Al cerrar, `body` vuelve detrás de
+   * `anchor` (su sitio en línea) y se avisa con `onClose`. Devuelve el h2, que el llamador guarda
+   * como "diálogo abierto" y usa para el foco.
+   */
+  function openInDialog(title: string, body: HTMLElement, anchor: HTMLElement, onClose: () => void): HTMLElement | null {
+    const d = dialog(title, [body]);
+    const h2 = d.querySelector('h2');
+    if (h2) {
+      h2.tabIndex = -1;
+      h2.focus({ preventScroll: true });
+      d.scrollTop = 0;
+    }
+    d.addEventListener('close', () => {
+      anchor.after(body);
+      onClose();
+    });
+    return h2;
+  }
+
   const money = h('p', { class: 'money' });
   const rate = h('p', { class: 'rate' });
   const recipesText = h('span');
@@ -350,6 +355,12 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
   let answer: string | null = null;
   let lastTip: string | null = null;
   let unread = false;
+  /** Enciende el punto de "consejo nuevo"; suena solo al encenderse. */
+  const markUnread = () => {
+    if (unread) return;
+    unread = true;
+    handlers.onSound('tip');
+  };
   let autoCloseAt = 0; // panel abierto por un evento: se cierra solo salvo clic dentro
   let welcomed = false;
   let taught = false; // lección del primer empleado
@@ -365,6 +376,7 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
           type: 'button',
           text: f.q,
           onclick: () => {
+            handlers.onSound('ask');
             eventUntil = 0; // la pregunta manda sobre la frase de evento en curso
             if ('id' in f) answer = null;
             else {
@@ -564,7 +576,7 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
         activePanel = panel;
         section.classList.add('open');
         btn.setAttribute('aria-expanded', 'true');
-        handlers.onSlide(true);
+        handlers.onSound('slideOpen');
         // Ya es visible (sin retardo al abrir); el frame deja que el navegador lo pinte antes de enfocar.
         // Una apertura automática (Chelo habla) no mueve el foco del jugador.
         if (focus) focusFrame = requestAnimationFrame(() => title.focus({ preventScroll: true }));
@@ -575,7 +587,7 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
         cancelAnimationFrame(focusFrame);
         section.classList.remove('open');
         btn.setAttribute('aria-expanded', 'false');
-        if (!switching) handlers.onSlide(false);
+        if (!switching) handlers.onSound('slideClose');
         // Si el foco seguía dentro del panel (teclado, o Safari que no enfoca al hacer clic), no se pierde.
         if (restore || section.contains(document.activeElement)) focusLateral(btn);
       },
@@ -771,8 +783,9 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
     const tip = consejo ?? CHELO.idle;
     // Punto solo con consejo nuevo de verdad: ni en el primer render, ni al volver de un evento,
     // ni al quedarse sin consejo (reposo).
-    if (lastTip !== null && tip !== lastTip && !abierto && consejo !== null) unread = true;
+    const consejoNuevo = lastTip !== null && tip !== lastTip && !abierto && consejo !== null;
     lastTip = tip;
+    let leccionAbrio = false;
     // Lección: la primera vez que alcanza para un empleado, Chelo explica para qué sirve (6 s) y
     // luego queda el consejo de dónde contratarlo. Se abre sola, también en móvil, pero nunca sobre
     // otro panel, diálogo o frase de evento en curso (espera a que terminen) y no se cierra sola.
@@ -790,10 +803,13 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
         if (!abierto) {
           if (mq.matches) cheloPanel.open(false);
           else openGuia();
+          leccionAbrio = true;
         }
         taught = true;
       }
     }
+    // El consejo de contratar cambia en el mismo render que abre la lección: no suma el tin.
+    if (consejoNuevo && !leccionAbrio) markUnread();
     const text = bubbleVisible(now, eventUntil) ? eventText : (answer ?? tip);
     if (guiaTexto.textContent !== text) {
       guiaTexto.textContent = text;
@@ -933,13 +949,13 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
         // "clic fuera" cerraría el panel en ese mismo instante.
         requestAnimationFrame(() => {
           if (activePanel !== null || document.querySelector('dialog[open]')) {
-            unread = true;
+            markUnread();
             return;
           }
           cheloPanel.open(false);
           autoCloseAt = eventUntil;
         });
-      } else unread = true;
+      } else markUnread();
     },
 
     sold(id, amount) {

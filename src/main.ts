@@ -3,11 +3,13 @@ import { registerSW } from 'virtual:pwa-register';
 import {
   applyOffline,
   buy,
+  buySound,
   buyUpgrade,
   getDef,
   getUpgrade,
   hireManager,
   milestonesCrossed,
+  pendingRecipes,
   prestige,
   revenuePerCycle,
   startCycle,
@@ -76,7 +78,8 @@ function start(root: HTMLElement): void {
     onStart: (id) => set(startCycle(state, id)),
     onBuy: (id) => {
       const before = state;
-      if (!act(buy(state, id, mode), 'buy', id)) return;
+      const next = buy(state, id, mode);
+      if (!act(next, 'buy', id, buySound(before, next, id))) return;
       // Al cruzar un hito habla el gerente; si aún no hay, Doña Chelo.
       if (milestonesCrossed(before, state, id) === 0) return;
       const { manager } = getDef(id);
@@ -127,8 +130,10 @@ function start(root: HTMLElement): void {
       dirty = true;
     },
     onMode: (m) => {
+      if (m === mode) return; // el segmentado móvil repite el toque sobre el modo actual
       mode = m;
       dirty = true;
+      audio.play(m === 1 ? 'modeX1' : m === 10 ? 'modeX10' : 'modeMax');
     },
     onPrestige: () => {
       const next = prestige(state, Date.now());
@@ -150,15 +155,20 @@ function start(root: HTMLElement): void {
       ui.announce('Partida cargada.');
       return true;
     },
-    onSlide: (open) => audio.play(open ? 'slideOpen' : 'slideClose'),
+    onSound: (kind) => audio.play(kind),
     getExport: () => exportSave(state),
   });
 
-  /** Aplica una acción; si cambió el estado, da feedback visual y sonoro. */
-  function act(next: State, kind: Extract<Sound, 'buy' | 'hire' | 'upgrade'>, id: string): boolean {
+  /** Aplica una acción; si cambió el estado, da feedback visual y sonoro (`sound` si difiere del tipo). */
+  function act(
+    next: State,
+    kind: Extract<Sound, 'buy' | 'hire' | 'upgrade'>,
+    id: string,
+    sound: Sound = kind,
+  ): boolean {
     if (next === state) return false;
     set(next);
-    audio.play(kind);
+    audio.play(sound);
     ui.confirm(kind, id);
     return true;
   }
@@ -183,9 +193,13 @@ function start(root: HTMLElement): void {
       }
     }
     if (r.earned > 0 && r.elapsedMs >= MIN_OFFLINE_NOTICE_MS) {
-      if (notify) ui.showOffline(r.earned, r.elapsedMs);
-      else ui.announce(`Ganaste ${formatMoney(r.earned)} mientras no estabas.`);
+      if (notify) {
+        ui.showOffline(r.earned, r.elapsedMs);
+        audio.play('welcome');
+      } else ui.announce(`Ganaste ${formatMoney(r.earned)} mientras no estabas.`);
     }
+    // Primera receta disponible en esta partida: un guardado que ya la traía no suena al cargar.
+    if (pendingRecipes(before) === 0 && pendingRecipes(state) > 0) audio.play('heir');
   };
   catchUp(true);
 

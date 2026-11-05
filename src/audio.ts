@@ -5,7 +5,25 @@
  */
 import { createMusic, type Music } from './music';
 
-export type Sound = 'sell' | 'buy' | 'hire' | 'upgrade' | 'prestige' | 'slideOpen' | 'slideClose';
+export type Sound =
+  | 'sell'
+  | 'buy'
+  | 'open'
+  | 'milestone'
+  | 'hire'
+  | 'upgrade'
+  | 'prestige'
+  | 'heir'
+  | 'welcome'
+  | 'slideOpen'
+  | 'slideClose'
+  | 'dialogOpen'
+  | 'dialogClose'
+  | 'modeX1'
+  | 'modeX10'
+  | 'modeMax'
+  | 'ask'
+  | 'tip';
 
 export interface Prefs {
   sound: boolean;
@@ -63,6 +81,41 @@ export const SOUNDS: Record<Sound, readonly Note[]> = {
     { freq: 440, at: 0, dur: 0.07, type: 'sine', level: 0.5 },
     { freq: 294, at: 0.06, dur: 0.12, type: 'sine', level: 0.5 },
   ],
+  // Abrir un negocio nuevo: arpegio rápido, como una cortina que sube (sustituye a `buy`).
+  open: [
+    { freq: C5, at: 0, dur: 0.12, type: 'triangle' },
+    { freq: E5, at: 0.05, dur: 0.12, type: 'triangle' },
+    { freq: G5, at: 0.1, dur: 0.16, type: 'triangle' },
+  ],
+  // Hito ×2 a las 25: campana (dos notas a la vez, larga). Sustituye a `buy` en esa compra.
+  milestone: [
+    { freq: C6, at: 0, dur: 0.4, type: 'sine', level: 0.6 },
+    { freq: 1318.5, at: 0, dur: 0.4, type: 'sine', level: 0.4 },
+  ],
+  // Ya puedes heredar: ta-dá corto, una vez por partida.
+  heir: [
+    { freq: G5, at: 0, dur: 0.12, type: 'triangle', level: 0.8 },
+    { freq: C6, at: 0.12, dur: 0.35, type: 'triangle', level: 0.8 },
+  ],
+  // Bienvenido de vuelta: monedas que caen (cinco notas agudas en escalera).
+  welcome: [
+    { freq: 1319, at: 0, dur: 0.1, type: 'triangle', level: 0.6 },
+    { freq: 1568, at: 0.07, dur: 0.1, type: 'triangle', level: 0.6 },
+    { freq: 1760, at: 0.14, dur: 0.1, type: 'triangle', level: 0.6 },
+    { freq: 2093, at: 0.21, dur: 0.1, type: 'triangle', level: 0.6 },
+    { freq: 2637, at: 0.28, dur: 0.16, type: 'triangle', level: 0.6 },
+  ],
+  // Diálogos modales: pop corto que sube al abrir y baja al cerrar.
+  dialogOpen: [{ freq: 500, to: 700, at: 0, dur: 0.06, type: 'sine', level: 0.5 }],
+  dialogClose: [{ freq: 700, to: 500, at: 0, dur: 0.06, type: 'sine', level: 0.5 }],
+  // Cantidad ×1 → ×10 → Máx: tic con tres alturas (sube al avanzar, baja al volver a ×1).
+  modeX1: [{ freq: C5, at: 0, dur: 0.05, type: 'sine', level: 0.6 }],
+  modeX10: [{ freq: E5, at: 0, dur: 0.05, type: 'sine', level: 0.6 }],
+  modeMax: [{ freq: G5, at: 0, dur: 0.05, type: 'sine', level: 0.6 }],
+  // Pregunta a Chelo: tap suave.
+  ask: [{ freq: 600, at: 0, dur: 0.04, type: 'sine', level: 0.4 }],
+  // Punto de "consejo nuevo": tin discreto.
+  tip: [{ freq: 1760, at: 0, dur: 0.15, type: 'sine', level: 0.4 }],
 };
 
 /** Preferencias del dispositivo; lo que falte o no sea booleano vale false. */
@@ -139,6 +192,28 @@ export function createAudio(initial: Prefs): Audio {
     }
   };
 
+  function schedule(c: AudioContext, out: GainNode, sound: Sound): void {
+    safe(() => {
+      const t0 = c.currentTime;
+      for (const n of SOUNDS[sound]) {
+        const osc = c.createOscillator();
+        const env = c.createGain();
+        osc.type = n.type;
+        osc.frequency.setValueAtTime(n.freq, t0 + n.at);
+        if (n.to !== undefined) osc.frequency.exponentialRampToValueAtTime(n.to, t0 + n.at + n.dur);
+        // Envolvente corta: ataque rápido y caída exponencial (sin clics). Un barrido cae lineal:
+        // con la exponencial estaría a -40 dB a mitad de camino y no se oiría cambiar de tono.
+        env.gain.setValueAtTime(0.0001, t0 + n.at);
+        env.gain.exponentialRampToValueAtTime(n.level ?? 1, t0 + n.at + 0.01);
+        if (n.to !== undefined) env.gain.linearRampToValueAtTime(0.0001, t0 + n.at + n.dur);
+        else env.gain.exponentialRampToValueAtTime(0.0001, t0 + n.at + n.dur);
+        osc.connect(env).connect(out);
+        osc.start(t0 + n.at);
+        osc.stop(t0 + n.at + n.dur + 0.02);
+      }
+    });
+  }
+
   return {
     prefs: () => ({ ...prefs }),
 
@@ -182,26 +257,22 @@ export function createAudio(initial: Prefs): Audio {
       // Nunca crea el contexto aquí: solo unlock() lo hace, dentro de un gesto.
       const c = ctx;
       const out = sfx;
-      if (!c || !out || c.state !== 'running') return;
-      safe(() => {
-        const t0 = c.currentTime;
-        for (const n of SOUNDS[sound]) {
-          const osc = c.createOscillator();
-          const env = c.createGain();
-          osc.type = n.type;
-          osc.frequency.setValueAtTime(n.freq, t0 + n.at);
-          if (n.to !== undefined) osc.frequency.exponentialRampToValueAtTime(n.to, t0 + n.at + n.dur);
-          // Envolvente corta: ataque rápido y caída exponencial (sin clics). Un barrido cae lineal:
-          // con la exponencial estaría a -40 dB a mitad de camino y no se oiría cambiar de tono.
-          env.gain.setValueAtTime(0.0001, t0 + n.at);
-          env.gain.exponentialRampToValueAtTime(n.level ?? 1, t0 + n.at + 0.01);
-          if (n.to !== undefined) env.gain.linearRampToValueAtTime(0.0001, t0 + n.at + n.dur);
-          else env.gain.exponentialRampToValueAtTime(0.0001, t0 + n.at + n.dur);
-          osc.connect(env).connect(out);
-          osc.start(t0 + n.at);
-          osc.stop(t0 + n.at + n.dur + 0.02);
-        }
-      });
+      if (!c || !out) return;
+      if (c.state === 'suspended' && visible) {
+        // Al volver a la pestaña setVisible() pidió resume() y aún no llegó: el sonido espera
+        // (así suena "Bienvenido de vuelta"). Sin gesto previo resume() quedaría colgado y el
+        // sonido saldría tarde en el siguiente clic: en ese caso se descarta.
+        if (navigator.userActivation && !navigator.userActivation.hasBeenActive) return;
+        void c
+          .resume()
+          .then(() => {
+            if (visible && c.state === 'running') schedule(c, out, sound);
+          })
+          .catch(() => undefined);
+        return;
+      }
+      if (c.state !== 'running') return;
+      schedule(c, out, sound);
     },
   };
 }

@@ -3,6 +3,7 @@ import { BUSINESSES, OFFLINE_CAP_MS, RECIPE_DIVISOR, UPGRADES } from './data';
 import {
   applyOffline,
   buy,
+  buySound,
   buyUpgrade,
   canHireManager,
   getUpgrade,
@@ -110,6 +111,24 @@ describe('comprar', () => {
     const s = buy(withMoney(123_456), 'elotes', 'max');
     expect(s.money).toBeGreaterThanOrEqual(0);
     expect(s.money).toBeLessThan(costOf(elotes, s.businesses.elotes!.count, 1));
+  });
+});
+
+describe('buySound', () => {
+  it('abrir, comprar o hito según lo que cambió la compra', () => {
+    const rico = withMoney(1e12);
+    expect(buySound(rico, buy(rico, 'aguas', 1), 'aguas')).toBe('open');
+    expect(buySound(rico, buy(rico, 'elotes', 1), 'elotes')).toBe('buy');
+    const conCarritos = (s: State, count: number): State => ({
+      ...s,
+      businesses: { ...s.businesses, elotes: { count, progressMs: 0, running: false, manager: false } },
+    });
+    const casi = conCarritos(rico, 24);
+    expect(buySound(casi, buy(casi, 'elotes', 1), 'elotes')).toBe('milestone');
+    const abierto = buy(rico, 'aguas', 1);
+    expect(buySound(abierto, buy(abierto, 'aguas', 10), 'aguas')).toBe('buy');
+    // Máx desde cero puede abrir y cruzar el hito de golpe: el hito manda.
+    expect(buySound(rico, buy(rico, 'aguas', 'max'), 'aguas')).toBe('milestone');
   });
 });
 
