@@ -5,7 +5,7 @@
  */
 import { createMusic, type Music } from './music';
 
-export type Sound = 'sell' | 'buy' | 'hire' | 'upgrade' | 'prestige';
+export type Sound = 'sell' | 'buy' | 'hire' | 'upgrade' | 'prestige' | 'slideOpen' | 'slideClose';
 
 export interface Prefs {
   sound: boolean;
@@ -18,11 +18,15 @@ const MUSIC_GAIN = 0.1; // por debajo de los efectos
 /** Evita ráfagas cuando varios ciclos terminan en el mismo frame. */
 const MIN_GAP_MS = 60;
 
-interface Note {
+export interface Note {
   freq: number;
   at: number;
   dur: number;
   type: OscillatorType;
+  /** Barrido exponencial de freq a `to` durante dur (deslizar). */
+  to?: number;
+  /** Pico de la envolvente, 1 si falta: para efectos que no deben competir con los demás. */
+  level?: number;
 }
 
 const C5 = 523.25;
@@ -30,7 +34,7 @@ const E5 = 659.25;
 const G5 = 783.99;
 const C6 = 1046.5;
 
-const SOUNDS: Record<Sound, readonly Note[]> = {
+export const SOUNDS: Record<Sound, readonly Note[]> = {
   sell: [
     { freq: 988, at: 0, dur: 0.06, type: 'triangle' },
     { freq: 1319, at: 0.06, dur: 0.1, type: 'triangle' },
@@ -50,6 +54,14 @@ const SOUNDS: Record<Sound, readonly Note[]> = {
     { freq: E5, at: 0.14, dur: 0.14, type: 'triangle' },
     { freq: G5, at: 0.28, dur: 0.14, type: 'triangle' },
     { freq: C6, at: 0.42, dur: 0.4, type: 'triangle' },
+  ],
+  // Paneles del lateral, a amplitud 0.5. Abrir: barrido de dos octavas en 200 ms que acompaña al
+  // deslizamiento de 250 ms (arranca en 330 Hz para oírse en bocinas de laptop). Cerrar: dos notas
+  // cortas que bajan, como un cajón que se cierra; el barrido descendente sonaba a láser.
+  slideOpen: [{ freq: 330, to: 1320, at: 0, dur: 0.2, type: 'triangle', level: 0.5 }],
+  slideClose: [
+    { freq: 440, at: 0, dur: 0.07, type: 'sine', level: 0.5 },
+    { freq: 294, at: 0.06, dur: 0.12, type: 'sine', level: 0.5 },
   ],
 };
 
@@ -89,7 +101,8 @@ export function createAudio(initial: Prefs): Audio {
   let sfx: GainNode | null = null;
   let music: Music | null = null;
   let visible = true;
-  let lastPlay = 0;
+  /** Último inicio por tipo: el hueco anti-ráfaga no debe callar un deslizar tras una compra. */
+  const lastPlay: Partial<Record<Sound, number>> = {};
 
   const ensureContext = (): AudioContext | null => {
     if (ctx) return ctx;
@@ -164,8 +177,8 @@ export function createAudio(initial: Prefs): Audio {
     play(sound) {
       if (!prefs.sound) return;
       const now = performance.now();
-      if (now - lastPlay < MIN_GAP_MS) return;
-      lastPlay = now;
+      if (now - (lastPlay[sound] ?? -Infinity) < MIN_GAP_MS) return;
+      lastPlay[sound] = now;
       // Nunca crea el contexto aquí: solo unlock() lo hace, dentro de un gesto.
       const c = ctx;
       const out = sfx;
@@ -176,11 +189,14 @@ export function createAudio(initial: Prefs): Audio {
           const osc = c.createOscillator();
           const env = c.createGain();
           osc.type = n.type;
-          osc.frequency.value = n.freq;
-          // Envolvente corta: ataque rápido y caída exponencial (sin clics).
+          osc.frequency.setValueAtTime(n.freq, t0 + n.at);
+          if (n.to !== undefined) osc.frequency.exponentialRampToValueAtTime(n.to, t0 + n.at + n.dur);
+          // Envolvente corta: ataque rápido y caída exponencial (sin clics). Un barrido cae lineal:
+          // con la exponencial estaría a -40 dB a mitad de camino y no se oiría cambiar de tono.
           env.gain.setValueAtTime(0.0001, t0 + n.at);
-          env.gain.exponentialRampToValueAtTime(1, t0 + n.at + 0.01);
-          env.gain.exponentialRampToValueAtTime(0.0001, t0 + n.at + n.dur);
+          env.gain.exponentialRampToValueAtTime(n.level ?? 1, t0 + n.at + 0.01);
+          if (n.to !== undefined) env.gain.linearRampToValueAtTime(0.0001, t0 + n.at + n.dur);
+          else env.gain.exponentialRampToValueAtTime(0.0001, t0 + n.at + n.dur);
           osc.connect(env).connect(out);
           osc.start(t0 + n.at);
           osc.stop(t0 + n.at + n.dur + 0.02);

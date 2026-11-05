@@ -150,6 +150,7 @@ function start(root: HTMLElement): void {
       ui.announce('Partida cargada.');
       return true;
     },
+    onSlide: (open) => audio.play(open ? 'slideOpen' : 'slideClose'),
     getExport: () => exportSave(state),
   });
 

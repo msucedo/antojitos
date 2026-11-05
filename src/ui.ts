@@ -32,6 +32,8 @@ export interface Handlers {
   onPrestige(): void;
   onToggleSound(): void;
   onToggleMusic(): void;
+  /** Un panel del lateral se desliza (abre o cierra); main.ts le pone sonido. */
+  onSlide(open: boolean): void;
   onImport(text: string): boolean;
   getExport(): string;
 }
@@ -541,6 +543,7 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
     close(restore: boolean): void;
   }
   let activePanel: Panel | null = null;
+  let switching = false; // open() cierra al activo: ese cierre no suena, solo la apertura
   /** Foco al botón del lateral; si está deshabilitado o en móvil, al título de la app. */
   function focusLateral(btn: HTMLButtonElement): void {
     (mq.matches && !btn.disabled ? btn : appTitle).focus({ preventScroll: true });
@@ -552,10 +555,16 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
       toggle: () => (activePanel === panel ? panel.close(true) : panel.open()),
       open(focus = true) {
         if (section.hidden || activePanel === panel) return;
-        activePanel?.close(false); // el que cierra sale mientras este entra
+        switching = true;
+        try {
+          activePanel?.close(false); // el que cierra sale mientras este entra
+        } finally {
+          switching = false;
+        }
         activePanel = panel;
         section.classList.add('open');
         btn.setAttribute('aria-expanded', 'true');
+        handlers.onSlide(true);
         // Ya es visible (sin retardo al abrir); el frame deja que el navegador lo pinte antes de enfocar.
         // Una apertura automática (Chelo habla) no mueve el foco del jugador.
         if (focus) focusFrame = requestAnimationFrame(() => title.focus({ preventScroll: true }));
@@ -566,6 +575,7 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
         cancelAnimationFrame(focusFrame);
         section.classList.remove('open');
         btn.setAttribute('aria-expanded', 'false');
+        if (!switching) handlers.onSlide(false);
         // Si el foco seguía dentro del panel (teclado, o Safari que no enfoca al hacer clic), no se pierde.
         if (restore || section.contains(document.activeElement)) focusLateral(btn);
       },
