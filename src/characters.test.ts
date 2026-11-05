@@ -16,11 +16,12 @@ describe('personajes', () => {
     expect(new Set(names).size).toBe(names.length);
     const ids = [CHELO.id, ...managers.map((m) => m.id)];
     expect(Object.keys(PORTRAITS).sort()).toEqual([...ids].sort());
+    for (const m of managers) expect(['m', 'f']).toContain(m.genero);
   });
 
   it('las frases son cortas, sin pictogramas y sin tratamiento de género', () => {
     const lines = [...managers.flatMap((m) => Object.values(m.says)), ...Object.values(CHELO.says)];
-    expect(lines.length).toBe(BUSINESSES.length * 3 + 4);
+    expect(lines.length).toBe(BUSINESSES.length * 3 + 5);
     for (const line of lines) {
       expect(line.trim().length).toBeGreaterThan(0);
       expect(line.length).toBeLessThanOrEqual(MAX_LEN);

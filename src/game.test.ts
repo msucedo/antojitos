@@ -11,6 +11,7 @@ import {
   costOf,
   getDef,
   hireManager,
+  firstHireReady,
   hireableIds,
   maxAffordable,
   milestonesCrossed,
@@ -123,6 +124,14 @@ describe('contratar', () => {
     const conDinero = withMoney(aguas.manager.cost, abierto);
     expect(hireableIds(conDinero)).toEqual(['aguas']);
     expect(hireableIds(hireManager(conDinero, 'aguas'))).toEqual([]);
+  });
+
+  it('firstHireReady: solo la primera vez que alcanza para un empleado, sin recetas', () => {
+    const cost = elotes.manager.cost;
+    expect(firstHireReady(withMoney(cost - 1))).toBe(false);
+    expect(firstHireReady(withMoney(cost))).toBe(true);
+    expect(firstHireReady(hireManager(withMoney(cost), 'elotes'))).toBe(false);
+    expect(firstHireReady({ ...withMoney(cost), recipes: 1 })).toBe(false);
   });
 });
 

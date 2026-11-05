@@ -13,8 +13,8 @@ export interface Prefs {
 }
 
 const PREFS_KEY = 'antojitos.prefs';
-const SFX_GAIN = 0.12;
-const MUSIC_GAIN = 0.05; // por debajo de los efectos
+const SFX_GAIN = 0.24;
+const MUSIC_GAIN = 0.1; // por debajo de los efectos
 /** Evita ráfagas cuando varios ciclos terminan en el mismo frame. */
 const MIN_GAP_MS = 60;
 

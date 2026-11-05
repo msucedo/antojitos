@@ -5,6 +5,7 @@ import {
   costOf,
   getDef,
   getUpgrade,
+  firstHireReady,
   hireableIds,
   incomePerSecond,
   nextMilestone,
@@ -120,7 +121,7 @@ interface UpgradeSlot {
   id: string | null;
 }
 
-/** Cupón de un gerente en el menú Personajes: ahí se contrata, no en la tarjeta. */
+/** Cupón de un gerente en el menú Empleados: ahí se contrata, no en la tarjeta. */
 interface CharSlot {
   def: BusinessDef;
   root: HTMLElement;
@@ -152,7 +153,7 @@ function tipFor(s: State): string | null {
     return 'Ya puedes heredar: vuelves a empezar, pero con recetas que suben todas tus ventas.';
   if (s.lifetimeEarned > 0 || s.recipes > 0) {
     if (managers === 0 && canHireManager(s, 'elotes'))
-      return `En Personajes contrata a ${getDef('elotes').manager.name}: vende solito aunque cierres.`;
+      return `En Empleados contrata a ${getDef('elotes').manager.name}; ya te alcanza.`;
     if (managers === 0 && (elotes?.count ?? 0) < 5) return 'Compra más carritos: cada uno vende más por vuelta.';
     if (managers === 1 && (s.businesses.aguas?.count ?? 0) === 0)
       return 'Junta para un puesto de aguas frescas; deja más por vuelta.';
@@ -279,7 +280,7 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
   // Personajes en móvil: icono en el header que abre la lista en un diálogo.
   const charsBadge = h('span', { class: 'lat-badge', hidden: true });
   charsBadge.setAttribute('aria-hidden', 'true');
-  const charsBtn = h('button', { class: 'icon-btn', type: 'button', label: 'Personajes', onclick: openChars }, [
+  const charsBtn = h('button', { class: 'icon-btn', type: 'button', label: 'Empleados', onclick: openChars }, [
     icon('gente'),
     charsBadge,
   ]);
@@ -287,7 +288,7 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
   // Menú lateral (web): copias de los controles del header y la barra; render() las sincroniza.
   const mq = window.matchMedia('(min-width: 900px)');
   const latUp = latBtn('Mejoras', 'upgrade', () => upPanel.toggle());
-  const latChars = latBtn('Personajes', 'personajes', () => charsPanel.toggle());
+  const latChars = latBtn('Empleados', 'personajes', () => charsPanel.toggle());
   const latCharsBadge = h('span', { class: 'lat-badge', hidden: true });
   latCharsBadge.setAttribute('aria-hidden', 'true');
   latChars.disc.append(latCharsBadge);
@@ -349,6 +350,7 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
   let unread = false;
   let autoCloseAt = 0; // panel abierto por un evento: se cierra solo salvo clic dentro
   let welcomed = false;
+  let taught = false; // lección del primer empleado
   let guiaDialogTitle: HTMLElement | null = null;
   const guiaTexto = h('p', { class: 'guia-texto' });
   const guiaFaq = h(
@@ -467,11 +469,11 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
   upgrades.setAttribute('aria-labelledby', 'upgrades-title');
   upgrades.id = 'upgrades';
 
-  // Personajes: los 8 gerentes siempre, en cupones como las mejoras. render() pone el estado.
+  // Empleados: los 8 gerentes siempre, en cupones como las mejoras. render() pone el estado.
   let refocusAfterHire = false;
   const charSlots: CharSlot[] = BUSINESSES.map((def) => {
     const buy = h('button', { class: 'btn primary', type: 'button', onclick: () => handlers.onHire(def.id) });
-    const state = h('p', { class: 'char-state', text: 'Vende solito', hidden: true });
+    const state = h('p', { class: 'char-state', text: def.manager.genero === 'f' ? 'Contratada' : 'Contratado', hidden: true });
     const root = h('li', { class: 'up-slot' }, [
       h('div', { class: 'up-card char-card' }, [
         portrait(def.manager.id, 'icon char-portrait', true),
@@ -488,7 +490,7 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
     { class: 'up-list' },
     charSlots.map((x) => x.root),
   );
-  const charsTitle = h('h2', { class: 'section-title', text: 'Personajes' });
+  const charsTitle = h('h2', { class: 'section-title', text: 'Empleados' });
   charsTitle.id = 'personajes-title';
   charsTitle.tabIndex = -1;
   const chars = h('section', { class: 'personajes panel' }, [charsTitle, charList]);
@@ -588,7 +590,7 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
   let charsDialogTitle: HTMLElement | null = null;
   function openChars(): void {
     if (charsDialogTitle) return;
-    charsDialogTitle = openInDialog('Personajes', charList, charsTitle, () => {
+    charsDialogTitle = openInDialog('Empleados', charList, charsTitle, () => {
       charsDialogTitle = null;
     });
   }
@@ -628,7 +630,7 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
       'Herencia',
       [
         h('p', {
-          text: `Le pasas el negocio a la familia: pierdes dinero, negocios, gerentes y mejoras, pero ganas ${formatNumber(n)} recetas de la abuela.`,
+          text: `Le pasas el negocio a la familia: pierdes dinero, negocios, empleados y mejoras, pero ganas ${formatNumber(n)} recetas de la abuela.`,
         }),
         h('p', { text: 'Cada receta suma +2% a todas tus ventas, para siempre.' }),
       ],
@@ -728,7 +730,7 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
     }
     // Badge: cuántos se pueden contratar ahora; el conteo va al nombre accesible, no al badge.
     const n = hireableIds(s).length;
-    const label = n > 0 ? `Personajes: ${n} por contratar` : 'Personajes';
+    const label = n > 0 ? `Empleados: ${n} por contratar` : 'Empleados';
     for (const [btn, badge] of [
       [latChars.btn, latCharsBadge],
       [charsBtn, charsBadge],
@@ -761,6 +763,27 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
     // ni al quedarse sin consejo (reposo).
     if (lastTip !== null && tip !== lastTip && !abierto && consejo !== null) unread = true;
     lastTip = tip;
+    // Lección: la primera vez que alcanza para un empleado, Chelo explica para qué sirve (6 s) y
+    // luego queda el consejo de dónde contratarlo. Se abre sola, también en móvil, pero nunca sobre
+    // otro panel, diálogo o frase de evento en curso (espera a que terminen) y no se cierra sola.
+    // Una vez por sesión. Va antes de calcular `text` para que el panel abra ya con la frase.
+    if (!taught && firstHireReady(s) && !bubbleVisible(now, eventUntil)) {
+      const modal = document.querySelector('dialog[open]') !== null;
+      const libre = mq.matches ? activePanel === null && !modal : !modal;
+      if (abierto || libre) {
+        eventText = CHELO.says.empleado;
+        eventUntil = now + BUBBLE_MS;
+        answer = null;
+        unread = false;
+        autoCloseAt = 0; // si el panel estaba abierto por un evento, ya no se cierra solo
+        live.textContent = `${CHELO.name}: ${eventText}`;
+        if (!abierto) {
+          if (mq.matches) cheloPanel.open(false);
+          else openGuia();
+        }
+        taught = true;
+      }
+    }
     const text = bubbleVisible(now, eventUntil) ? eventText : (answer ?? tip);
     if (guiaTexto.textContent !== text) {
       guiaTexto.textContent = text;
@@ -789,7 +812,7 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
       last = s;
       setText(money, formatMoney(s.money));
       const ips = incomePerSecond(s);
-      setText(rate, ips > 0 ? `${formatMoney(ips)}/s con gerentes` : 'Sin gerentes todavía');
+      setText(rate, ips > 0 ? `${formatMoney(ips)}/s con empleados` : 'Sin empleados todavía');
       setHidden(recipes, s.recipes === 0);
       setText(recipesText, `${formatNumber(s.recipes)} recetas (+${formatNumber(s.recipes * 2)}%)`);
 
@@ -929,7 +952,7 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
         return;
       }
       // Contratado: el sello cae sobre la tarjeta (se ve desde el render que pone .managed) y el
-      // cupón del gerente cambia a "Vende solito".
+      // cupón del gerente cambia a "Contratado"/"Contratada".
       stamp(c.mark);
       const slot = charSlots.find((x) => x.def.id === id);
       if (slot) {

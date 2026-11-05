@@ -2,10 +2,10 @@ import type { CharacterId } from './characters';
 import type { IconName } from './icons';
 
 export type ManagerEvent = 'hire' | 'milestone' | 'upgrade';
-export type CheloEvent = 'milestone' | 'upgrade' | 'upgradeOne' | 'prestige';
+export type CheloEvent = 'milestone' | 'upgrade' | 'upgradeOne' | 'prestige' | 'empleado';
 
 /**
- * Gerente de un negocio: nombre, costo, retrato y una frase por evento.
+ * Gerente de un negocio (en pantalla, "empleado"): nombre, costo, retrato, género y una frase por evento.
  * Voz: trata al jugador de "usted" y nunca usa sustantivos de género ni de rol
  * ("patrón", "jefe"); lo comprueba characters.test.ts.
  */
@@ -13,6 +13,8 @@ export interface ManagerDef {
   readonly name: string;
   readonly cost: number;
   readonly id: CharacterId;
+  /** Concordancia de la etiqueta "Contratado"/"Contratada". */
+  readonly genero: 'm' | 'f';
   readonly says: Readonly<Record<ManagerEvent, string>>;
 }
 
@@ -48,6 +50,7 @@ export const BUSINESSES: readonly BusinessDef[] = [
       name: 'Don Beto',
       cost: 500,
       id: 'beto',
+      genero: 'm',
       says: {
         hire: 'Órale. Usted descanse, que el elote se vende solo.',
         milestone: '¿Ya vio? Hasta la fila da vuelta a la esquina.',
@@ -68,6 +71,7 @@ export const BUSINESSES: readonly BusinessDef[] = [
       name: 'Lupita',
       cost: 7_500,
       id: 'lupita',
+      genero: 'f',
       says: {
         hire: '¡Aguas, aguas! Jamaica, horchata y limón, bien frías.',
         milestone: '¡Se nos acaba el hielo de tanta gente!',
@@ -88,6 +92,7 @@ export const BUSINESSES: readonly BusinessDef[] = [
       name: 'El Güero',
       cost: 100_000,
       id: 'guero',
+      genero: 'm',
       says: {
         hire: '¿Con todo? Con todo. Aquí nadie se va con hambre.',
         milestone: '¡Trompo nuevo cada hora! Esto ya es otra liga.',
@@ -108,6 +113,7 @@ export const BUSINESSES: readonly BusinessDef[] = [
       name: 'Doña Tere',
       cost: 1_200_000,
       id: 'tere',
+      genero: 'f',
       says: {
         hire: 'Aquí las tortas van bien servidas. Ya lo verá.',
         milestone: 'No me mire así. Le dije que iban a venir.',
@@ -128,6 +134,7 @@ export const BUSINESSES: readonly BusinessDef[] = [
       name: 'Chuy',
       cost: 15_000_000,
       id: 'chuy',
+      genero: 'm',
       says: {
         hire: 'Siéntese, que ya casi sale el guisado.',
         milestone: 'Tuvimos que poner mesas en la banqueta.',
@@ -148,6 +155,7 @@ export const BUSINESSES: readonly BusinessDef[] = [
       name: 'Rosita',
       cost: 180_000_000,
       id: 'rosita',
+      genero: 'f',
       says: {
         hire: 'Hoy salieron esponjaditas. Huela nomás.',
         milestone: 'Ya no caben las charolas en el mostrador.',
@@ -168,6 +176,7 @@ export const BUSINESSES: readonly BusinessDef[] = [
       name: 'Licenciado Pérez',
       cost: 2_000_000_000,
       id: 'perez',
+      genero: 'm',
       says: {
         hire: 'Según mis proyecciones, esto escala. Confíe en el proceso.',
         milestone: 'Los indicadores superan lo previsto. Lo llevo a la junta.',
@@ -188,6 +197,7 @@ export const BUSINESSES: readonly BusinessDef[] = [
       name: 'La Jefa',
       cost: 25_000_000_000,
       id: 'jefa',
+      genero: 'f',
       says: {
         hire: 'Yo me encargo. Usted no se distraiga.',
         milestone: 'Bien. Ahora el doble.',
@@ -213,6 +223,7 @@ export const CHELO = {
     upgrade: 'Esa mejora le sirve a todos los negocios, mijo.',
     upgradeOne: 'Esa mejora se nota en el puesto, mijo.',
     prestige: 'Qué orgullo. Con las recetas de la abuela todo vende más.',
+    empleado: 'Ya te alcanza para un empleado, mijo: vende por ti aunque cierres.',
   },
   /** Cuando no hay consejo pendiente. */
   idle: 'Todo en orden, mijo. Sigue vendiendo y yo te aviso.',
@@ -223,8 +234,8 @@ export const CHELO = {
       a: 'Cada mejora multiplica lo que vende un negocio, o todos. Las compras en Mejoras.',
     },
     {
-      q: '¿Qué hace un gerente?',
-      a: 'Vende solito, hasta con el juego cerrado. Se contrata en Personajes, mijo.',
+      q: '¿Qué hace un empleado?',
+      a: 'Vende por ti, hasta con el juego cerrado. Se contrata en Empleados, mijo.',
     },
     {
       q: '¿Qué es la herencia?',

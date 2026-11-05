@@ -162,9 +162,19 @@ export function canHireManager(state: State, id: string): boolean {
   return !b.manager && b.count > 0 && state.money >= getDef(id).manager.cost;
 }
 
-/** Negocios cuyo gerente se puede contratar ahora mismo (badge del menú Personajes). */
+/** Negocios cuyo gerente se puede contratar ahora mismo (badge del menú Empleados). */
 export function hireableIds(state: State): string[] {
   return BUSINESSES.filter((d) => canHireManager(state, d.id)).map((d) => d.id);
+}
+
+/**
+ * Momento de la lección de Chelo: por primera vez alcanza para un empleado. Nunca tras heredar
+ * (quien tiene recetas ya contrató antes) ni con alguno contratado.
+ */
+export function firstHireReady(state: State): boolean {
+  if (state.recipes > 0) return false;
+  if (BUSINESSES.some((d) => biz(state, d.id).manager)) return false;
+  return hireableIds(state).length > 0;
 }
 
 export function hireManager(state: State, id: string): State {

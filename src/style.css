@@ -161,8 +161,11 @@ body {
   -webkit-tap-highlight-color: transparent;
 }
 
-/* Fondo ilustrado: azulejo propio servido por Vite (img-src 'self'), tenue en claro y oscuro. */
+/* Fondo ilustrado: azulejo propio servido por Vite (img-src 'self'), tenue en claro y oscuro.
+   min-height: con poco contenido el patrón cubre toda la ventana (html queda liso solo para el overscroll). */
 body {
+  min-height: 100vh;
+  min-height: 100dvh;
   background:
     var(--grano),
     var(--bg) url('./assets/fondo.svg') 0 0 / 192px 192px repeat;
