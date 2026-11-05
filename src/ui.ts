@@ -10,7 +10,6 @@ import {
   firstHireReady,
   hireableIds,
   incomePerSecond,
-  nextMilestone,
   MODES,
   nextMode,
   nextUpgrades,
@@ -21,7 +20,7 @@ import {
   type State,
 } from './game';
 import { formatDuration, formatMoney, formatNumber } from './format';
-import { icon, setIcon, use, type IconName } from './icons';
+import { icon, setIcon, tabla, use, type IconName } from './icons';
 import { portrait } from './characters';
 import { coin, confetti, flip, pop, pulse, stamp } from './fx';
 
@@ -107,11 +106,10 @@ interface Card {
   sell: HTMLButtonElement;
   count: HTMLElement;
   fill: HTMLElement;
-  /** Línea bajo la barra: cuánto deja cada vuelta y el siguiente hito. */
+  /** Línea bajo la barra: cuánto deja cada vuelta. */
   meta: HTMLElement;
   gana: HTMLElement;
   por: HTMLElement;
-  hito: HTMLElement;
   buy: HTMLButtonElement;
   /** Sello del gerente a todo el alto de la tarjeta; solo se ve con .managed. */
   mark: Element;
@@ -256,7 +254,12 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
    * `anchor` (su sitio en línea) y se avisa con `onClose`. Devuelve el h2, que el llamador guarda
    * como "diálogo abierto" y usa para el foco.
    */
-  function openInDialog(title: string, body: HTMLElement, anchor: HTMLElement, onClose: () => void): HTMLElement | null {
+  function openInDialog(
+    title: string,
+    body: HTMLElement,
+    anchor: HTMLElement,
+    onClose: () => void,
+  ): HTMLElement | null {
     const d = dialog(title, [body]);
     const h2 = d.querySelector('h2');
     if (h2) {
@@ -324,10 +327,14 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
   // Doña Chelo: disco con su retrato y punto de "consejo nuevo"; renderChelo() los sincroniza.
   const latCheloDot = h('span', { class: 'lat-dot', hidden: true });
   latCheloDot.setAttribute('aria-hidden', 'true');
-  const latChelo = h('button', { class: 'lat-btn', type: 'button', label: CHELO.name, onclick: () => cheloPanel.toggle() }, [
-    h('span', { class: 'lat-disc' }, [portrait(CHELO.id, 'lat-retrato'), latCheloDot]),
-    h('span', { class: 'lat-label', text: 'Chelo' }),
-  ]);
+  const latChelo = h(
+    'button',
+    { class: 'lat-btn', type: 'button', label: CHELO.name, onclick: () => cheloPanel.toggle() },
+    [
+      h('span', { class: 'lat-disc' }, [portrait(CHELO.id, 'lat-retrato'), latCheloDot]),
+      h('span', { class: 'lat-label', text: 'Chelo' }),
+    ],
+  );
   const lateral = h('nav', { class: 'lateral', label: 'Menú' }, [
     latChelo,
     latUp.btn,
@@ -425,8 +432,7 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
     bar.setAttribute('aria-hidden', 'true');
     const gana = h('strong', { class: 'gana' });
     const por = h('span', { class: 'por' });
-    const hito = h('span', { class: 'hito' });
-    const meta = h('p', { class: 'meta' }, [gana, por, hito]);
+    const meta = h('p', { class: 'meta' }, [count, gana, por]);
     const buy = h('button', { class: 'btn primary', type: 'button', onclick: () => handlers.onBuy(def.id) });
     // Sello del gerente: va al final del papel para quedar bajo el contenido (z-index -1 en la máscara).
     const mark = portrait(def.manager.id, 'icon card-mark', true);
@@ -434,22 +440,24 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
     // botones, y se coloca solo sobre el título sea cual sea el ancho del icono.
     const bubble = h('div', { class: 'bubble', hidden: true });
     bubble.setAttribute('aria-hidden', 'true');
-    // li: sombra; .paper: la estampilla con la máscara perforada.
+    // Letrero colgante con el nombre: fuera de .paper (la máscara recortaría la mitad que sobresale).
+    const letrero = h('h2', { class: 'letrero' }, [
+      tabla(),
+      icon('clavo', 'clavo izq'),
+      icon('clavo', 'clavo der'),
+      h('span', { class: 'nombre', text: def.name }),
+    ]);
+    // li: letrero y sombra; .paper: la estampilla con la máscara perforada.
     const cardRoot = h('li', { class: 'card' }, [
+      letrero,
       h('div', { class: 'paper' }, [
         sell,
-        h('div', { class: 'body' }, [
-          h('h2', {}, [h('span', { class: 'nombre', text: def.name }), document.createTextNode(' '), count]),
-          bar,
-          meta,
-          h('div', { class: 'row' }, [buy]),
-          bubble,
-        ]),
+        h('div', { class: 'body' }, [bar, meta, h('div', { class: 'row' }, [buy]), bubble]),
         mark,
       ]),
     ]);
     cardRoot.dataset.papel = def.papel;
-    return { def, root: cardRoot, sell, count, fill, meta, gana, por, hito, buy, mark, bubble, bubbleUntil: 0 };
+    return { def, root: cardRoot, sell, count, fill, meta, gana, por, buy, mark, bubble, bubbleUntil: 0 };
   });
 
   const appTitle = h('h1', { text: 'Imperio de Antojitos' });
@@ -496,7 +504,11 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
   let refocusAfterHire = false;
   const charSlots: CharSlot[] = BUSINESSES.map((def) => {
     const buy = h('button', { class: 'btn primary', type: 'button', onclick: () => handlers.onHire(def.id) });
-    const state = h('p', { class: 'char-state', text: def.manager.genero === 'f' ? 'Contratada' : 'Contratado', hidden: true });
+    const state = h('p', {
+      class: 'char-state',
+      text: def.manager.genero === 'f' ? 'Contratada' : 'Contratado',
+      hidden: true,
+    });
     const root = h('li', { class: 'up-slot' }, [
       h('div', { class: 'up-card char-card' }, [
         portrait(def.manager.id, 'icon char-portrait', true),
@@ -640,7 +652,8 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
   document.addEventListener('click', (e) => {
     if (!activePanel) return;
     const t = e.target;
-    if (!(t instanceof Element) || activePanel.section.contains(t) || lateral.contains(t) || t.closest('dialog')) return;
+    if (!(t instanceof Element) || activePanel.section.contains(t) || lateral.contains(t) || t.closest('dialog'))
+      return;
     activePanel.close(false); // el clic sigue llegando a su destino
   });
 
@@ -893,11 +906,10 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
         setText(c.count, owned ? `×${formatNumber(b.count)}` : '');
         setDisabled(c.sell, !owned || b.running || b.manager);
 
-        // "$10 por vuelta · ×2 a las 25": la barra ya enseña el ritmo, el tiempo no se escribe.
-        const next = nextMilestone(b.count);
+        // "$10 por vuelta": la barra ya enseña el ritmo, el tiempo no se escribe; el siguiente hito
+        // lo cuenta Chelo, no la tarjeta.
         setText(c.gana, owned ? formatMoney(revenuePerCycle(s, c.def.id)) : '');
         setText(c.por, owned ? ' por vuelta' : 'Sin abrir');
-        setText(c.hito, owned && next !== null ? `· ×2 a las ${formatNumber(next)}` : '');
 
         const q = quantityFor(s, c.def.id, mode);
         const k = q > 0 ? q : mode === 'max' ? 1 : mode;
@@ -929,7 +941,8 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
         const b = s.businesses[c.def.id];
         if (!b || c.root.hidden) continue;
         const p = b.count > 0 && (b.running || b.manager) ? Math.min(b.progressMs / c.def.cycleMs, 1) : 0;
-        c.fill.style.transform = `scaleX(${p})`;
+        // Relleno a todo el ancho que se desliza desde la izquierda: rayas y brillo no se estiran.
+        c.fill.style.transform = `translateX(${(p - 1) * 100}%)`;
       }
     },
 

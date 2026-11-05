@@ -35,9 +35,7 @@ const { values: flags } = parseArgs({
 
 async function leerSemilla(ruta) {
   if (!ruta) return null;
-  const semilla = JSON.parse(await readFile(path.resolve(ruta), 'utf8'));
-  // lastSeen reciente: evita el aviso de ausencia al entrar.
-  return { lastSeen: Date.now(), ...semilla };
+  return JSON.parse(await readFile(path.resolve(ruta), 'utf8'));
 }
 
 async function capturar(browser, { viewport, tema, url, archivo, fullPage, semilla, esperar }) {
@@ -48,9 +46,12 @@ async function capturar(browser, { viewport, tema, url, archivo, fullPage, semil
   });
   try {
     if (semilla) {
+      // lastSeen se fija en el navegador, al cargar cada captura: si se fijara una vez en Node,
+      // las capturas en serie llegarían "tarde" y el catchUp cerraría las vueltas en curso
+      // (y con más retraso saldría el aviso de ausencia).
       await context.addInitScript(
-        ([clave, valor]) => localStorage.setItem(clave, valor),
-        [SAVE_KEY, JSON.stringify(semilla)],
+        ([clave, valor]) => localStorage.setItem(clave, JSON.stringify({ lastSeen: Date.now(), ...valor })),
+        [SAVE_KEY, semilla],
       );
     }
     const page = await context.newPage();

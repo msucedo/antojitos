@@ -31,6 +31,7 @@ export const ICON_NAMES = [
   'menu',
   'lock',
   'check',
+  'clavo',
 ] as const;
 
 export type IconName = (typeof ICON_NAMES)[number];
@@ -60,4 +61,21 @@ export function setIcon(svg: SVGSVGElement, name: IconName): void {
   const use = svg.firstElementChild;
   const href = `${spriteUrl}#${name}`;
   if (use && use.getAttribute('href') !== href) use.setAttribute('href', href);
+}
+
+/**
+ * Tabla del letrero de la tarjeta: un rect al 100 % × 100 % que se estira con el texto sin deformar
+ * esquinas ni trazo (color y grosor en style.css, .tabla). El nombre lo pone el h2 que lo contiene.
+ */
+export function tabla(): SVGSVGElement {
+  const svg = document.createElementNS(NS, 'svg');
+  svg.setAttribute('class', 'tabla');
+  svg.setAttribute('aria-hidden', 'true');
+  svg.setAttribute('focusable', 'false');
+  const rect = document.createElementNS(NS, 'rect');
+  rect.setAttribute('width', '100%');
+  rect.setAttribute('height', '100%');
+  rect.setAttribute('rx', '6');
+  svg.append(rect);
+  return svg;
 }
