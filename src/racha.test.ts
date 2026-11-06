@@ -111,6 +111,18 @@ describe('cobrar', () => {
     expect(tope?.state.money).toBe(Number.MAX_VALUE);
   });
 
+  it('medianoche: el día ofrecido se cobra aunque se pulse pasadas las 12; ultimoDia es el día del clic', () => {
+    const s = conRacha(5, AYER); // ofrecido el día 6 a las 23:59 de hoy
+    const mostradoEn = local(2026, 11, 6, 23);
+    const clic = local(2026, 11, 7, 0);
+    const r = cobrar(s, clic, mostradoEn);
+    expect(r?.dia).toBe(6);
+    expect(r?.state.racha).toEqual({ dias: 6, ultimoDia: '2026-11-07' });
+    expect(cobrar(r!.state, clic)).toBeNull(); // ya cobrado hoy (7): no hay segundo regalo
+    // Sin hora de muestra, pasada la medianoche la racha se habría roto: era el bug.
+    expect(cobrar(s, clic)?.dia).toBe(1);
+  });
+
   it('día 7: receta de regalo que no gasta las pendientes ni cuenta como herencia', () => {
     const r = cobrar(conRacha(6, AYER), HOY);
     expect(r?.regalo).toEqual({ tipo: 'receta' });
@@ -140,8 +152,10 @@ describe('cobrar', () => {
     expect(p.recipes).toBe(3);
   });
 
-  it('siete seguidos desbloquea el logro', () => {
+  it('siete seguidos desbloquea el logro y la racha sobrevive a la herencia', () => {
     const r = cobrar(conRacha(6, AYER), HOY);
     expect(nuevos(r!.state)).toContain(getLogro('racha-7'));
+    const heredado = prestige({ ...r!.state, lifetimeEarned: 1e12 }, HOY);
+    expect(heredado.racha).toEqual(r!.state.racha);
   });
 });

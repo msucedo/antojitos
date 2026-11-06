@@ -237,7 +237,7 @@ test('logro: la primera venta a mano lo desbloquea y el badge del Álbum se apag
   assert.match(await page.locator('p[aria-live]').textContent(), /^Logro: Primer elote\. \+2 % de ventas\./);
   assert.equal(await albumBtn.locator('.lat-badge').textContent(), '1');
   await albumBtn.click();
-  await page.waitForTimeout(400);
+  await page.locator('#album .estampilla.nueva').waitFor(); // el marcado va en un rAF tras abrir
   assert.equal(await page.locator('#album .estampilla:not(.bloqueada)').count(), 1);
   assert.equal(await page.locator('#album .estampilla').count(), 25);
   assert.equal(await albumBtn.getAttribute('aria-label'), 'Álbum');
@@ -301,7 +301,7 @@ test('móvil: el Álbum abre en diálogo desde la barra inferior y el cuerpo vue
   await context.close();
 });
 
-test('carga v3 avanzada: migra a v4 y apunta los logros de golpe con un solo anuncio, sin sonido ni Chelo', async () => {
+test('carga v3 avanzada: migra a la versión actual y apunta los logros de golpe con un solo anuncio, sin sonido ni Chelo', async () => {
   const negocios = Object.fromEntries(
     ['elotes', 'aguas', 'tacos', 'tortas', 'fonda', 'panaderia', 'franquicia', 'cadena'].map((id) => [
       id,
@@ -319,7 +319,7 @@ test('carga v3 avanzada: migra a v4 y apunta los logros de golpe con un solo anu
   assert.equal(await page.locator('.lateral button[aria-label="Álbum: 8 logros nuevos"]').count(), 1);
   assert.equal(await page.locator('dialog[open]').count(), 0);
   assert.doesNotMatch((await page.locator('.guia-texto').textContent()) ?? '', /logro/i);
-  // El autoguardado corre cada 5 s: se espera a que escriba la v4 migrada.
+  // El autoguardado corre cada 5 s: se espera a que escriba la versión migrada.
   await page.waitForFunction((k) => JSON.parse(localStorage.getItem(k) ?? '{}').version >= 4, SAVE_KEY, {
     timeout: 8000,
   });
@@ -334,6 +334,7 @@ test('racha: partida nueva no regala el primer día (ningún diálogo tras la bi
   await sinPaneles(page);
   await page.waitForTimeout(400);
   assert.equal(await page.locator('dialog[open]').count(), 0);
+  assert.equal(await page.locator('#chelo .guia-faq li[hidden]').count(), 1); // sin regalo pendiente
   assert.deepEqual(errores, []);
   await context.close();
 });

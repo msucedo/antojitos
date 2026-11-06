@@ -32,6 +32,7 @@ const { values: flags } = parseArgs({
     sprite: { type: 'boolean', default: false },
     album: { type: 'boolean', default: false }, // abre el Álbum y captura sus dos pestañas
     semilla: { type: 'string' },
+    nombre: { type: 'string' }, // prefijo de los PNG en vez de "juego" (p. ej. --nombre racha7)
   },
 });
 
@@ -52,7 +53,16 @@ async function capturar(browser, { viewport, tema, url, archivo, fullPage, semil
       // las capturas en serie llegarían "tarde" y el catchUp cerraría las vueltas en curso
       // (y con más retraso saldría el aviso de ausencia).
       await context.addInitScript(
-        ([clave, valor]) => localStorage.setItem(clave, JSON.stringify({ lastSeen: Date.now(), ...valor })),
+        ([clave, valor]) => {
+          // "AYER" en racha.ultimoDia se resuelve aquí, en la zona local del navegador (como en e2e).
+          if (valor?.racha?.ultimoDia === 'AYER') {
+            const d = new Date();
+            d.setDate(d.getDate() - 1);
+            const dos = (n) => String(n).padStart(2, '0');
+            valor.racha.ultimoDia = `${d.getFullYear()}-${dos(d.getMonth() + 1)}-${dos(d.getDate())}`;
+          }
+          localStorage.setItem(clave, JSON.stringify({ lastSeen: Date.now(), ...valor }));
+        },
         [SAVE_KEY, semilla],
       );
     }
@@ -125,7 +135,7 @@ function tareas(semilla) {
               viewport,
               tema,
               url: `${ORIGEN}/`,
-              archivo: `juego-${vista}-${tema}.png`,
+              archivo: `${flags.nombre ?? 'juego'}-${vista}-${tema}.png`,
               fullPage: false,
               semilla,
               esperar: esperarJuego,

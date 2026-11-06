@@ -211,7 +211,12 @@ const VELOCIDAD_ACUMULADA: ReadonlyMap<string, readonly number[]> = new Map(
 
 function hitosDe(def: BusinessDef, count: number, efecto: HitoEfecto): number {
   const alcanzados = milestonesReached(count);
-  const velocidad = VELOCIDAD_ACUMULADA.get(def.id)?.[alcanzados] ?? 0;
+  let velocidad = VELOCIDAD_ACUMULADA.get(def.id)?.[alcanzados];
+  if (velocidad === undefined) {
+    // Negocio fuera del catálogo (tests): misma regla, sin tabla.
+    velocidad = 0;
+    for (let i = 0; i < alcanzados; i++) if (hitoEfecto(def, i) === 'velocidad') velocidad++;
+  }
   return efecto === 'velocidad' ? velocidad : alcanzados - velocidad;
 }
 
@@ -458,7 +463,11 @@ function advance(state: State, dtMs: number): { state: State; earned: number } {
   return {
     state: withStats(next, {
       ventasManuales,
-      maxPorSegundo: Math.min(Math.max(state.stats.maxPorSegundo, incomePerSecond(next)), Number.MAX_VALUE),
+      // Solo cuando algo vendió: ahorra 8 revenuePerCycle por frame en vacío (el /s no cambia sin ventas).
+      maxPorSegundo:
+        earned > 0
+          ? Math.min(Math.max(state.stats.maxPorSegundo, incomePerSecond(next)), Number.MAX_VALUE)
+          : state.stats.maxPorSegundo,
     }),
     earned,
   };

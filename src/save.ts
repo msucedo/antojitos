@@ -69,7 +69,7 @@ const DIA_RE = /^\d{4}-\d{2}-\d{2}$/;
 function parseRacha(raw: unknown): Racha {
   if (!isObj(raw)) return { dias: 0, ultimoDia: null };
   const ultimoDia = typeof raw.ultimoDia === 'string' && DIA_RE.test(raw.ultimoDia) ? raw.ultimoDia : null;
-  const dias = ultimoDia !== null && isInt(raw.dias) ? raw.dias : 0;
+  const dias = ultimoDia !== null && isInt(raw.dias) ? Math.min(raw.dias, MAX_COUNT) : 0;
   return { dias, ultimoDia };
 }
 
@@ -161,9 +161,9 @@ export function validate(input: unknown): State | null {
   const logros = parseLogros(o.logros);
   if (!upgrades || !stats || !logros) return null;
   if (!isNum(money) || !isNum(runEarned) || !isNum(lifetimeEarned) || !isInt(recipes) || !isNum(lastSeen)) return null;
-  const vistos = o.logrosVistos === undefined ? 0 : o.logrosVistos;
+  const vistos = o.logrosVistos ?? 0; // faltante o null (Infinity tras JSON) vale 0, como en stats
   if (!isInt(vistos)) return null;
-  const regaladas = o.recetasRegalo === undefined ? 0 : o.recetasRegalo;
+  const regaladas = o.recetasRegalo ?? 0;
   if (!isInt(regaladas)) return null;
   if (!isObj(businesses)) return null;
   const out: Record<string, BizState> = {};
@@ -221,6 +221,16 @@ export interface Loaded {
   source: 'save' | 'backup' | 'new' | 'newer';
   /** Había datos pero no se pudieron leer: avisar al jugador. */
   problem: boolean;
+  /** Con `newer`: el texto del guardado más nuevo, para exportarlo tal cual desde Respaldo. */
+  crudo: string | null;
+}
+
+/** Código de respaldo de un guardado tal cual (sin validar): el formato que `importSave` acepta. */
+export function exportCrudo(texto: string): string {
+  const bytes = new TextEncoder().encode(texto);
+  let bin = '';
+  for (const b of bytes) bin += String.fromCharCode(b);
+  return btoa(bin);
 }
 
 /** Versión declarada por un guardado, o null si no se puede leer. */
@@ -237,16 +247,18 @@ function versionDe(text: string | null): number | null {
 export function load(kv: KV, now: number): Loaded {
   const main = safeGet(kv, SAVE_KEY);
   // Build viejo en caché con una partida más nueva: no se toca nada (ni UNREADABLE ni autosave).
-  if ((versionDe(main) ?? 0) > SAVE_VERSION) return { state: newState(now), source: 'newer', problem: false };
+  if ((versionDe(main) ?? 0) > SAVE_VERSION)
+    return { state: newState(now), source: 'newer', problem: false, crudo: main };
   const fromMain = parseJson(main);
-  if (fromMain) return { state: iniciarRacha(fromMain, now), source: 'save', problem: false };
+  if (fromMain) return { state: iniciarRacha(fromMain, now), source: 'save', problem: false, crudo: null };
   const bak = safeGet(kv, BACKUP_KEY);
   // Principal ilegible o ausente pero respaldo más nuevo: tampoco se pisa (el respaldo se reescribe cada minuto).
-  if ((versionDe(bak) ?? 0) > SAVE_VERSION) return { state: newState(now), source: 'newer', problem: main !== null };
+  if ((versionDe(bak) ?? 0) > SAVE_VERSION)
+    return { state: newState(now), source: 'newer', problem: main !== null, crudo: bak };
   if (main !== null) safeSet(kv, UNREADABLE_KEY, main);
   const fromBak = parseJson(bak);
-  if (fromBak) return { state: iniciarRacha(fromBak, now), source: 'backup', problem: main !== null };
-  return { state: newState(now), source: 'new', problem: main !== null };
+  if (fromBak) return { state: iniciarRacha(fromBak, now), source: 'backup', problem: main !== null, crudo: null };
+  return { state: newState(now), source: 'new', problem: main !== null, crudo: null };
 }
 
 export function save(kv: KV, state: State): boolean {

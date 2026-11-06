@@ -26,7 +26,7 @@ import { createAudio, loadPrefs, savePrefs, type Sound } from './audio';
 import { desbloquear, nuevos, verLogros } from './logros';
 import { cobrar, diaSiguiente, estadoRacha, regalo } from './racha';
 import { claveDia } from './fecha';
-import { backup, exportSave, importSave, load, save, type KV } from './save';
+import { backup, exportCrudo, exportSave, importSave, load, save, type KV } from './save';
 import { createUI, showLocked, type UI } from './ui';
 import { formatMoney, recetas } from './format';
 
@@ -179,7 +179,7 @@ function start(root: HTMLElement): void {
       ui.announce(`Heredaste. Ahora tienes ${recetas(next.recipes)}. ${CHELO.says.prestige}`);
     },
     onImport: (text) => {
-      if (soloLectura) return false; // no se guardaría: al recargar volvería la partida más nueva
+      if (soloLectura) return 'bloqueado'; // no se guardaría: al recargar volvería la partida más nueva
       const next = importSave(text, Date.now());
       if (!next) return false;
       respaldar();
@@ -192,12 +192,15 @@ function start(root: HTMLElement): void {
     },
     onSound: (kind) => audio.play(kind),
     onAlbumVisto: () => set(verLogros(state)),
-    onRacha: () => {
-      // Lo cobrado se calcula aquí (hora y estado del clic); null si hoy ya se cobró (doble clic, dos botones).
-      const r = cobrar(state, Date.now());
+    onRacha: (mostradoEn) => {
+      // Lo cobrado se calcula aquí (estado del clic); null si hoy ya se cobró (doble clic, dos botones).
+      const r = cobrar(state, Date.now(), mostradoEn);
       if (!r) return;
+      const habiaPendientes = pendingRecipes(state) > 0;
       set(r.state);
       persist(); // cerrar antes del autosave no debe perder el regalo
+      // El dinero del regalo puede cruzar el umbral de receta: mismo ta-dá que en catchUp.
+      if (!habiaPendientes && pendingRecipes(state) > 0) audio.play('heir');
       if (r.regalo.tipo === 'receta') {
         audio.play('heir');
         ui.fiesta();
@@ -207,7 +210,8 @@ function start(root: HTMLElement): void {
         ui.announce(`Día ${r.dia} de racha: recibiste ${formatMoney(r.regalo.monto)}.`);
       }
     },
-    getExport: () => exportSave(state),
+    // Solo lectura: se exporta el guardado más nuevo tal cual (sin validar), no la partida vacía en memoria.
+    getExport: () => (loaded.crudo !== null ? exportCrudo(loaded.crudo) : exportSave(state)),
   });
 
   /** Aplica una acción; si cambió el estado, da feedback visual y sonoro (`sound` si difiere del tipo). */
@@ -224,8 +228,8 @@ function start(root: HTMLElement): void {
     return true;
   }
 
-  if (loaded.problem) ui.showProblem();
   if (soloLectura) ui.showNewer(actualizar);
+  else if (loaded.problem) ui.showProblem(); // nunca dos modales apilados
 
   // Todo avance de tiempo usa el reloj de pared contra lastSeen: un frame, una pausa
   // del hilo o horas fuera pasan por el mismo camino (tope 8 h, reloj atrasado → 0).
@@ -323,7 +327,7 @@ function start(root: HTMLElement): void {
     const hoy = claveDia(now);
     if (hoy === diaVisto || estadoRacha(state, now) === 'cobrado') return;
     const dia = diaSiguiente(state, now);
-    if (ui.showRacha(dia, regalo(state, dia), regalo(state, dia + 1))) diaVisto = hoy;
+    if (ui.showRacha(dia, regalo(state, dia), regalo(state, dia + 1), now)) diaVisto = hoy;
   };
 
   let lastText = 0;
@@ -377,9 +381,17 @@ function start(root: HTMLElement): void {
       reloading = true;
       location.reload();
     };
-    if ('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('controllerchange', reload);
+    if (!('serviceWorker' in navigator)) {
+      reload();
+      return;
+    }
+    navigator.serviceWorker.addEventListener('controllerchange', reload);
     void updateSW(true);
-    setTimeout(reload, 1500);
+    // Sin SW en espera (p. ej. tras un rollback) el controlador no cambia: recargar igual; con uno en
+    // espera, esperar al cambio (un dispositivo lento no debe recargar el build viejo).
+    void navigator.serviceWorker.getRegistration().then((r) => {
+      if (!r?.waiting) setTimeout(reload, 1500);
+    });
   }
 }
 

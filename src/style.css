@@ -664,7 +664,7 @@ p {
   gap: 3px;
 }
 
-/* Sello de goma "Bloqueado" cruzado sobre la estampilla sin lograr; el mismo .sello-goma de Empleados, en gris. */
+/* Sello de goma "Bloqueado" cruzado sobre la estampilla sin lograr; el mismo .sello-goma de Empleados, en rojo. */
 .sello-bloqueado {
   position: absolute;
   inset: 0; /* centrado en la estampilla entera */
@@ -708,8 +708,13 @@ p {
 }
 
 .estampilla.bloqueada .up-icon {
-  filter: grayscale(1) var(--filtro-estampa, none); /* el sprite conserva halo y sombra: sin salto al desbloquear */
+  filter: grayscale(1);
   opacity: 0.45;
+}
+
+/* El sprite conserva halo y sombra (sin salto al desbloquear); `none` no vale dentro de una lista de filtros. */
+.estampilla.bloqueada .up-icon.sticker {
+  filter: grayscale(1) var(--filtro-estampa);
 }
 
 /*

@@ -103,7 +103,7 @@ describe('load / save', () => {
     const kv = memory();
     const s = played();
     save(kv, s);
-    expect(load(kv, T0)).toEqual({ state: s, source: 'save', problem: false });
+    expect(load(kv, T0)).toEqual({ state: s, source: 'save', problem: false, crudo: null });
   });
 
   it('vacío → partida nueva sin aviso', () => {
@@ -116,7 +116,7 @@ describe('load / save', () => {
     const bak = played();
     const kv = memory({ [SAVE_KEY]: '{not json', [BACKUP_KEY]: JSON.stringify(bak) });
     const r = load(kv, T0);
-    expect(r).toEqual({ state: bak, source: 'backup', problem: true });
+    expect(r).toEqual({ state: bak, source: 'backup', problem: true, crudo: null });
     expect(kv.data[UNREADABLE_KEY]).toBe('{not json');
   });
 
@@ -393,6 +393,8 @@ describe('v5: racha diaria y recetas de regalo', () => {
       ultimoDia: '2026-11-05',
     });
     expect(validate({ ...base, racha: null })?.racha).toEqual({ dias: 0, ultimoDia: null });
+    expect(validate({ ...base, racha: { dias: 1e300, ultimoDia: '2026-11-05' } })?.racha.dias).toBe(1_000_000);
+    expect(validate({ ...base, logrosVistos: null, recetasRegalo: null })).not.toBeNull();
     expect(validate({ ...base, racha: { dias: 1.5, ultimoDia: '2026-11-05' } })?.racha).toEqual({
       dias: 0,
       ultimoDia: '2026-11-05',
@@ -401,7 +403,7 @@ describe('v5: racha diaria y recetas de regalo', () => {
     expect(validate({ ...base, recetasRegalo: 1.5 })).toBeNull();
   });
 
-  it('una semilla sin racha queda vista hoy al cargar; con racha de ayer se respeta', () => {
+  it('una semilla sin racha queda vista hoy al cargar; con racha propia se respeta', () => {
     const sin: Record<string, unknown> = { ...newState(T0) };
     delete sin.racha;
     expect(load(memory({ [SAVE_KEY]: JSON.stringify(sin) }), T0).state.racha).toEqual({ dias: 0, ultimoDia: HOY });

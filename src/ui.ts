@@ -64,8 +64,10 @@ export interface Handlers {
   /** Se abrió el Álbum: todo lo desbloqueado queda visto (badge a cero). */
   onAlbumVisto(): void;
   /** Cobrar el regalo del día (botón del diálogo de racha o del panel de Chelo). */
-  onRacha(): void;
-  onImport(text: string): boolean;
+  /** `mostradoEn`: hora con que el diálogo calculó el día (el botón de Chelo no la tiene). */
+  onRacha(mostradoEn?: number): void;
+  /** false: código inválido; 'bloqueado': solo lectura (guardado de una versión más nueva). */
+  onImport(text: string): boolean | 'bloqueado';
   getExport(): string;
 }
 
@@ -350,7 +352,7 @@ export interface UI {
    * Diálogo del regalo del día (`dia` de racha, lo que da hoy y mañana). Devuelve false sin abrir
    * si ya hay un modal: el llamador vuelve a intentar en el siguiente render.
    */
-  showRacha(dia: number, hoy: Regalo, manana: Regalo): boolean;
+  showRacha(dia: number, hoy: Regalo, manana: Regalo, mostradoEn: number): boolean;
   /** Confeti y sacudida del papel picado, sin tocar bocadillos (celebrate() además reinicia). */
   fiesta(): void;
   /** La partida guardada es de una versión más nueva: se juega sin guardar hasta recargar. */
@@ -490,7 +492,7 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
       // el marcado va en un rAF porque el panel entra en transición, como el foco en sidePanel.open.
       const nuevos = sinVer();
       requestAnimationFrame(() => {
-        colocarIndicador();
+        colocarIndicador(true);
         marcarNuevas(nuevos);
       });
       handlers.onAlbumVisto();
@@ -812,6 +814,8 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
     card: HTMLElement;
     nombre: HTMLElement;
     estado: HTMLElement;
+    /** Marcador "Nuevo": lo que se anima al caer un logro a la vista (la tarjeta enmascarada se vería borrosa con scale). */
+    nuevo: HTMLElement;
     lograda: boolean;
   }
   const resaltadas = new Set<string>(); // ids marcados "Nuevo" (antes de las estampillas: setEstado ya los consulta)
@@ -839,7 +843,7 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
     nuevo.setAttribute('aria-hidden', 'true'); // el sr-only del nombre ya lo dice
     // El marcador va después de la tarjeta enmascarada: el orden del árbol lo pinta encima.
     const root = h('li', { class: 'up-slot estampilla' }, [card, nuevo]);
-    const e: Estampilla = { def, root, card, nombre, estado, lograda: true };
+    const e: Estampilla = { def, root, card, nombre, estado, nuevo, lograda: true };
     setEstado(e, false);
     return e;
   });
@@ -920,11 +924,19 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
     tabEls[1]!.btn,
     indicador,
   ]);
-  /** Coloca el subrayado bajo la pestaña activa; medir exige el Álbum en el layout (tras abrir, en un rAF). */
-  function colocarIndicador(): void {
+  /**
+   * Coloca el subrayado bajo la pestaña activa; medir exige el Álbum en el layout (tras abrir, en un
+   * rAF). Al abrir va sin transición: si no, se estiraría desde 1 px en x = 0 mientras el panel entra.
+   */
+  function colocarIndicador(sinAnimar = false): void {
     const btn = tabEls.find((t) => t.id === tabActiva)?.btn;
     if (!btn || btn.offsetWidth === 0) return;
+    if (sinAnimar) indicador.style.transition = 'none';
     indicador.style.transform = `translateX(${btn.offsetLeft}px) scaleX(${btn.offsetWidth})`;
+    if (sinAnimar) {
+      void indicador.offsetWidth; // aplica el salto antes de devolver la transición
+      indicador.style.transition = '';
+    }
   }
   tablist.setAttribute('role', 'tablist');
   tablist.addEventListener('keydown', (ev) => {
@@ -1096,7 +1108,8 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
     });
   }
 
-  const albumPanel = sidePanel(album, latAlbum.btn, albumTitle);
+  // El foco al abrir va a la pestaña activa (el h2 es sr-only: su anillo no se vería); siempre es Logros al abrir.
+  const albumPanel = sidePanel(album, latAlbum.btn, tabEls[0]!.btn);
   let albumDialogTitle: HTMLElement | null = null;
   function openAlbum(): void {
     if (albumDialogTitle) return;
@@ -1105,7 +1118,7 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
       albumDialogTitle = null;
       limpiarNuevas();
     });
-    colocarIndicador(); // ya en el diálogo: hay layout
+    colocarIndicador(true); // ya en el diálogo: hay layout
     marcarNuevas(sinVer()); // tras asignar albumDialogTitle (lo consulta albumAbierto) y del scrollTop = 0 del diálogo
     handlers.onAlbumVisto();
   }
@@ -1185,11 +1198,17 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
       type: 'button',
       text: 'Cargar partida',
       onclick: () => {
-        if (handlers.onImport(input.value)) {
+        const r = handlers.onImport(input.value);
+        if (r === true) {
           // Partida nueva: las estrellas que trae no son "recién ganadas" (sin pop).
           for (const slot of charSlots) slot.shownStars = -1;
           d.close();
-        } else setText(msg, 'Ese código no es válido.');
+        } else if (r === 'bloqueado')
+          setText(
+            msg,
+            'Ahora no se puede cargar: tu partida guardada es de una versión más nueva. Recarga para actualizar.',
+          );
+        else setText(msg, 'Ese código no es válido.');
       },
     });
     const d = dialog('Respaldo', [
@@ -1622,17 +1641,22 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
     },
 
     logros(defs, silencioso) {
-      if (silencioso) return;
+      const aLaVista = albumAbierto() && tabActiva === 'logros';
+      if (silencioso) {
+        // Importar con el Álbum abierto (bajo el diálogo de Respaldo): sin fiesta, pero lo ve → visto.
+        if (aLaVista) handlers.onAlbumVisto();
+        return;
+      }
       pop(latAlbumBadge);
       pop(albumBadge);
       // En la Libreta no lo ve: el badge se enciende como si estuviera cerrado y se marca al volver a Logros.
-      if (!albumAbierto() || tabActiva !== 'logros') return;
+      if (!aLaVista) return;
       for (const def of defs) {
         const e = estampillas.find((x) => x.def.id === def.id);
         if (!e) continue;
         setEstado(e, true); // render() aún no corrió: la estampilla sigue bloqueada
         marcar(e);
-        stamp(e.card);
+        stamp(e.nuevo);
       }
       handlers.onAlbumVisto(); // lo está viendo: el badge no debe encenderse
     },
@@ -1676,7 +1700,7 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
       confetti();
     },
 
-    showRacha(dia, hoy, manana) {
+    showRacha(dia, hoy, manana, mostradoEn) {
       if (document.querySelector('dialog[open]')) return false;
       const semana = diaDeSemana(dia);
       const discos = Array.from({ length: RACHA_SEMANA }, (_, i) => {
@@ -1702,7 +1726,7 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
         text: 'Recibir',
         onclick: () => {
           d.close();
-          handlers.onRacha();
+          handlers.onRacha(mostradoEn);
         },
       });
       const d = dialog(
@@ -1715,6 +1739,8 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
         ],
         [recibir],
       );
+      // Abrió sin gesto: al cerrar, el foco iría a body. Va al disco de Chelo (web) o al título (móvil).
+      d.addEventListener('close', () => focusLateral(latChelo));
       return true;
     },
 
@@ -1723,7 +1749,7 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
         'Partida de una versión más nueva',
         [
           h('p', {
-            text: 'Tu partida se guardó con una versión más nueva del juego. Recarga para actualizar; mientras tanto puedes jugar, pero no se guardará nada.',
+            text: 'Tu partida se guardó con una versión más nueva del juego. Recarga para actualizar; mientras tanto puedes jugar, pero no se guardará nada. En Respaldo puedes copiar tu partida tal cual por si acaso.',
           }),
         ],
         [h('button', { class: 'btn primary', type: 'button', text: 'Recargar', onclick: onReload })],

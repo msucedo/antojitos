@@ -64,12 +64,14 @@ export function iniciarRacha(s: State, now: number): State {
 }
 
 /**
- * Cobra el regalo de hoy. `null` si hoy ya se cobró (doble clic, dos botones). Lo que se cobra se
- * calcula aquí, con el estado y la hora del clic: es lo que se anuncia.
+ * Cobra el regalo. `null` si hoy ya se cobró (doble clic, dos botones). Lo que se cobra se calcula
+ * aquí con el estado del clic: es lo que se anuncia. `mostradoEn` es la hora con que se calculó el
+ * día ofrecido: si el diálogo se abrió a las 23:59 y se pulsa pasada la medianoche, la racha no se
+ * rompe (el día sigue siendo el ofrecido) y `ultimoDia` queda en el día real del clic.
  */
-export function cobrar(s: State, now: number): { state: State; dia: number; regalo: Regalo } | null {
+export function cobrar(s: State, now: number, mostradoEn = now): { state: State; dia: number; regalo: Regalo } | null {
   if (estadoRacha(s, now) === 'cobrado') return null;
-  const dia = diaSiguiente(s, now);
+  const dia = diaSiguiente(s, estadoRacha(s, mostradoEn) === 'cobrado' ? now : mostradoEn);
   const r = regalo(s, dia);
   const base: State = {
     ...s,

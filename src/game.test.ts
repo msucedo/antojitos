@@ -282,6 +282,13 @@ describe('hitos 300 y 400 (mixtos)', () => {
     expect(fonda400.businesses.fonda?.progressMs).toBe(20);
   });
 
+  it('dos hitos de ventas (400 elotes) cuadruplican el ingreso por vuelta', () => {
+    const a299 = conCount('elotes', 299);
+    const a400 = conCount('elotes', 400);
+    expect(revenuePerCycle(a400, 'elotes') / revenuePerCycle(a299, 'elotes')).toBeCloseTo((4 * 400) / 299);
+    expect(cicloMs(elotes, 400)).toBe(cicloMs(elotes, 299));
+  });
+
   it('nextMilestone trae el conteo y el efecto del siguiente hito', () => {
     expect(nextMilestone(elotes, 10)).toEqual({ count: 25, efecto: 'velocidad' });
     expect(nextMilestone(elotes, 250)).toEqual({ count: 300, efecto: 'ventas' });

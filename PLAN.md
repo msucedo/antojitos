@@ -91,7 +91,7 @@ Fórmulas estándar del género (Kongregate, "The Math of Idle Games"); constant
 
 ## Verificación
 
-1. `npm run check` en verde, `prettier --check .` y `npm run e2e` (build + 15 escenarios en Chrome headless con la CSP de `vercel.json`).
+1. `npm run check` en verde, `prettier --check .` y `npm run e2e` (build + 21 escenarios en Chrome headless con la CSP de `vercel.json`).
 2. `npm run dev` en vista móvil:
    - comprar, gerente, hito, prestigio;
    - recargar → progreso intacto;
@@ -272,6 +272,7 @@ Rediseño de lo de dentro de las tarjetas de negocio (`li.card`) a partir de las
 - [x] Guardado v5: `racha { dias, ultimoDia }`, `recetasRegalo`, `stats.regalos`; migración 4→5 sin campos (los rellena `validate`; `load`/`importSave` inician la racha hoy); regla "versión más nueva" implementada (ver Guardado).
 - [x] `src/fecha.ts` (`claveDia`, `diaVecino` con `setDate`) y `src/racha.ts` (`estadoRacha`, `diaSiguiente`, `diaDeSemana`, `ingresoPorSegundo` sin propina, `regalo`, `iniciarRacha`, `cobrar` idempotente que devuelve lo cobrado). `heredadas()` en `game.ts` para la lección, el tip y el logro "Primera herencia".
 - [x] UI: diálogo `Día N de racha` con semana de discos (`role="img"`), Recibir, "Mañana: …"; botón "Recibir regalo del día" en el panel de Chelo y tip prioritario si cerró sin recibir; Libreta 16 filas; logro "Siete seguidos" (25); `ui.fiesta()`; `ui.showNewer()`; FAQ "¿Qué es la racha?"; frases `racha`/`rachaReceta` de Chelo.
-- [x] Verificación: 215 tests unitarios (`racha.test.ts`, v5, balance con el regalo del día 1); e2e 21 (nuevos: partida nueva sin regalo; día 1 con Recibir y recarga; día 7 con receta sin pendientes y logro; bienvenida antes que racha; cerrar sin recibir → botón/tip y vuelve a salir; versión más nueva deja el guardado intacto); capturas móvil/web del diálogo (días 3 y 7).
+- [x] Revisión independiente de los 4 commits del día (dos revisores: lógica y UI; 25 hallazgos, sin bloqueantes, aplicados): grayscale real en estampillas bloqueadas, `stamp` sobre la etiqueta y no la tarjeta enmascarada, foco a la pestaña al abrir el Álbum, indicador sin estirón inicial, carrera de medianoche en Recibir (`cobrar(…, mostradoEn)`), salida del estado "versión más nueva" (export crudo, mensaje de Cargar, recarga sin bucle), `onAlbumVisto` en importación silenciosa, topes y `null` en el guardado, `heir` tras el regalo, `--nombre`/`AYER` en capturas.
+- [x] Verificación: 216 tests unitarios (`racha.test.ts`, v5, balance con el regalo del día 1); e2e 21 (nuevos: partida nueva sin regalo; día 1 con Recibir y recarga; día 7 con receta sin pendientes y logro; bienvenida antes que racha; cerrar sin recibir → botón/tip y vuelve a salir; versión más nueva deja el guardado intacto); capturas móvil/web del diálogo (días 3 y 7).
 - [x] Revisión independiente de la implementación (14 hallazgos aplicados, sin bloqueantes: Recargar usa el camino del SW en espera, respaldo más nuevo tampoco se pisa, importar bloqueado en solo lectura, Herencia no se estrena con una receta regalada, plural de recetas, bienvenida reintenta tras el modal).
 - [ ] El user commitea.
