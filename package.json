@@ -15,7 +15,8 @@
     "format": "prettier --write .",
     "check": "tsc --noEmit && eslint . && vitest run",
     "audit": "npm audit --omit=dev && npm audit --audit-level=high",
-    "capturas": "node scripts/capturas.mjs"
+    "capturas": "node scripts/capturas.mjs",
+    "e2e": "npm run build && node --test e2e/*.mjs"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

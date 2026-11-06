@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { BUSINESSES, PAPELES, type Papel } from './data';
-import type { IconName } from './icons';
+import type { PlatoId } from './platos';
 
 /**
  * Papeles donde el icono se perdería: comparten tono con su relleno principal
  * (decisión de DESIGN.md: el icono nunca va sobre papel de su propio matiz). Tabla a mano,
  * no derivada del sprite: guarda la decisión, no el hecho; al cambiar un relleno, revisarla.
  */
-const PROHIBIDOS: Readonly<Partial<Record<IconName, readonly Papel[]>>> = {
+const PROHIBIDOS: Readonly<Record<PlatoId, readonly Papel[]>> = {
   elote: ['mostaza'],
   agua: ['rosa'],
   taco: ['crema', 'mostaza'],
@@ -38,6 +38,6 @@ describe('papel de estampilla por negocio', () => {
   });
 
   it('el icono nunca cae sobre un papel de su propio matiz', () => {
-    for (const b of BUSINESSES) expect(PROHIBIDOS[b.icon] ?? [], b.id).not.toContain(b.papel);
+    for (const b of BUSINESSES) expect(PROHIBIDOS[b.icon], b.id).not.toContain(b.papel);
   });
 });

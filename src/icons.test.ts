@@ -16,8 +16,8 @@ describe('sprite de iconos', () => {
     expect([...symbols].sort()).toEqual([...ICON_NAMES].sort());
   });
 
-  it('todos los negocios usan un icono existente', () => {
-    for (const b of BUSINESSES) expect(ICON_NAMES).toContain(b.icon);
+  it('los platos de los negocios son raster, no viven en el sprite', () => {
+    for (const b of BUSINESSES) expect(symbols).not.toContain(b.icon);
   });
 
   it('los personajes viven en los retratos raster, no en el sprite', () => {

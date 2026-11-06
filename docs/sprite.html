@@ -41,6 +41,10 @@
         gap: 14px;
         flex-wrap: wrap;
       }
+      .cell .i56 {
+        width: 56px;
+        height: 56px;
+      }
       .cell .i30 {
         width: 30px;
         height: 30px;
@@ -101,18 +105,18 @@
         `<svg class="${cls}" viewBox="0 0 48 48" aria-hidden="true"><use href="${SPRITE}#${id}"></use></svg>`;
       const text = await (await fetch(SPRITE)).text();
       const ids = [...text.matchAll(/<symbol id="([^"]+)"/g)].map((m) => m[1]);
-      // Cada negocio se pinta sobre el papel real de su tarjeta.
+      // Papel real de la tarjeta de cada plato (los platos son raster; el sprite ya no los trae).
       const papel = new Map(BUSINESSES.map((b) => [b.icon, b.papel]));
       document.getElementById('count').textContent = ids.length;
       document.getElementById('sheet').innerHTML = ids
         .map(
-          (id) => `<li class="card" data-papel="${papel.get(id) ?? ''}">
+          (id) => `<li class="card">
             <div class="cell paper">
               ${svg(id, 'icon big')}
               <div>
-                <p class="name">${id}${papel.has(id) ? ` · ${papel.get(id)}` : ''}</p>
+                <p class="name">${id}</p>
                 <div class="small">
-                  <span class="sell">${svg(id, 'icon sell-icon sticker')}</span>
+                  ${svg(id, 'icon i56 sticker')}
                   ${svg(id, 'icon i30')}
                   ${svg(id, 'icon i20')}
                 </div>

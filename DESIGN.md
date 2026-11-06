@@ -29,7 +29,6 @@ Contraste mínimo: texto ≥ 4.5:1, UI ≥ 3:1 (WCAG AA). Nunca usar hex sueltos
 | `--cielo`          | `#1f7fc2`            | `#6cc1f0`                | solo decorativo: banderines                                            |
 | `--border`         | `#1b2a3a`            | `#8fb3d1`                | bordes de 2 px fuera de las estampillas                                |
 | `--track`          | `#e6d9c0`            | `#2f4b68`                | hovers del chrome                                                      |
-| `--shadow`         | `0 3px 0 var(--ink)` | `none`                   | sombra dura de estampa; en oscuro el relieve lo da el borde            |
 | `--sombra-btn`     | `0 2px 0 var(--ink)` | `none`                   | matasellos: botones y pastillas                                        |
 | `--halo`           | `#ffffff`            | `#ffffff`                | halo troquelado de `.sticker`; dentro de una estampilla es el papel    |
 | `--focus`          | `#c2006a`            | `#f5b92a`                | anillo de foco, 4.85:1 sobre `--bg`                                    |
@@ -42,22 +41,22 @@ Contraste mínimo: texto ≥ 4.5:1, UI ≥ 3:1 (WCAG AA). Nunca usar hex sueltos
 
 Decisión del 2026-11-03: una estampa conserva su papel sobre azul noche, como los timbres sobre marino de `docs/refs/estampas2.png`. Por eso estos tokens no tienen par oscuro.
 
-| Token             | Valor                 | Uso / contraste sobre los cuatro papeles                   |
-| ----------------- | --------------------- | ---------------------------------------------------------- |
-| `--papel-crema`   | `#fff6e5`             | cupones, estampa de Chelo, negocios sin papel asignado     |
-| `--papel-rosa`    | `#f6c7cf`             | papel de negocio                                           |
-| `--papel-mostaza` | `#f5c462`             | papel de negocio                                           |
-| `--papel-verde`   | `#c5dcc6`             | papel de negocio                                           |
-| `--tinta`         | `#1b2a3a`             | texto, bordes y sombra: 9.0 (mostaza) a 13.6 (crema)       |
-| `--tinta-suave`   | `#3d4f61`             | secundario: 5.2 (mostaza) a 7.9 (crema)                    |
-| `--tinta-rosa`    | `#c2006a`             | primario, aro del plato, foco: ≥ 3.7 (UI)                  |
-| `--tinta-nopal`   | `#2a7239`             | barra de progreso, heredar: ≥ 3.6 (UI)                     |
-| `--marco-tinta`   | `rgb(27 42 58 / .4)`  | línea interior y puntos de esquina sobre papel, decorativo |
-| `--on-tinta`      | `#ffffff`             | texto sobre `--tinta-rosa` (6.0) y `--tinta-nopal` (5.9)   |
-| `--velo-tinta`    | `rgb(27 42 58 / .08)` | pista de la barra, decorativo                              |
-| `--brillo` | `rgb(255 255 255 / 0.35)` | brillo de la barra de progreso sobre el relleno `--nopal`; fijo en ambos temas |
+| Token             | Valor                     | Uso / contraste sobre los cuatro papeles                                       |
+| ----------------- | ------------------------- | ------------------------------------------------------------------------------ |
+| `--papel-crema`   | `#fff6e5`                 | cupones, estampa de Chelo, negocios sin papel asignado                         |
+| `--papel-rosa`    | `#f6c7cf`                 | papel de negocio                                                               |
+| `--papel-mostaza` | `#f5c462`                 | papel de negocio                                                               |
+| `--papel-verde`   | `#c5dcc6`                 | papel de negocio                                                               |
+| `--tinta`         | `#1b2a3a`                 | texto, bordes y sombra: 9.0 (mostaza) a 13.6 (crema)                           |
+| `--tinta-suave`   | `#3d4f61`                 | secundario: 5.2 (mostaza) a 7.9 (crema)                                        |
+| `--tinta-rosa`    | `#c2006a`                 | primario, aro del plato, foco: ≥ 3.7 (UI)                                      |
+| `--tinta-nopal`   | `#2a7239`                 | barra de progreso, heredar: ≥ 3.6 (UI)                                         |
+| `--marco-tinta`   | `rgb(27 42 58 / .4)`      | línea interior y puntos de esquina sobre papel, decorativo                     |
+| `--on-tinta`      | `#ffffff`                 | texto sobre `--tinta-rosa` (6.0) y `--tinta-nopal` (5.9)                       |
+| `--velo-tinta`    | `rgb(27 42 58 / .08)`     | pista de la barra, decorativo                                                  |
+| `--brillo`        | `rgb(255 255 255 / 0.35)` | brillo de la barra de progreso sobre el relleno `--nopal`; fijo en ambos temas |
 
-**Isla de papel.** `.paper` y `.up-card` re-declaran los tokens semánticos (`--text`, `--muted`, `--ink`, `--border`, `--card`, `--track`, `--primary`, `--on-primary`, `--nopal`, `--on-nopal`, `--focus`, `--halo`, `--sombra-btn`) con la tinta y el papel de la estampa (`--papel`). Las reglas hijas (`.sell`, `.estampa`, `.bar`, `.btn`) siguen leyendo `var(--token)`: dentro resuelven al papel, fuera al tema. El plato (`.sell`) y la estampa de personaje (`.estampa`) pintan `--papel`, nunca `--bg`; el radio del papel de la estampa es `--papel-r`.
+**Isla de papel.** `.paper` y `.up-card` re-declaran los tokens semánticos (`--text`, `--muted`, `--ink`, `--border`, `--card`, `--track`, `--primary`, `--on-primary`, `--nopal`, `--on-nopal`, `--focus`, `--halo`, `--sombra-btn`) con la tinta y el papel de la estampa (`--papel`). Las reglas hijas (`.sell`, `.bar`, `.btn`) siguen leyendo `var(--token)`: dentro resuelven al papel, fuera al tema. El botón de vender (`.sell`) y los cupones pintan `--papel`, nunca `--bg`.
 
 ## Tipografía
 
@@ -70,7 +69,7 @@ Decisión del 2026-11-03: una estampa conserva su papel sobre azul noche, como l
 
 - Sprite con `<symbol id="...">`, se usa con `<use href>`. Un `id` nuevo exige añadirlo a `ICON_NAMES` en `src/icons.ts` (lo comprueba `src/icons.test.ts`).
 - `viewBox="0 0 48 48"`, dibujado para verse bien a 24 px.
-- **Contorno:** tinta fija `stroke="#1B2A3A"`, `stroke-width="3"`, `stroke-linejoin="round"` (y `stroke-linecap="round"` en trazos abiertos). Mismo contorno en claro y oscuro: sobre azul noche los rellenos saturados lo separan del fondo. Los iconos de **acción** son ilustrados (los del plato, los cupones y los del menú lateral: `upgrade`, `recipe`, `moneda`, `monedas`, `costal`, `caja`, `personajes`, `bocina`, `guitarra`); solo los de **ajuste compacto** del header móvil y los de estado (`sound-*`, `music-*`, `menu`, `gente`, `lock`, `check`) usan `currentColor`. Empleados tiene los dos: `personajes` (gafete ilustrado) en el disco del lateral y `gente` (dos bustos en `currentColor`) en el header móvil, porque un gafete con contorno de 3 px a 24 px se ensucia.
+- **Contorno:** tinta fija `stroke="#1B2A3A"`, `stroke-width="3"`, `stroke-linejoin="round"` (y `stroke-linecap="round"` en trazos abiertos). Mismo contorno en claro y oscuro: sobre azul noche los rellenos saturados lo separan del fondo. Los iconos de **acción** son ilustrados (los del cupón de mejoras globales y los del menú lateral: `upgrade`, `recipe`, `moneda`, `monedas`, `costal`, `caja`, `personajes`, `bocina`, `guitarra`); solo los de **ajuste compacto** del header móvil y los de estado (`sound-*`, `music-*`, `menu`, `gente`, `lock`) usan `currentColor`. Empleados tiene los dos: `personajes` (gafete ilustrado) en el disco del lateral y `gente` (dos bustos en `currentColor`) en el header móvil, porque un gafete con contorno de 3 px a 24 px se ensucia.
 - **Detalles internos:** trazos finos de 1.5–2 en un tono más oscuro del relleno (p. ej. granos del elote `#C99700`). Excepción: en los iconos del menú lateral (36 px) los "$", cuerdas, manijas y ondas suben a 2.5–3 para leerse en el disco.
 - **Rellenos:** hex fijo de comida. Paleta de ilustración actual:
   - Masa / pan: `#F6E3C3` `#F2D18B` `#E8C99A` `#D9A15B` `#F7D9C4`
@@ -85,45 +84,43 @@ Decisión del 2026-11-03: una estampa conserva su papel sobre azul noche, como l
 - Reutilizar estos hex antes de añadir nuevos. Formas simples, máximo 10–12 elementos por icono.
 - **Iconos del menú lateral** (dibujados para 30 px, hoy a 36 en disco de 56; se dan por buenos cuando se distinguen por silueta a 20 px). Las variantes `-off` repiten el dibujo y añaden la barra diagonal `M6 6l36 36` en tinta 3.5, sin bajar la opacidad. El "$" se dibuja como trazo, nunca `<text>`. Sin hex nuevos:
 
-  | id           | Uso        | Composición y paleta                                                                                                                                          |
-  | ------------ | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-  | `moneda`     | ×1         | Disco r 16 `#F4C430`, aro interior `#C99700` 2, "$" en trazo `#C99700` 2.5, brillo. 4 elementos.                                                              |
-  | `monedas`    | ×10        | Tres cantos `rect` 32×8 apilados y cara `ellipse` 16×6, todo `#F4C430`; "$" pequeño `#C99700` 2; brillo. 6 elementos.                                         |
-  | `costal`     | Máx        | Bolsa `#E8C99A`, cuerda `#B5562B` 3, dos pliegues `#B07850` 2, "$" grande `#B5562B` 3, brillo. 5 elementos.                                                   |
-  | `caja`       | Respaldo   | Cuerpo `#C8C8C8`, puerta `#DADADA`, dial `#1B2A3A` con marca `#F4C430`, manija `#F4C430` 3, patas, brillo. 7 elementos.                                       |
-  | `personajes` | Empleados  | Gafete `#FFF6E5` colgado de un cordón `#1F7FC2` con clip `#C8C8C8`; dentro, busto (cabeza `#D9A15B`, hombros `#E4007C`) y tres líneas `#C8C8C8`. 6 elementos. |
-  | `bocina`     | Sonido     | Base `#C99700`, cono `#F4C430` con aro `#C99700` 2, dos ondas en tinta 3 (un solo `path`), brillo. 5 elementos. `bocina-off`: sin ondas.                      |
-  | `guitarra`   | Música     | Mástil `#B07850` 4 sobre tinta 9, clavijero `#2B1B17`, cuerpo `#D9A15B` de dos lóbulos, boca, puente, brillo. 7 elementos. Sin cuerdas: no se leen.           |
-  | `clavo`      | Letrero    | Cabeza redonda r 18 `#C8C8C8` (gris de la caja), centro `#1B2A3A` r 7, brillo en arco. 3 elementos; se usa a 10 px en las esquinas del letrero de la tarjeta. |
+  | id           | Uso        | Composición y paleta                                                                                                                                                                        |
+  | ------------ | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+  | `moneda`     | ×1         | Disco r 16 `#F4C430`, aro interior `#C99700` 2, "$" en trazo `#C99700` 2.5, brillo. 4 elementos.                                                                                            |
+  | `monedas`    | ×10        | Tres cantos `rect` 32×8 apilados y cara `ellipse` 16×6, todo `#F4C430`; "$" pequeño `#C99700` 2; brillo. 6 elementos.                                                                       |
+  | `costal`     | Máx        | Bolsa `#E8C99A`, cuerda `#B5562B` 3, dos pliegues `#B07850` 2, "$" grande `#B5562B` 3, brillo. 5 elementos.                                                                                 |
+  | `caja`       | Respaldo   | Cuerpo `#C8C8C8`, puerta `#DADADA`, dial `#1B2A3A` con marca `#F4C430`, manija `#F4C430` 3, patas, brillo. 7 elementos.                                                                     |
+  | `personajes` | Empleados  | Gafete `#FFF6E5` colgado de un cordón `#1F7FC2` con clip `#C8C8C8`; dentro, busto (cabeza `#D9A15B`, hombros `#E4007C`) y tres líneas `#C8C8C8`. 6 elementos.                               |
+  | `bocina`     | Sonido     | Base `#C99700`, cono `#F4C430` con aro `#C99700` 2, dos ondas en tinta 3 (un solo `path`), brillo. 5 elementos. `bocina-off`: sin ondas.                                                    |
+  | `guitarra`   | Música     | Mástil `#B07850` 4 sobre tinta 9, clavijero `#2B1B17`, cuerpo `#D9A15B` de dos lóbulos, boca, puente, brillo. 7 elementos. Sin cuerdas: no se leen.                                         |
+  | `clavo`      | Letrero    | Cabeza redonda r 18 `#C8C8C8` (gris de la caja), centro `#1B2A3A` r 7, brillo en arco. 3 elementos; se usa a 10 px en las esquinas del letrero de la tarjeta.                               |
   | `estrella`   | Antigüedad | Estrella de 5 puntas (radios 20/9) `#F4C430` con contorno 3 y un brillo blanco. 2 elementos; se usa a 16 px en el cupón de Empleados. `estrella-off`: misma forma en `#DADADA`, sin brillo. |
 
 - **Estampa:** los iconos ilustrados grandes llevan la clase `.sticker` (`src/style.css`): cuatro `drop-shadow` de 1.5 px en cruz en `--halo` (el papel dentro de una estampilla, blanco fuera) forman el halo troquelado y un quinto `drop-shadow(2px 2.5px 0 var(--ink))` pone la sombra dura. Es CSS puro (vale con la CSP) y no toca el sprite. Hoy solo lo lleva el sprite `upgrade` del cupón de mejoras de "Todos los negocios": los cupones de un negocio muestran su plato raster (`plato()`, igual que la tarjeta), que trae contorno y sombra propios. No se aplica a iconos de 30 px o menos, a los retratos raster (`<img>`) ni al sello de gerente de la tarjeta (`.card-mark`, que va tenue y sin `filter`).
-- **Marcos de estampa** (`.estampa`): el símbolo `sello` detrás del icono, papel liso de `--papel` por `radial-gradient` y color del ondulado en `--aro`.
 - **Cupones** (`.up-slot` > `.up-card`): estampilla vertical de 156 px (icono 56 arriba, nombre, efecto, botón). El `li` exterior pone la sombra con `::before` enmascarado, que sigue el perforado; el interior lleva la máscara: rectángulo interior y una fila de medios círculos de 12 px centrada en cada lado. Borde `--corn`. Botón de precio como matasellos: pastilla con borde `--ink` y sombra de 2 px. En web, cuadrícula de 2 columnas (4 cupones de mejoras; 8 de empleados, con scroll propio del panel).
 - **Avatares SVG**: ya no existen. Los 9 personajes son retratos raster (abajo); el sprite no lleva símbolos de personaje (`icons.test.ts` lo comprueba) y `ManagerDef.id`/`CHELO.id` son claves de `PORTRAITS` (`CharacterId`), así que un personaje sin retrato no compila.
 - **Retratos raster** (`src/assets/personajes/<id>.webp`, `PORTRAITS` y `portrait()` en `src/characters.ts`): ilustración estilo estampilla retro (referencias `docs/refs/caracter1-3.png`): busto centrado, línea fina de tinta `#1B2A3A` de ~1 px, bloques de color plano con un tono oscuro por color para sombras, sin degradados, disco de color plano detrás con anillo fino, paleta del juego. Se generan con un modelo de imagen a partir del prompt base (en inglés) que fija estilo, encuadre 1:1, fondo crema plano y "no text, no frame, no watermark", cambiando solo el párrafo del personaje y el color del disco; se guardan como `docs/refs/<id>-v1.png` (o `.jpeg`; mejor PNG, sin artefactos) y `python3 scripts/retrato.py <id>` (Pillow) quita el fondo plano por relleno desde las esquinas (o respeta el alfa si el PNG ya lo trae), recorta, cuadra y exporta 480×480 WebP con alfa (≤ 80 KB; lo comprueba `characters.test.ts`). Si el modelo puso una escena detrás (Lupita salió con su puesto de aguas y rótulos), `--sujeto` recorta la figura con Vision de macOS (`scripts/recorta.swift`, subject lifting; necesita Xcode Command Line Tools) y `--abajo N` tira las filas desde el píxel N para quitar rótulos pegados al busto. Decisión del user: puro personaje, sin fondo ni disco pintado por nosotros; si la imagen trae disco (Chelo) se queda. `portrait(id, clase, lazy)` devuelve `<img alt="" decoding="async">` (decorativa: el nombre lo da el botón o el título que la rodea); cupones y sellos van con `loading="lazy"` porque nacen fuera de la vista, los de Chelo (lateral, panel, botón móvil) eager. Vite no los inlinea como `data:` (`assetsInlineLimit`; la CSP solo admite `img-src 'self'`) y el service worker los precachea (`globPatterns` con `webp`). Tamaños: botón de la barra móvil 36 (`.lat-retrato`) y disco del lateral 42 (`.lat-disc .lat-retrato`), cupón de Personajes 120 (`.char-portrait`), panel de Chelo un cuarto del alto de la ventana (`.guia-retrato`, `25dvh`, máx. 300), sello de la tarjeta a todo el alto (`.card-mark`).
-- **Platos raster** (`src/assets/platos/<id>.webp`, `PLATOS` y `plato()` en `src/platos.ts`): icono de juego al estilo de `docs/refs/iconos-tarjetas1-4`: contorno negro grueso cerrado, sombra dura desplazada dentro del contorno, colores planos con un tono oscuro por color, un brillo grande, sin degradados, sin texto. Se generan con `docs/platos-prompt.md` (fondo gris `#E6E6E6`, 1:1, PNG) y `python3 scripts/retrato.py <id> --plato` (perfil de plato: 256×256, margen 2 %, ≤ 30 KB; `platos.test.ts` lo comprueba). Son el botón de vender entero (`.sell`, lado `--icono`), sin `.sticker`: traen contorno y sombra propios. Mientras falte alguno, `plato()` devuelve el símbolo del sprite con `.sticker`. La regla "el icono nunca sobre su propio matiz" (`papel.test.ts`) se revisa a ojo en la hoja de contacto y se corrige `PROHIBIDOS` si el raster cambió el color dominante.
-- **Sello** (`sello`): círculo de borde ondulado generado por fórmula (radio 21.6 ± 1.9, 14 ondas, 140 puntos), un solo `<path fill="currentColor">`. Marco del plato; si se reutiliza para otro marco, mantener el mismo número de ondas.
+- **Platos raster** (`src/assets/platos/<id>.webp`, `PLATOS` y `plato()` en `src/platos.ts`): icono de juego al estilo de `docs/refs/iconos-tarjetas1-4`: contorno negro grueso cerrado, sombra dura desplazada dentro del contorno, colores planos con un tono oscuro por color, un brillo grande, sin degradados, sin texto. Se generan con `docs/platos-prompt.md` (fondo gris `#E6E6E6`, 1:1, PNG) y `python3 scripts/retrato.py <id> --plato` (perfil de plato: 256×256, margen 2 %, ≤ 30 KB; `platos.test.ts` lo comprueba). Son el botón de vender entero (`.sell`, lado `--icono`) y el arte de los cupones de mejora de un negocio, sin `.sticker`: traen contorno y sombra propios. Son los únicos platos: el sprite ya no trae símbolos de plato (`icons.test.ts` lo comprueba) y `BusinessDef.icon` es un `PlatoId` (`PLATOS` es un `Record` completo), así que un negocio sin raster no compila. La regla "el icono nunca sobre su propio matiz" (`papel.test.ts`) se revisa a ojo en la hoja de contacto y se corrige `PROHIBIDOS` si el raster cambió el color dominante.
 - **Banderín** (`banderin`, viewBox `0 0 24 28`): un solo `<path fill="currentColor" fill-rule="evenodd">` con borde inferior festoneado y calados. El color lo pone CSS (`.picado .f1…f4`).
 - **CSP:** prohibido `style`, `<style>`, `<script>`, handlers `on*` y recursos externos dentro del SVG.
 
 ## Personajes
 
-En pantalla el gerente se llama *empleado* y el menú *Empleados*; en código siguen `manager`, `personajes`, `chars` (ids, clases e iconos).
+En pantalla el gerente se llama _empleado_ y el menú _Empleados_; en código siguen `manager`, `personajes`, `chars` (ids, clases e iconos).
 
 Cada negocio tiene un gerente con nombre, retrato y cuatro frases (`manager.says` en `src/data.ts`: `hire`, `milestone`, `upgrade` y `estrella`, al ganar una estrella de antigüedad). Doña Chelo (`CHELO`) es la guía: tiene panel propio (ver **Panel de Chelo**) donde da el consejo según la partida (`tipFor`, o `idle` si no hay), habla cuando no hay gerente (`milestone`, `upgrade` global, `upgradeOne` de un negocio sin gerente, `prestige`), da la lección `empleado` la primera vez que alcanza para uno (`firstHireReady`, ver **Panel de Chelo**) y responde preguntas fijas (`faq`).
 
-| Personaje        | Negocio    | Look                                                                   | Voz                        |
-| ---------------- | ---------- | ---------------------------------------------------------------------- | -------------------------- |
-| Doña Chelo       | guía       | abuela, chongo con canas, lentes redondos, rebozo rosa | cariñosa, manda con "mijo" |
-| Don Beto         | elotes     | 70 años, sombrero de palma, bigote blanco, camisa a cuadros            | calmado, de refranes       |
-| Lupita           | aguas      | trenza con listón rosa, delantal de flores, sonrisa grande             | pregonera, entusiasta      |
-| El Güero         | tacos      | cachucha al revés, playera, cucharón al hombro                         | bromista                   |
-| Doña Tere        | tortas     | lentes de media luna, chongo, aretes                                   | seria, exigente            |
-| Chuy             | fonda      | gorro de cocinero, bigote, cachetes rojos                              | cálido, consentidor        |
-| Rosita           | panadería  | pañoleta, harina en la mejilla, charola                                | soñadora, dulce            |
-| Licenciado Pérez | franquicia | traje gris, corbata rosa, lentes, gafete                               | corporativo, con cifras    |
-| La Jefa          | cadena     | lentes oscuros, aretes grandes, saco rojo                              | pocas palabras, manda      |
+| Personaje        | Negocio    | Look                                                        | Voz                        |
+| ---------------- | ---------- | ----------------------------------------------------------- | -------------------------- |
+| Doña Chelo       | guía       | abuela, chongo con canas, lentes redondos, rebozo rosa      | cariñosa, manda con "mijo" |
+| Don Beto         | elotes     | 70 años, sombrero de palma, bigote blanco, camisa a cuadros | calmado, de refranes       |
+| Lupita           | aguas      | trenza con listón rosa, delantal de flores, sonrisa grande  | pregonera, entusiasta      |
+| El Güero         | tacos      | cachucha al revés, playera, cucharón al hombro              | bromista                   |
+| Doña Tere        | tortas     | lentes de media luna, chongo, aretes                        | seria, exigente            |
+| Chuy             | fonda      | gorro de cocinero, bigote, cachetes rojos                   | cálido, consentidor        |
+| Rosita           | panadería  | pañoleta, harina en la mejilla, charola                     | soñadora, dulce            |
+| Licenciado Pérez | franquicia | traje gris, corbata rosa, lentes, gafete                    | corporativo, con cifras    |
+| La Jefa          | cadena     | lentes oscuros, aretes grandes, saco rojo                   | pocas palabras, manda      |
 
 Reglas de voz:
 
@@ -174,7 +171,7 @@ Reglas de voz:
 - Estado deshabilitado: borde punteado además del color (nunca solo color).
 - Foco visible con `--focus`.
 - Animaciones cortas de feedback en `src/fx.ts` (`pop`, `pulse`, `coin`, `confetti`, `flip`, `stamp`, `tilt`: 200–320 ms, solo `transform` y opacidad); todo se desactiva con `prefers-reduced-motion: reduce`.
-- **Rendimiento:** nunca `filter` en un ancestro de contenido que anima por frame (las barras de progreso). Nunca `outline` con `outline-offset` negativo sobre un elemento enmascarado (`.paper`, `.modal-paper`): obliga a repintar toda la estampilla en cada frame de las barras; medido en Chromium headless con la misma partida, el proceso GPU pasó de 10 % (antes del rediseño) a 26 % y volvió a 10 % con la línea en `::after`. Medir con `top` sobre los procesos de Chromium headless (`--type=gpu-process` y `renderer`) comparando contra `git worktree` del commit anterior. Las sombras de estampilla van en un pseudo-elemento enmascarado, no en `drop-shadow`; `.sticker` solo en iconos estáticos. `.fill` lleva `will-change: transform` para animar en su propia capa. Con filtros en `.card` el frame subía a 32 ms (31 fps) y la GPU al 99 %.
+- **Rendimiento:** nunca `filter` en un ancestro de contenido que anima por frame (las barras de progreso). Nunca `outline` con `outline-offset` negativo sobre un elemento enmascarado (`.paper`, `.modal-paper`): obliga a repintar toda la estampilla en cada frame de las barras; medido en Chromium headless con la misma partida, el proceso GPU pasó de 10 % (antes del rediseño) a 26 % y volvió a 10 % con la línea en `::after`. Medir con `top` sobre los procesos de Chromium headless (`--type=gpu-process` y `renderer`) comparando contra `git worktree` del commit anterior. Las sombras de estampilla van en un pseudo-elemento enmascarado, no en `drop-shadow`; `.sticker` solo en iconos estáticos. `.fill` lleva `will-change: transform` para animar en su propia capa. Con filtros en `.card` el frame subía a 32 ms (31 fps) y la GPU al 99 %. Medición del 2026-11-05 con 8 negocios con empleado (1280×800, `ps` sobre los procesos de Chromium headless, comparado contra un `git worktree` de `c621b90`): GPU ~27 % → 27–31 % (dentro del ruido) y renderer ~15 % → ~19 % (trabajo por frame de empleados, estrellas, propina y `tilt`).
 
 ## Verificación visual (obligatoria para cambios de UI)
 
@@ -184,11 +181,12 @@ Con el script `scripts/capturas.mjs` (`npm run capturas`). Arranca Vite en `http
 2. Leer `capturas/juego-movil-claro.png` y `capturas/juego-web-claro.png`. Si el cambio toca color, leer también las `-oscuro` y comprobar que solo usa tokens con par oscuro. Leer solo las capturas necesarias: capturar es gratis, leer imágenes cuesta tokens.
 3. Partida de prueba sin tocar la real: `npm run capturas -- --semilla ruta.json`. Cada captura abre un contexto nuevo con `localStorage` vacío y siembra `antojitos.save` antes de que corra el juego. El JSON sigue el esquema `{ version: 3, money, runEarned, lifetimeEarned, recipes, businesses: { id: { count, running, progressMs, manager, propinaMs, trabajadoMs } }, upgrades: [] }` (las semillas v2 siguen sirviendo: migran con propina y antigüedad en 0); `lastSeen` es opcional (el script pone la hora actual para no disparar el aviso de ausencia). Semillas útiles: sin semilla para la bienvenida; elotes a 20 sin gerente y `money: 1e6` para disparar hitos de Chelo. Guardar las semillas fuera del repo.
 4. Criticar (jerarquía, contraste, alineación, consistencia con este archivo), corregir, repetir capturas.
-5. El MCP `playwright` de `.mcp.json` queda solo para depuración interactiva (clics, consola, estados que exigen varias acciones). No usarlo para capturas rutinarias: cada `browser_navigate`, `browser_click` o `browser_resize` devuelve el árbol de accesibilidad entero y cuesta miles de tokens. Si se usa, `browser_close` al terminar: el Chrome headless no hace throttling y deja el juego a 60 fps con la GPU ocupada.
+5. **Pruebas de punta a punta** (`e2e/juego.mjs`, `npm run e2e`): construye y sirve `dist/` con los headers de `vercel.json` (CSP incluida) en un servidor estático mínimo, y con `node:test` + `playwright-core` (Chrome del sistema) comprueba: partida nueva sin errores ni violaciones de CSP, venta manual, recarga conserva el progreso, contratar + propina con precio y `/s` que sube, diálogo de Empleados en móvil, aviso de ausencia, carga de un código de respaldo, guardado corrupto con copia en `antojitos.unreadable`, segunda pestaña bloqueada y service worker activo. Correr antes de mergear o desplegar.
+6. El MCP `playwright` de `.mcp.json` queda solo para depuración interactiva (clics, consola, estados que exigen varias acciones). No usarlo para capturas rutinarias: cada `browser_navigate`, `browser_click` o `browser_resize` devuelve el árbol de accesibilidad entero y cuesta miles de tokens. Si se usa, `browser_close` al terminar: el Chrome headless no hace throttling y deja el juego a 60 fps con la GPU ocupada.
 
 ## Hoja de contacto del sprite (obligatoria al ilustrar)
 
-`docs/sprite.html`, servida solo por `vite` en `http://localhost:5173/docs/sprite.html` (no entra en el build). Lee el sprite y pinta cada símbolo a 160 px, como botón de vender (muestra fija de 56 en la hoja), a 30 px y a 20 px; debajo, cada retrato raster a 160, 120 (cupón) y 42 (disco del lateral) sobre el papel de su negocio; y las referencias de `docs/refs/` al pie. Al dibujar o retocar un icono: `npm run capturas -- --sprite` deja `capturas/sprite-claro.png` y `capturas/sprite-oscuro.png` (1280 de ancho, página completa, `prefers-color-scheme` claro y oscuro); leerlas, criticar contra las referencias y contra las reglas de arriba, corregir, repetir. Un icono se da por bueno cuando se lee a 20 px y no se ensucia a 160 px.
+`docs/sprite.html`, servida solo por `vite` en `http://localhost:5173/docs/sprite.html` (no entra en el build). Lee el sprite y pinta cada símbolo a 160 px, a 56 con `.sticker`, a 30 px y a 20 px; debajo, cada retrato raster a 160, 120 (cupón) y 42 (disco del lateral) sobre el papel de su negocio; y las referencias de `docs/refs/` al pie. Al dibujar o retocar un icono: `npm run capturas -- --sprite` deja `capturas/sprite-claro.png` y `capturas/sprite-oscuro.png` (1280 de ancho, página completa, `prefers-color-scheme` claro y oscuro); leerlas, criticar contra las referencias y contra las reglas de arriba, corregir, repetir. Un icono se da por bueno cuando se lee a 20 px y no se ensucia a 160 px.
 
 ## Referencias
 

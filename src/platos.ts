@@ -6,23 +6,22 @@ import olla from './assets/platos/olla.webp?url';
 import taco from './assets/platos/taco.webp?url';
 import tienda from './assets/platos/tienda.webp?url';
 import torta from './assets/platos/torta.webp?url';
-import { icon, type IconName } from './icons';
+
+/** Id del plato raster de cada negocio (`BusinessDef.icon`). */
+export type PlatoId = 'elote' | 'agua' | 'taco' | 'torta' | 'olla' | 'concha' | 'tienda' | 'camion';
 
 /**
  * Iconos raster de los platos (estilo de icono de juego: contorno grueso, sombra desplazada y
  * brillo; ver DESIGN.md "Platos raster"). 256×256 WebP con alfa, generados con
- * docs/platos-prompt.md y scripts/retrato.py --plato. Los negocios sin raster siguen usando su
- * símbolo del sprite hasta que estén los ocho. platos.test.ts comprueba cada archivo.
+ * docs/platos-prompt.md y scripts/retrato.py --plato. platos.test.ts comprueba cada archivo.
  */
-export const PLATOS: Partial<Record<IconName, string>> = { elote, agua, taco, torta, olla, concha, tienda, camion };
+export const PLATOS: Readonly<Record<PlatoId, string>> = { elote, agua, taco, torta, olla, concha, tienda, camion };
 
-/** Imagen del plato: <img> si hay raster, si no el icono SVG (con su halo .sticker). Decorativa. */
-export function plato(name: IconName, className: string): HTMLImageElement | SVGSVGElement {
-  const src = PLATOS[name];
-  if (!src) return icon(name, `${className} sticker`);
+/** Imagen del plato. Decorativa: el nombre lo pone el control que la contiene. */
+export function plato(name: PlatoId, className: string): HTMLImageElement {
   const img = document.createElement('img');
   img.className = className;
-  img.src = src;
+  img.src = PLATOS[name];
   img.alt = '';
   img.decoding = 'async';
   img.width = 256;

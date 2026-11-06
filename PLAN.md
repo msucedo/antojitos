@@ -54,6 +54,7 @@ Fórmulas estándar del género (Kongregate, "The Math of Idle Games"); constant
 - Exportar/importar (base64, tope 10 KB, misma validación).
 - `navigator.storage.persist()`: Safari borra los datos tras 7 días sin uso si no está instalada.
 - Una sola pestaña: `navigator.locks.request('antojitos', { ifAvailable: true })`. Sin candado → pantalla "Ya está abierto en otra pestaña", sin guardar.
+- **Regla de deploy: nunca hacer rollback a un build con `SAVE_VERSION` menor que el publicado.** Un cliente viejo ve el guardado nuevo como ilegible, lo copia a `antojitos.unreadable` (solo recuperable a mano) y empieza partida nueva; el autosave pisa los dos guardados. Si hay que revertir, revertir el código pero conservar la versión de guardado y su migración. Para una v4: considerar no autoguardar encima de un guardado de versión más nueva.
 
 ## Seguridad
 
@@ -88,7 +89,7 @@ Fórmulas estándar del género (Kongregate, "The Math of Idle Games"); constant
 
 ## Verificación
 
-1. `npm run check` en verde.
+1. `npm run check` en verde y `npm run e2e` (build + 10 escenarios en Chrome headless con la CSP de `vercel.json`).
 2. `npm run dev` en vista móvil:
    - comprar, gerente, hito, prestigio;
    - recargar → progreso intacto;
@@ -234,15 +235,14 @@ Fórmulas estándar del género (Kongregate, "The Math of Idle Games"); constant
 
 Rediseño de lo de dentro de las tarjetas de negocio (`li.card`) a partir de las referencias `docs/refs/iconos-tarjetas1-4` (iconos de juego: contorno grueso, sombra desplazada, brillo). Decisiones del user: los iconos los genera él con su modelo (como los retratos) y el pipeline los convierte; "menos números, más claro"; barra "más ancha y con más estilo". Plan validado por revisión independiente antes de ejecutar.
 
-- Iconos raster de plato: `docs/platos-prompt.md` (bloque base + 8 párrafos con el color a evitar según el papel), `scripts/retrato.py --plato` (perfiles `personaje`/`plato`: 480/256 px, 80/30 KB, carpeta y prefijo `plato-`), `src/platos.ts` (`PLATOS`, `plato()` con respaldo al símbolo SVG hasta tener los 8), `src/platos.test.ts`, sección Platos en `docs/sprite.html`.
+- Iconos raster de plato: `docs/platos-prompt.md` (bloque base + 8 párrafos con el color a evitar según el papel), `scripts/retrato.py --plato` (perfiles `personaje`/`plato`: 480/256 px, 80/30 KB, carpeta y prefijo `plato-`), `src/platos.ts` (`PLATOS`, `plato()`), `src/platos.test.ts`, sección Platos en `docs/sprite.html`.
 - Texto: título 1.1 rem/800 en una línea, cantidad como ficha "×10", línea "$10 por vuelta · ×2 a las 25" (sin "cada 1 s"), "Sin abrir" en vez de "Bloqueado". Barra 20/16 px con pista hundida, brillo `--brillo` y línea de sombra en el relleno (solo `transform`). Las 8 tarjetas siguen cabiendo en 1280×800 (133 px cada una, `scrollHeight` 800).
-- Pendiente: retirar los 8 símbolos de plato del sprite (`PLATOS` a `Record`, `BusinessDef.icon` tipado con sus claves, `icons.test.ts` y `papel.test.ts` retipados, mapa de papel de `sprite.html`).
+- Hecho (2026-11-05): los 8 símbolos de plato salieron del sprite; `plato()` ya no tiene respaldo SVG.
 
 **Estado MVP2.7**
 
 - [x] Prompt, pipeline, `platos.ts`, test, hoja de contacto, texto y barra. `npm test` 148. Capturas `.playwright-mcp/tarjetas-web-claro.png`, `-oscuro.png`, `tarjetas-movil-claro.png`.
 - [x] Sin plato (2026-11-04, pedido del user): fuera el sello ondulado y el disco de papel; el botón de vender es solo el raster, con lado `--icono` (`clamp(6.5rem, 30vw, 8rem)` móvil, `6.75rem` web) y el cuerpo reparte sus filas en ese alto. Un primer intento con `--plato` 120/107 fijos se revirtió (el user: "por qué hardcodeas tamaños"); `align-self: stretch` + `aspect-ratio` no sirve en flex con alto automático. Web vuelve al mismo flex que móvil (sin grid de cuatro filas ni `display: contents`); el bocadillo se ancla a `.body` y desaparece `--bubble-x`. Las 8 tarjetas siguen en 1280×800 (134 px). Capturas `.playwright-mcp/icono-movil.png`, `icono-web.png`.
 - [x] Iconos raster (8): el user entregó una sola lámina `docs/refs/platos-todos.jpeg` con los 8 sobre losetas del color de su papel; `retrato.py` ganó `--fuente` (origen explícito) y `--motas` (borra islas < 1 % de la pieza mayor: confeti y motas del papel) y se extrajeron por `--recorte` (comandos en `docs/platos-prompt.md`). 12-17 KB cada uno; hoja de contacto `.playwright-mcp/sprite-platos.png`; en el juego `platos-web-claro.png`, `-oscuro.png`, `platos-movil-claro.png`. Raster a 56 px móvil y 50 web.
-- [ ] Medición de rendimiento con 8 barras (método de `DESIGN.md`, Rendimiento) y revisión independiente.
-- [ ] Retirar los símbolos de plato del sprite.
-
+- [x] Medición de rendimiento con 8 barras (2026-11-05, ver `DESIGN.md` Rendimiento) y revisión independiente de la rama.
+- [x] Retirar los símbolos de plato del sprite (2026-11-05): `PlatoId` en `platos.ts`, `PLATOS` como `Record` completo, `BusinessDef.icon: PlatoId`; también fuera `sello`, `check`, `.estampa` y `--shadow`, que nadie usaba.

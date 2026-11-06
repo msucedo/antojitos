@@ -1,5 +1,5 @@
 import type { Sound } from './audio';
-import { plato } from './platos';
+import { plato, type PlatoId } from './platos';
 import {
   ANTIGUEDAD_MS,
   BUSINESSES,
@@ -23,6 +23,7 @@ import {
   hireableIds,
   incomePerSecond,
   MODES,
+  nextMilestone,
   nextMode,
   nextUpgrades,
   pendingRecipes,
@@ -142,7 +143,7 @@ interface UpgradeSlot {
   root: HTMLElement;
   /** Plato raster del negocio (o el sprite `upgrade` para "todos"); se reemplaza al cambiar. */
   art: Element;
-  artName: IconName;
+  artName: UpgradeArt;
   name: HTMLElement;
   effect: HTMLElement;
   buy: HTMLButtonElement;
@@ -191,6 +192,8 @@ const modeLabel = (m: BuyMode) => (m === 'max' ? 'Máx' : `×${m}`);
 const modeIcon = (m: BuyMode): IconName => (m === 'max' ? 'costal' : m === 10 ? 'monedas' : 'moneda');
 const UPGRADE_SLOTS = 4;
 const UPGRADE_LOCK_MS = 500;
+/** Chelo avisa del siguiente hito ×2 cuando faltan esto o menos unidades. */
+const MILESTONE_TIP_FALTAN = 5;
 
 function tipFor(s: State): string | null {
   const elotes = s.businesses.elotes;
@@ -205,12 +208,26 @@ function tipFor(s: State): string | null {
       return 'Junta para un puesto de aguas frescas; deja más por vuelta.';
     if (s.upgrades.length === 0 && nextUpgrades(s, 1).some((u) => canBuyUpgrade(s, u.id)))
       return 'Ya te alcanza para una mejora: multiplica lo que vende un negocio.';
+    // Siguiente hito (×2) cercano: la tarjeta ya no lo escribe, lo cuenta Chelo.
+    for (const d of BUSINESSES) {
+      const count = s.businesses[d.id]?.count ?? 0;
+      const m = count > 0 ? nextMilestone(count) : null;
+      if (m !== null && m - count <= MILESTONE_TIP_FALTAN)
+        return `Con ${m} de ${d.name} vende el doble: te faltan ${m - count}.`;
+    }
     return null;
   }
   return '¡Ándale, mijo! Toca el elote para hacer tu primera venta.';
 }
 
-function upgradeTarget(target: string): { art: IconName; label: string } {
+/** Arte de un cupón de mejora: el plato del negocio, o el sprite `upgrade` para "Todos los negocios". */
+type UpgradeArt = PlatoId | 'upgrade';
+
+function upgradeArt(art: UpgradeArt): Element {
+  return art === 'upgrade' ? icon('upgrade', 'icon up-icon sticker') : plato(art, 'icon up-icon');
+}
+
+function upgradeTarget(target: string): { art: UpgradeArt; label: string } {
   if (target === 'all') return { art: 'upgrade', label: 'Todos los negocios' };
   const def = getDef(target);
   return { art: def.icon, label: def.name };
@@ -520,7 +537,7 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
   let refocusAfterUpgrade = false;
 
   const slots: UpgradeSlot[] = Array.from({ length: UPGRADE_SLOTS }, () => {
-    const art = plato('upgrade', 'icon up-icon');
+    const art = upgradeArt('upgrade');
     const name = h('h3', { class: 'up-name' });
     const effect = h('p', { class: 'up-effect' });
     const slot: UpgradeSlot = { root: h('li'), art, artName: 'upgrade', name, effect, buy: h('button'), id: null };
@@ -559,10 +576,18 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
     const buy = h('button', { class: 'btn primary', type: 'button' });
     // Un solo botón: contrata y, ya contratado, da propina. En curso o en espera va con
     // aria-disabled (no disabled) para que el foco no caiga a body; el clic se ignora.
+    // Tras contratar, el mismo botón pasa a "Dar propina" en el siguiente frame: un doble toque
+    // pagaría una propina sin querer. Bloqueo corto, como en Mejoras.
+    let bloqueoHasta = 0;
     buy.addEventListener('click', () => {
       if (buy.getAttribute('aria-disabled') === 'true') return;
-      if (buy.dataset.accion === 'propina') handlers.onPropina(def.id);
-      else handlers.onHire(def.id);
+      const now = performance.now();
+      if (buy.dataset.accion === 'propina') {
+        if (now >= bloqueoHasta) handlers.onPropina(def.id);
+        return;
+      }
+      bloqueoHasta = now + UPGRADE_LOCK_MS;
+      handlers.onHire(def.id);
     });
     const price = h('p', { class: 'char-price', text: formatMoney(def.manager.cost) });
     price.setAttribute('aria-hidden', 'true'); // el precio ya va en el aria-label del botón
@@ -828,7 +853,7 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
       slot.id = u.id;
       const t = upgradeTarget(u.target);
       if (t.art !== slot.artName) {
-        const next = plato(t.art, 'icon up-icon');
+        const next = upgradeArt(t.art);
         slot.art.replaceWith(next);
         slot.art = next;
         slot.artName = t.art;

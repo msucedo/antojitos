@@ -3,12 +3,14 @@ import { BUSINESSES } from './data';
 import { PLATOS } from './platos';
 
 describe('platos raster', () => {
-  it('cada plato es de un negocio, apunta a su archivo y es WebP 256×256 con alfa de máximo 30 KB', async () => {
+  it('cada negocio tiene plato y cada plato es de un negocio', () => {
+    expect(Object.keys(PLATOS).sort()).toEqual(BUSINESSES.map((b) => b.icon).sort());
+  });
+
+  it('cada plato apunta a su archivo y es WebP 256×256 con alfa de máximo 30 KB', async () => {
     const fs = await import('node:fs/promises');
     const ascii = (b: Uint8Array, from: number) => String.fromCharCode(...b.subarray(from, from + 4));
-    const iconos = new Set(BUSINESSES.map((b) => b.icon));
     for (const [id, url] of Object.entries(PLATOS)) {
-      expect(iconos.has(id as (typeof BUSINESSES)[number]['icon']), id).toBe(true);
       expect(url).toMatch(new RegExp(`/${id}\\.webp$`));
       const bytes = await fs.readFile(new URL(`./assets/platos/${id}.webp`, import.meta.url));
       expect(bytes.length, id).toBeLessThanOrEqual(30 * 1024);

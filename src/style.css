@@ -34,7 +34,6 @@
   --cielo: #1f7fc2; /* banderines */
   --border: #1b2a3a; /* bordes negros de 2 px, estilo pegatina */
   --track: #e6d9c0;
-  --shadow: 0 3px 0 var(--ink); /* estampa sobre papel: dura, sin desenfoque */
   --sombra-btn: 0 2px 0 var(--ink); /* matasellos: botones y pastillas */
   --halo: #ffffff; /* halo troquelado de .sticker; dentro de una estampilla es el papel */
   /*
@@ -96,7 +95,6 @@
     --cielo: #6cc1f0;
     --border: #8fb3d1; /* en oscuro el borde es claro: la tinta no se vería sobre azul noche */
     --track: #2f4b68;
-    --shadow: none;
     --sombra-btn: none;
     --marco: rgb(234 243 251 / 0.35);
     --grano: none; /* tinta sobre azul noche no se ve: no vale el repintado */
@@ -107,7 +105,7 @@
 
 /*
  * Isla de papel: dentro de una estampilla los tokens semánticos se re-declaran con la tinta
- * y el papel de la estampa, y no cambian con el tema. Las reglas hijas (.sell, .estampa,
+ * y el papel de la estampa, y no cambian con el tema. Las reglas hijas (.sell,
  * .bar, .btn...) siguen leyendo var(--token) y resuelven al papel aquí y al tema fuera.
  */
 .paper,
@@ -565,22 +563,6 @@ p {
 }
 
 /* ---------- Bocadillos de gerentes ---------- */
-/* Marco de estampa para personajes: sello ondulado detrás, papel liso (--papel), avatar encima. */
-.estampa {
-  position: relative;
-  flex: none;
-  display: inline-grid;
-  place-items: center;
-  border-radius: 50%;
-  --aro: var(--ink);
-  background: radial-gradient(circle, var(--papel) 0 var(--papel-r), transparent calc(var(--papel-r) + 0.5px));
-}
-
-.estampa > .icon:not(.sello) {
-  position: relative;
-  z-index: 1;
-}
-
 /* Retrato de gerente (menú Personajes): el personaje es el motivo de la estampilla, con su propio disco de fondo. */
 .char-portrait {
   width: 120px;
@@ -1511,7 +1493,7 @@ p {
 
 /* ---------- Web: puntero fino y pantallas anchas ---------- */
 @media (hover: hover) and (pointer: fine) {
-  .btn:not(:disabled):hover {
+  .btn:not(:disabled):not([aria-disabled='true']):hover {
     filter: brightness(1.08);
   }
 

@@ -1,5 +1,5 @@
 import type { CharacterId } from './characters';
-import type { IconName } from './icons';
+import type { PlatoId } from './platos';
 
 export type ManagerEvent = 'hire' | 'milestone' | 'upgrade' | 'estrella';
 export type CheloEvent = 'milestone' | 'upgrade' | 'upgradeOne' | 'prestige' | 'empleado';
@@ -25,7 +25,7 @@ export type Papel = (typeof PAPELES)[number];
 export interface BusinessDef {
   readonly id: string;
   readonly name: string;
-  readonly icon: IconName;
+  readonly icon: PlatoId;
   /** Nunca del mismo matiz que el icono; cada papel dos veces, vecinos distintos (papel.test.ts). */
   readonly papel: Papel;
   readonly baseCost: number;

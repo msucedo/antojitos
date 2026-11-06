@@ -2,16 +2,7 @@ import spriteUrl from './assets/icons.svg?url';
 
 /** Debe coincidir con los <symbol id> de assets/icons.svg (lo comprueba icons.test.ts). */
 export const ICON_NAMES = [
-  'elote',
-  'agua',
-  'taco',
-  'torta',
-  'olla',
-  'concha',
-  'tienda',
-  'camion',
   'banderin',
-  'sello',
   'upgrade',
   'recipe',
   'moneda',
@@ -30,7 +21,6 @@ export const ICON_NAMES = [
   'music-off',
   'menu',
   'lock',
-  'check',
   'clavo',
   'estrella',
   'estrella-off',
