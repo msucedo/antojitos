@@ -16,8 +16,9 @@ import {
   type BusinessDef,
   type UpgradeDef,
 } from './data';
+import { claveDia } from './fecha';
 
-export const SAVE_VERSION = 4;
+export const SAVE_VERSION = 5;
 
 export interface BizState {
   count: number;
@@ -60,6 +61,8 @@ export interface Stats {
   mejoras: number;
   /** Mejor ingreso por segundo visto (incluye propina, como el /s del header). */
   maxPorSegundo: number;
+  /** Regalos de la racha diaria cobrados. */
+  regalos: number;
 }
 
 export function emptyStats(): Stats {
@@ -72,6 +75,7 @@ export function emptyStats(): Stats {
     contratados: 0,
     mejoras: 0,
     maxPorSegundo: 0,
+    regalos: 0,
   };
 }
 
@@ -93,6 +97,16 @@ export interface State {
   logros: string[];
   /** Cuántos logros ya vio el jugador en el Álbum. */
   logrosVistos: number;
+  /** Racha diaria: días seguidos cobrados y el último día ("YYYY-MM-DD" local) en que se cobró o se vio. */
+  racha: Racha;
+  /** Recetas regaladas por la racha (ya sumadas en `recipes`); no cuentan como herencia ni como pendientes. */
+  recetasRegalo: number;
+}
+
+export interface Racha {
+  dias: number;
+  /** Nunca null en un estado cargado (`load`/`importSave` lo inician hoy); null solo en un guardado sin el campo. */
+  ultimoDia: string | null;
 }
 
 export type BuyMode = 1 | 10 | 'max';
@@ -125,6 +139,9 @@ export function newState(now: number): State {
     stats: emptyStats(),
     logros: [],
     logrosVistos: 0,
+    // Sin regalo el primer día: la racha arranca al volver mañana.
+    racha: { dias: 0, ultimoDia: claveDia(now) },
+    recetasRegalo: 0,
   };
 }
 
@@ -255,7 +272,7 @@ function revenueWithStars(state: State, id: string, stars: number): number {
 }
 
 /** Suma con tope: Infinity no sobrevive a JSON y destruiría el guardado. */
-function capAdd(a: number, b: number): number {
+export function capAdd(a: number, b: number): number {
   return Math.min(a + b, Number.MAX_VALUE);
 }
 
@@ -325,7 +342,7 @@ export function hireableIds(state: State): string[] {
  * (quien tiene recetas ya contrató antes) ni con alguno contratado.
  */
 export function firstHireReady(state: State): boolean {
-  if (state.recipes > 0) return false;
+  if (heredadas(state) > 0) return false;
   if (BUSINESSES.some((d) => biz(state, d.id).manager)) return false;
   return hireableIds(state).length > 0;
 }
@@ -506,8 +523,14 @@ export function recipesFor(lifetimeEarned: number): number {
   return Math.floor(Math.sqrt(Math.max(lifetimeEarned, 0) / RECIPE_DIVISOR));
 }
 
+/** Recetas pendientes de cobrar al heredar. Las regaladas por la racha no gastan las ganadas. */
 export function pendingRecipes(state: State): number {
-  return Math.max(recipesFor(state.lifetimeEarned) - state.recipes, 0);
+  return Math.max(recipesFor(state.lifetimeEarned) + state.recetasRegalo - state.recipes, 0);
+}
+
+/** Recetas ganadas heredando (las de regalo no cuentan como "ya heredó"). */
+export function heredadas(state: State): number {
+  return Math.max(state.recipes - state.recetasRegalo, 0);
 }
 
 export function getUpgrade(id: string): UpgradeDef {
@@ -558,5 +581,7 @@ export function prestige(state: State, now: number): State {
     stats: { ...state.stats, herencias: state.stats.herencias + 1 },
     logros: state.logros,
     logrosVistos: state.logrosVistos,
+    racha: state.racha,
+    recetasRegalo: state.recetasRegalo,
   };
 }

@@ -87,6 +87,13 @@ async function abrir({ semilla, crudo, movil = false, sw = false } = {}) {
       ([clave, valor, texto]) => {
         if (sessionStorage.getItem('sembrado')) return; // solo la primera carga: las recargas leen lo guardado
         sessionStorage.setItem('sembrado', '1');
+        // "AYER" en racha.ultimoDia se resuelve aquí, en la zona local del navegador.
+        if (valor?.racha?.ultimoDia === 'AYER') {
+          const d = new Date();
+          d.setDate(d.getDate() - 1);
+          const dos = (n) => String(n).padStart(2, '0');
+          valor.racha.ultimoDia = `${d.getFullYear()}-${dos(d.getMonth() + 1)}-${dos(d.getDate())}`;
+        }
         localStorage.setItem(clave, texto ?? JSON.stringify({ lastSeen: Date.now(), ...valor }));
       },
       [SAVE_KEY, semilla ?? null, crudo ?? null],
@@ -232,9 +239,9 @@ test('logro: la primera venta a mano lo desbloquea y el badge del Álbum se apag
   await albumBtn.click();
   await page.waitForTimeout(400);
   assert.equal(await page.locator('#album .estampilla:not(.bloqueada)').count(), 1);
-  assert.equal(await page.locator('#album .estampilla').count(), 24);
+  assert.equal(await page.locator('#album .estampilla').count(), 25);
   assert.equal(await albumBtn.getAttribute('aria-label'), 'Álbum');
-  assert.match(await page.locator('#album .libreta').textContent(), /Logros1 de 24/);
+  assert.match(await page.locator('#album .libreta').textContent(), /Logros1 de 25/);
   assert.deepEqual(errores, []);
   await context.close();
 });
@@ -263,11 +270,11 @@ test('móvil: el Álbum abre en diálogo desde la barra inferior y el cuerpo vue
   await page.locator('.album-btn').tap();
   const dlg = page.locator('dialog[open]');
   await dlg.waitFor();
-  assert.equal(await dlg.locator('.estampilla').count(), 24);
-  assert.equal(await dlg.locator('.libreta dt').count(), 13);
+  assert.equal(await dlg.locator('.estampilla').count(), 25);
+  assert.equal(await dlg.locator('.libreta dt').count(), 16);
   await page.keyboard.press('Escape');
   await page.waitForTimeout(300);
-  assert.equal(await page.locator('#album .estampilla').count(), 24);
+  assert.equal(await page.locator('#album .estampilla').count(), 25);
   assert.deepEqual(errores, []);
   await context.close();
 });
@@ -291,11 +298,134 @@ test('carga v3 avanzada: migra a v4 y apunta los logros de golpe con un solo anu
   assert.equal(await page.locator('dialog[open]').count(), 0);
   assert.doesNotMatch((await page.locator('.guia-texto').textContent()) ?? '', /logro/i);
   // El autoguardado corre cada 5 s: se espera a que escriba la v4 migrada.
-  await page.waitForFunction((k) => JSON.parse(localStorage.getItem(k) ?? '{}').version === 4, SAVE_KEY, {
+  await page.waitForFunction((k) => JSON.parse(localStorage.getItem(k) ?? '{}').version >= 4, SAVE_KEY, {
     timeout: 8000,
   });
   const guardado = await page.evaluate((k) => JSON.parse(localStorage.getItem(k) ?? '{}'), SAVE_KEY);
   assert.equal(guardado.logros.length, 8);
+  assert.deepEqual(errores, []);
+  await context.close();
+});
+
+test('racha: partida nueva no regala el primer día (ningún diálogo tras la bienvenida de Chelo)', async () => {
+  const { context, page, errores } = await abrir();
+  await sinPaneles(page);
+  await page.waitForTimeout(400);
+  assert.equal(await page.locator('dialog[open]').count(), 0);
+  assert.deepEqual(errores, []);
+  await context.close();
+});
+
+test('racha: al volver al día siguiente sale "Día 1", Recibir suma $120 y persiste al instante', async () => {
+  const semilla = partida({ racha: { dias: 0, ultimoDia: 'AYER' } }, { elotes: { count: 1 } });
+  const { context, page, errores } = await abrir({ semilla });
+  // La bienvenida de Chelo (web) es un panel, no un modal: la racha abre encima sin esperar.
+  const dlg = page.locator('dialog[open]');
+  await dlg.waitFor();
+  assert.match(await dlg.locator('h2').textContent(), /Día 1 de racha/);
+  assert.match(await dlg.locator('.big').textContent(), /^\$120/);
+  assert.equal(await dlg.locator('.racha-dia.hoy').count(), 1);
+  await dlg.getByRole('button', { name: 'Recibir' }).click();
+  await page.waitForFunction(() => document.querySelector('.money')?.textContent === '$120', null, { timeout: 2000 });
+  assert.equal(await page.locator('dialog[open]').count(), 0);
+  const guardado = await page.evaluate((k) => JSON.parse(localStorage.getItem(k) ?? '{}'), SAVE_KEY);
+  assert.equal(guardado.racha.dias, 1);
+  await page.reload();
+  await page.waitForSelector('#app .card');
+  await page.waitForTimeout(600);
+  assert.equal(await page.locator('dialog[open]').count(), 0); // ya cobrado hoy
+  assert.deepEqual(errores, []);
+  await context.close();
+});
+
+test('racha: el día 7 regala una receta sin heredar y no gasta las pendientes', async () => {
+  const semilla = partida(
+    { money: 10, lifetimeEarned: 10, runEarned: 10, racha: { dias: 6, ultimoDia: 'AYER' } },
+    { elotes: { count: 1 } },
+  );
+  const { context, page, errores } = await abrir({ semilla });
+  const dlg = page.locator('dialog[open]');
+  await dlg.waitFor();
+  assert.match(await dlg.locator('h2').textContent(), /Día 7 de racha/);
+  assert.match(await dlg.locator('.big').textContent(), /\+1 receta/);
+  await dlg.getByRole('button', { name: 'Recibir' }).click();
+  await page.waitForTimeout(300);
+  assert.match(await page.locator('.recipes').textContent(), /1 receta/);
+  const guardado = await page.evaluate((k) => JSON.parse(localStorage.getItem(k) ?? '{}'), SAVE_KEY);
+  assert.equal(guardado.recipes, 1);
+  assert.equal(guardado.recetasRegalo, 1);
+  assert.equal(guardado.racha.dias, 7);
+  assert.equal(await page.locator('.lateral button[aria-label^="Here"]:visible').count(), 0); // ni pendientes ni "ya heredó"
+  await page.waitForFunction(
+    () => /Siete seguidos/.test(document.querySelector('p[aria-live]')?.textContent ?? ''),
+    null,
+    {
+      timeout: 2000,
+    },
+  );
+  assert.deepEqual(errores, []);
+  await context.close();
+});
+
+test('racha: tras una ausencia primero "Bienvenido de vuelta" y luego el regalo', async () => {
+  const semilla = partida(
+    {
+      money: 0,
+      lifetimeEarned: 1,
+      runEarned: 1,
+      lastSeen: Date.now() - 3_600_000,
+      racha: { dias: 2, ultimoDia: 'AYER' },
+    },
+    { elotes: { count: 5, manager: true } },
+  );
+  const { context, page, errores } = await abrir({ semilla });
+  const dlg = page.locator('dialog[open]');
+  await dlg.waitFor();
+  assert.match(await dlg.locator('h2').textContent(), /Bienvenido de vuelta/);
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(400);
+  assert.match(await page.locator('dialog[open] h2').textContent(), /Día 3 de racha/);
+  assert.deepEqual(errores, []);
+  await context.close();
+});
+
+test('racha: cerrar sin recibir deja el botón y el tip en Chelo; al recargar vuelve a salir', async () => {
+  const semilla = partida(
+    { money: 10, lifetimeEarned: 10, runEarned: 10, racha: { dias: 0, ultimoDia: 'AYER' } },
+    { elotes: { count: 1 } },
+  );
+  const { context, page, errores } = await abrir({ semilla });
+  const dlg = page.locator('dialog[open]');
+  await dlg.waitFor();
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(400);
+  await page.locator('.lateral button[aria-label^="Doña Chelo"]').click();
+  await page.waitForTimeout(400);
+  assert.match(await page.locator('#chelo .guia-texto').textContent(), /regalo del día/);
+  const btn = page.locator('#chelo .guia-faq button', { hasText: 'Recibir regalo del día' });
+  assert.equal(await btn.isVisible(), true);
+  // pagehide persiste al recargar; la racha sigue sin cobrar.
+  await page.reload();
+  await page.waitForSelector('#app .card');
+  await page.locator('dialog[open]').waitFor();
+  assert.match(await page.locator('dialog[open] h2').textContent(), /Día 1 de racha/);
+  await page.locator('dialog[open]').getByRole('button', { name: 'Recibir' }).click();
+  await page.waitForTimeout(300);
+  assert.equal(await btn.isHidden(), true);
+  assert.deepEqual(errores, []);
+  await context.close();
+});
+
+test('guardado de una versión más nueva: aviso, se juega sin guardar y el guardado queda intacto', async () => {
+  const crudo = JSON.stringify({ ...partida({ money: 999 }), version: 99 });
+  const { context, page, errores } = await abrir({ crudo });
+  const dlg = page.locator('dialog[open]');
+  await dlg.waitFor();
+  assert.match(await dlg.locator('h2').textContent(), /versión más nueva/);
+  await page.keyboard.press('Escape');
+  // persist() directo (pagehide) y un intento de importar: nada escribe en solo lectura.
+  await page.evaluate(() => window.dispatchEvent(new Event('pagehide')));
+  assert.equal(await page.evaluate((k) => localStorage.getItem(k), SAVE_KEY), crudo);
   assert.deepEqual(errores, []);
   await context.close();
 });

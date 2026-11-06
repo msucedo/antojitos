@@ -1,6 +1,6 @@
 import type { CharacterId } from './characters';
 import { BUSINESSES, UPGRADES } from './data';
-import { estrellas, type State } from './game';
+import { estrellas, heredadas, type State } from './game';
 import type { IconName } from './icons';
 import type { PlatoId } from './platos';
 
@@ -133,7 +133,7 @@ export const LOGROS: readonly LogroDef[] = [
     nombre: 'Primera herencia',
     pista: 'Hereda una vez',
     icono: { sprite: 'recipe' },
-    cumple: (s) => s.stats.herencias >= 1 || s.recipes >= 1, // partidas de antes de los contadores
+    cumple: (s) => s.stats.herencias >= 1 || heredadas(s) >= 1, // partidas de antes de los contadores
   },
   {
     id: 'herencias-5',
@@ -190,6 +190,13 @@ export const LOGROS: readonly LogroDef[] = [
     pista: 'Juega diez horas',
     icono: { retrato: 'chelo' },
     cumple: (s) => s.stats.jugadoMs >= 36_000_000,
+  },
+  {
+    id: 'racha-7',
+    nombre: 'Siete seguidos',
+    pista: 'Vuelve 7 días seguidos',
+    icono: { sprite: 'recipe' },
+    cumple: (s) => s.racha.dias >= 7,
   },
 ];
 

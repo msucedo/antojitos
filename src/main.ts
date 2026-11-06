@@ -24,9 +24,11 @@ import {
 import { AUSENCIA_MS, BUSINESSES, CHELO, ESTRELLA_BONO, fraseDe, LOGRO_BONO, PROPINA_MS, PROPINA_MULT } from './data';
 import { createAudio, loadPrefs, savePrefs, type Sound } from './audio';
 import { desbloquear, nuevos, verLogros } from './logros';
+import { cobrar, diaSiguiente, estadoRacha, regalo } from './racha';
+import { claveDia } from './fecha';
 import { backup, exportSave, importSave, load, save, type KV } from './save';
 import { createUI, showLocked, type UI } from './ui';
-import { formatMoney } from './format';
+import { formatMoney, recetas } from './format';
 
 const AUTOSAVE_MS = 5_000;
 const BACKUP_MS = 60_000;
@@ -59,6 +61,10 @@ function start(root: HTMLElement): void {
   let warnedNoSave = false;
   // Tras cargar o importar, lo que ya se cumplía se apunta sin fiesta (una partida vieja trae varios).
   let logrosSilencio = true;
+  // Último día (local) en que se mostró el diálogo de la racha: sale una vez por día, no por sesión.
+  let diaVisto = '';
+  // Guardado de una versión más nueva (build viejo en caché): se juega, pero no se escribe nada.
+  const soloLectura = loaded.source === 'newer';
   const audio = createAudio(loadPrefs());
   // El audio solo arranca dentro de un gesto. Se escuchan varios porque cada navegador
   // cuenta como "activación" uno distinto (iOS: touchend/click; teclado: keydown).
@@ -74,7 +80,11 @@ function start(root: HTMLElement): void {
   };
   // Guarda el lastSeen en memoria: con la pestaña oculta el estado está congelado
   // en ese instante, así que el tiempo oculto se cobra como offline al volver.
+  const respaldar = () => {
+    if (!soloLectura) backup(kv, state);
+  };
   const persist = () => {
+    if (soloLectura) return;
     if (!save(kv, state) && !warnedNoSave) {
       warnedNoSave = true;
       ui.showNoSave();
@@ -162,24 +172,41 @@ function start(root: HTMLElement): void {
       if (next === state) return;
       set(next);
       persist();
-      backup(kv, state);
+      respaldar();
       audio.play('prestige');
       ui.celebrate();
       ui.cheloSays('prestige');
-      ui.announce(`Heredaste. Ahora tienes ${next.recipes} recetas. ${CHELO.says.prestige}`);
+      ui.announce(`Heredaste. Ahora tienes ${recetas(next.recipes)}. ${CHELO.says.prestige}`);
     },
     onImport: (text) => {
-      const next = importSave(text);
+      if (soloLectura) return false; // no se guardaría: al recargar volvería la partida más nueva
+      const next = importSave(text, Date.now());
       if (!next) return false;
-      backup(kv, state);
+      respaldar();
       set({ ...next, lastSeen: Date.now() });
       logrosSilencio = true;
+      diaVisto = ''; // la partida importada puede tener otro día de racha
       persist();
       ui.announce('Partida cargada.');
       return true;
     },
     onSound: (kind) => audio.play(kind),
     onAlbumVisto: () => set(verLogros(state)),
+    onRacha: () => {
+      // Lo cobrado se calcula aquí (hora y estado del clic); null si hoy ya se cobró (doble clic, dos botones).
+      const r = cobrar(state, Date.now());
+      if (!r) return;
+      set(r.state);
+      persist(); // cerrar antes del autosave no debe perder el regalo
+      if (r.regalo.tipo === 'receta') {
+        audio.play('heir');
+        ui.fiesta();
+        ui.announce(`Día ${r.dia} de racha: receta de la abuela de regalo. Ahora tienes ${recetas(r.state.recipes)}.`);
+      } else {
+        audio.play('welcome');
+        ui.announce(`Día ${r.dia} de racha: recibiste ${formatMoney(r.regalo.monto)}.`);
+      }
+    },
     getExport: () => exportSave(state),
   });
 
@@ -198,6 +225,7 @@ function start(root: HTMLElement): void {
   }
 
   if (loaded.problem) ui.showProblem();
+  if (soloLectura) ui.showNewer(actualizar);
 
   // Todo avance de tiempo usa el reloj de pared contra lastSeen: un frame, una pausa
   // del hilo o horas fuera pasan por el mismo camino (tope 8 h, reloj atrasado → 0).
@@ -285,12 +313,26 @@ function start(root: HTMLElement): void {
     logrosSilencio = false;
   };
 
+  /**
+   * Regalo del día: una vez por día local, cuando no hay otro modal (espera a "Bienvenido de
+   * vuelta", la lección o Empleados). Pestaña oculta a medianoche: rAF no corre; al volver,
+   * catchUp(true) abre la bienvenida si toca y el siguiente render abre la racha.
+   */
+  const revisarRacha = () => {
+    const now = Date.now();
+    const hoy = claveDia(now);
+    if (hoy === diaVisto || estadoRacha(state, now) === 'cobrado') return;
+    const dia = diaSiguiente(state, now);
+    if (ui.showRacha(dia, regalo(state, dia), regalo(state, dia + 1))) diaVisto = hoy;
+  };
+
   let lastText = 0;
   const frame = (t: number) => {
     catchUp(false);
     if (dirty || t - lastText >= TEXT_MS) {
       // Antes de pintar: un logro por acción sale en el mismo frame (dirty ya es true); uno por tiempo, en ≤ 100 ms.
       revisarLogros();
+      revisarRacha();
       ui.render(state, mode, audio.prefs());
       lastText = t;
       dirty = false;
@@ -301,7 +343,7 @@ function start(root: HTMLElement): void {
   requestAnimationFrame(frame);
 
   setInterval(persist, AUTOSAVE_MS);
-  setInterval(() => backup(kv, state), BACKUP_MS);
+  setInterval(respaldar, BACKUP_MS);
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'hidden') {
       catchUp(false);
@@ -318,20 +360,27 @@ function start(root: HTMLElement): void {
 
   const updateSW = registerSW({
     onNeedRefresh() {
-      ui.showUpdate(() => {
-        persist();
-        // workbox-window solo recarga si ya había SW controlando al registrar; en la
-        // primera visita no lo hay, así que recargamos nosotros al cambiar de controlador.
-        let reloading = false;
-        navigator.serviceWorker.addEventListener('controllerchange', () => {
-          if (reloading) return;
-          reloading = true;
-          location.reload();
-        });
-        void updateSW(true);
-      });
+      ui.showUpdate(actualizar);
     },
   });
+
+  /**
+   * Activa el SW en espera y recarga. workbox-window solo recarga si ya había SW controlando al
+   * registrar; en la primera visita no lo hay, así que recargamos nosotros al cambiar de controlador.
+   * Sin SW en espera (o sin SW), recarga de todos modos tras un momento.
+   */
+  function actualizar(): void {
+    persist();
+    let reloading = false;
+    const reload = () => {
+      if (reloading) return;
+      reloading = true;
+      location.reload();
+    };
+    if ('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('controllerchange', reload);
+    void updateSW(true);
+    setTimeout(reload, 1500);
+  }
 }
 
 /** Una sola pestaña con el candado: evita pisar el guardado y cobrar el offline dos veces. */

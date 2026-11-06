@@ -8,6 +8,7 @@ import {
   PROPINA_ESPERA_MS,
   PROPINA_MS,
   PROPINA_MULT,
+  RACHA_SEMANA,
   type BusinessDef,
   fraseDe,
   LOGRO_BONO,
@@ -23,6 +24,7 @@ import {
   getDef,
   getUpgrade,
   firstHireReady,
+  heredadas,
   hireableIds,
   incomePerSecond,
   MODES,
@@ -41,10 +43,11 @@ import {
   type BuyMode,
   type State,
 } from './game';
-import { formatDuration, formatMoney, formatNumber, formatReloj } from './format';
+import { formatDuration, formatMoney, formatNumber, formatReloj, recetas } from './format';
 import { icon, setIcon, tabla, use, type IconName } from './icons';
 import { portrait } from './characters';
 import { LOGROS, type LogroDef, type LogroIcono } from './logros';
+import { diaDeSemana, estadoRacha, type Regalo } from './racha';
 import { aparecer, coin, completar, confetti, flip, pop, pulse, stamp, tilt } from './fx';
 
 export interface Handlers {
@@ -61,6 +64,8 @@ export interface Handlers {
   onSound(kind: Sound): void;
   /** Se abrió el Álbum: todo lo desbloqueado queda visto (badge a cero). */
   onAlbumVisto(): void;
+  /** Cobrar el regalo del día (botón del diálogo de racha o del panel de Chelo). */
+  onRacha(): void;
   onImport(text: string): boolean;
   getExport(): string;
 }
@@ -126,6 +131,8 @@ function latBtn(
   return { btn, ic, disc, label: text };
 }
 
+const ORDINALES = ['primero', 'segundo', 'tercero', 'cuarto', 'quinto', 'sexto', 'séptimo'] as const;
+
 /** Arte de una estampilla del Álbum: plato, retrato o símbolo del sprite, al tamaño del cupón. */
 function logroArte(icono: LogroIcono): Element {
   if ('plato' in icono) return plato(icono.plato, 'icon up-icon');
@@ -154,6 +161,9 @@ const LIBRETA: readonly { label: string; valor: (s: State) => string }[] = [
   { label: 'Propinas dadas', valor: (s) => formatNumber(s.stats.propinas) },
   { label: 'Mejoras compradas', valor: (s) => formatNumber(s.stats.mejoras) },
   { label: 'Logros', valor: (s) => `${s.logros.length} de ${LOGROS.length}` },
+  { label: 'Racha actual', valor: (s) => `${formatNumber(s.racha.dias)} ${s.racha.dias === 1 ? 'día' : 'días'}` },
+  { label: 'Regalos recibidos', valor: (s) => formatNumber(s.stats.regalos) },
+  { label: 'Recetas de regalo', valor: (s) => formatNumber(s.recetasRegalo) },
 ];
 
 interface Card {
@@ -278,10 +288,11 @@ const UPGRADE_LOCK_MS = 500;
 /** Chelo avisa del siguiente hito (vuelta ×2 más rápida) cuando faltan esto o menos unidades. */
 const MILESTONE_TIP_FALTAN = 5;
 
-function tipFor(s: State): string | null {
+function tipFor(s: State, regaloPendiente: boolean): string | null {
+  if (regaloPendiente) return 'Tu regalo del día te espera: tócalo aquí abajo.';
   const elotes = s.businesses.elotes;
   const managers = BUSINESSES.filter((d) => s.businesses[d.id]?.manager).length;
-  if (pendingRecipes(s) > 0 && s.recipes === 0)
+  if (pendingRecipes(s) > 0 && heredadas(s) === 0)
     return 'Ya puedes heredar: vuelves a empezar, pero con recetas que suben todas tus ventas.';
   if (s.lifetimeEarned > 0 || s.recipes > 0) {
     if (managers === 0 && canHireManager(s, 'elotes'))
@@ -336,6 +347,15 @@ export interface UI {
   hito(id: string, velocidad: number, ventas: number): void;
   /** Logros recién desbloqueados: badge del Álbum y estampillas; `silencioso` al cargar (sin efectos). */
   logros(defs: readonly LogroDef[], silencioso: boolean): void;
+  /**
+   * Diálogo del regalo del día (`dia` de racha, lo que da hoy y mañana). Devuelve false sin abrir
+   * si ya hay un modal: el llamador vuelve a intentar en el siguiente render.
+   */
+  showRacha(dia: number, hoy: Regalo, manana: Regalo): boolean;
+  /** Confeti y sacudida del papel picado, sin tocar bocadillos (celebrate() además reinicia). */
+  fiesta(): void;
+  /** La partida guardada es de una versión más nueva: se juega sin guardar hasta recargar. */
+  showNewer(onReload: () => void): void;
   confirm(kind: 'buy' | 'hire' | 'upgrade', id: string): void;
   celebrate(): void;
   /** `estrellas`: nombres de los empleados que ganaron estrella mientras no estabas. */
@@ -564,6 +584,16 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
       ]),
     ),
   );
+  // Regalo del día sin cobrar (cerró el diálogo sin Recibir): botón al frente de las preguntas.
+  const regaloLi = h('li', { hidden: true }, [
+    h('button', {
+      class: 'btn primary',
+      type: 'button',
+      text: 'Recibir regalo del día',
+      onclick: () => handlers.onRacha(),
+    }),
+  ]);
+  guiaFaq.prepend(regaloLi);
   const guiaBody = h('div', { class: 'guia-body' }, [portrait(CHELO.id, 'guia-retrato'), guiaTexto, guiaFaq]);
   const guiaTitle = h('h2', { class: 'section-title', text: CHELO.name });
   guiaTitle.id = 'chelo-title';
@@ -1191,7 +1221,9 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
       autoCloseAt = 0;
       cheloPanel.close(false);
     }
-    const consejo = tipFor(s);
+    const regaloPendiente = estadoRacha(s, Date.now()) !== 'cobrado';
+    setHidden(regaloLi, !regaloPendiente);
+    const consejo = tipFor(s, regaloPendiente);
     const tip = consejo ?? CHELO.idle;
     // Punto solo con consejo nuevo de verdad: ni en el primer render, ni al volver de un evento,
     // ni al quedarse sin consejo (reposo).
@@ -1236,12 +1268,14 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
       setAttr(btn, 'aria-label', label);
     }
     // Bienvenida: en partida nueva el primer consejo se muestra sin que haya que buscarlo.
+    // Bienvenida: si hay un modal (p. ej. el regalo del día en móvil), se reintenta en el siguiente render.
     if (!welcomed) {
-      welcomed = true;
       if (s.lifetimeEarned === 0 && s.recipes === 0) {
         if (mq.matches) cheloPanel.open(false);
-        else if (!document.querySelector('dialog[open]')) openGuia(); // nunca dos modales
+        else if (document.querySelector('dialog[open]')) return;
+        else openGuia(); // nunca dos modales
       }
+      welcomed = true;
     }
   }
 
@@ -1259,7 +1293,7 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
         setText(rateSr, `${ipsText} por segundo`);
       }
       setHidden(recipes, s.recipes === 0);
-      setText(recipesText, `${formatNumber(s.recipes)} recetas (+${formatNumber(s.recipes * 2)}%)`);
+      setText(recipesText, `${recetas(s.recipes)} (+${formatNumber(s.recipes * 2)}%)`);
 
       for (const [btn, ic, canal, onName, offName] of audioBtns) {
         const on = audio[canal];
@@ -1335,7 +1369,7 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
       const n = pendingRecipes(s);
       const heirLabel = n > 0 ? `Heredar · +${formatNumber(n)} recetas` : 'Herencia: sigue vendiendo';
       for (const b of [prestigeBtn, latHeir.btn]) {
-        setHidden(b, n === 0 && s.recipes === 0);
+        setHidden(b, n === 0 && heredadas(s) === 0); // una receta de regalo no estrena el botón
         setDisabled(b, n === 0);
       }
       setText(prestigeBtn, heirLabel);
@@ -1482,11 +1516,69 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
       eventUntil = 0;
       answer = null;
       autoCloseAt = 0;
+      this.fiesta();
+    },
+
+    fiesta() {
       // Con reduced-motion no hay animationend y la clase se quedaría puesta: se reinicia a mano.
       picado.classList.remove('shake');
       void picado.getBoundingClientRect();
       picado.classList.add('shake');
       confetti();
+    },
+
+    showRacha(dia, hoy, manana) {
+      if (document.querySelector('dialog[open]')) return false;
+      const semana = diaDeSemana(dia);
+      const discos = Array.from({ length: RACHA_SEMANA }, (_, i) => {
+        const k = i + 1;
+        const clase = k < semana ? 'cobrado' : k === semana ? 'hoy' : 'falta';
+        return h(
+          'span',
+          { class: `racha-dia ${clase}` },
+          k === RACHA_SEMANA ? [icon('recipe', 'icon racha-receta')] : [],
+        );
+      });
+      const fila = h('div', { class: 'racha-semana' }, discos);
+      fila.setAttribute('role', 'img');
+      fila.setAttribute(
+        'aria-label',
+        `Semana de racha: ${semana - 1} de ${RACHA_SEMANA} días cobrados, hoy el ${ORDINALES[semana - 1]}; el séptimo da una receta.`,
+      );
+      const texto = (r: Regalo) => (r.tipo === 'receta' ? 'una receta de la abuela' : `${formatMoney(r.monto)} aprox`);
+      // Cierra antes de cobrar: así el sonido del regalo no se encima con el de cerrar.
+      const recibir = h('button', {
+        class: 'btn primary',
+        type: 'button',
+        text: 'Recibir',
+        onclick: () => {
+          d.close();
+          handlers.onRacha();
+        },
+      });
+      const d = dialog(
+        `Día ${dia} de racha`,
+        [
+          h('p', { text: `${CHELO.name}: ${hoy.tipo === 'receta' ? CHELO.says.rachaReceta : CHELO.says.racha}` }),
+          fila,
+          h('p', { class: 'big', text: hoy.tipo === 'receta' ? '+1 receta' : `${formatMoney(hoy.monto)} aprox.` }),
+          h('p', { text: `Mañana: ${texto(manana)}.` }),
+        ],
+        [recibir],
+      );
+      return true;
+    },
+
+    showNewer(onReload) {
+      dialog(
+        'Partida de una versión más nueva',
+        [
+          h('p', {
+            text: 'Tu partida se guardó con una versión más nueva del juego. Recarga para actualizar; mientras tanto puedes jugar, pero no se guardará nada.',
+          }),
+        ],
+        [h('button', { class: 'btn primary', type: 'button', text: 'Recargar', onclick: onReload })],
+      );
     },
 
     showOffline(earned, elapsedMs, estrellasGanadas) {

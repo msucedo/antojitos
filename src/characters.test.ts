@@ -22,7 +22,7 @@ describe('personajes', () => {
 
   it('las frases son cortas, sin pictogramas y sin tratamiento de género', () => {
     const lines = [...managers.flatMap(frases), ...Object.values(CHELO.says)];
-    expect(lines.length).toBe(BUSINESSES.length * (3 + MILESTONES.length) + 6);
+    expect(lines.length).toBe(BUSINESSES.length * (3 + MILESTONES.length) + 8);
     for (const line of lines) {
       expect(line.trim().length).toBeGreaterThan(0);
       expect(line.length).toBeLessThanOrEqual(MAX_LEN);

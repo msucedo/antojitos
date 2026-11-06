@@ -714,6 +714,44 @@ p {
   font-variant-numeric: tabular-nums;
 }
 
+/* ---------- Racha diaria: semana de discos en el diálogo del regalo ---------- */
+.racha-semana {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  margin: 4px 0;
+}
+
+/* Disco por día: cobrado relleno, hoy con aro grueso, por venir punteado. El séptimo lleva la receta. */
+.racha-dia {
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  background: var(--card);
+}
+
+.racha-dia.cobrado {
+  background: var(--primary);
+  border-color: var(--primary);
+}
+
+.racha-dia.hoy {
+  border: 3px solid var(--primary);
+}
+
+.racha-dia.falta {
+  border-style: dashed;
+  border-color: var(--muted);
+}
+
+.racha-receta {
+  width: 16px;
+  height: 16px;
+}
+
 /* Botón del Álbum en la barra inferior móvil: mismo disco que Chelo, con icono y badge de logros nuevos. */
 .album-btn .icon {
   width: 28px;

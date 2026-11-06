@@ -12,6 +12,7 @@ import {
   SAVE_VERSION,
   emptyStats,
 } from './game';
+import { claveDia } from './fecha';
 import {
   BACKUP_KEY,
   exportSave,
@@ -142,14 +143,14 @@ describe('load / save', () => {
 describe('export / import', () => {
   it('ida y vuelta', () => {
     const s = played();
-    expect(importSave(exportSave(s))).toEqual(s);
+    expect(importSave(exportSave(s), T0)).toEqual(s);
   });
 
   it('rechaza texto inválido o enorme', () => {
-    expect(importSave('')).toBeNull();
-    expect(importSave('%%%')).toBeNull();
-    expect(importSave(btoa('{"a":1}'))).toBeNull();
-    expect(importSave('A'.repeat(MAX_IMPORT_CHARS + 1))).toBeNull();
+    expect(importSave('', T0)).toBeNull();
+    expect(importSave('%%%', T0)).toBeNull();
+    expect(importSave(btoa('{"a":1}'), T0)).toBeNull();
+    expect(importSave('A'.repeat(MAX_IMPORT_CHARS + 1), T0)).toBeNull();
   });
 });
 
@@ -274,14 +275,14 @@ describe('v3: propina y antigüedad', () => {
 
   it('export / import conserva propina y antigüedad', () => {
     const s = conBeto();
-    expect(importSave(exportSave(s))?.businesses.elotes).toEqual(s.businesses.elotes);
+    expect(importSave(exportSave(s), T0)?.businesses.elotes).toEqual(s.businesses.elotes);
   });
 
-  it('un guardado de una versión futura no se pierde: queda copiado en UNREADABLE_KEY', () => {
+  it('un guardado de una versión futura no se pierde: se deja intacto y se juega sin guardar (ver v5)', () => {
     const futuro = JSON.stringify({ ...conBeto(), version: SAVE_VERSION + 1 });
     const kv = memory({ [SAVE_KEY]: futuro });
-    expect(load(kv, T0).problem).toBe(true);
-    expect(kv.data[UNREADABLE_KEY]).toBe(futuro);
+    expect(load(kv, T0).source).toBe('newer');
+    expect(kv.data[SAVE_KEY]).toBe(futuro);
   });
 });
 
@@ -297,9 +298,9 @@ describe('v4: contadores y logros', () => {
     businesses: { elotes: { count: 3, progressMs: 100, running: false, manager: true, propinaMs: 0, trabajadoMs: 0 } },
   };
 
-  it('migra v3 → v4 con contadores en cero y sin logros', () => {
+  it('migra v3 → actual con contadores en cero y sin logros', () => {
     const s = validate(JSON.parse(JSON.stringify(v3)));
-    expect(s?.version).toBe(4);
+    expect(s?.version).toBe(SAVE_VERSION);
     expect(s?.stats).toEqual(emptyStats());
     expect(s?.logros).toEqual([]);
     expect(s?.logrosVistos).toBe(0);
@@ -356,9 +357,79 @@ describe('v4: contadores y logros', () => {
       logros: ['empleado', 'venta'],
       logrosVistos: 1,
     };
-    const back = importSave(exportSave(s));
+    const back = importSave(exportSave(s), T0);
     expect(back?.stats).toEqual(s.stats);
     expect(back?.logros).toEqual(['empleado', 'venta']);
     expect(back?.logrosVistos).toBe(1);
+  });
+});
+
+describe('v5: racha diaria y recetas de regalo', () => {
+  const HOY = claveDia(T0);
+
+  it('migra v4 → v5: racha vista hoy sin regalo y 0 recetas de regalo', () => {
+    const v4: Record<string, unknown> = { ...newState(T0), version: 4 };
+    delete v4.racha;
+    delete v4.recetasRegalo;
+    const kv = memory({ [SAVE_KEY]: JSON.stringify(v4) });
+    const { state, source } = load(kv, T0);
+    expect(source).toBe('save');
+    expect(state.version).toBe(5);
+    expect(state.racha).toEqual({ dias: 0, ultimoDia: HOY });
+    expect(state.recetasRegalo).toBe(0);
+    expect(state.stats.regalos).toBe(0);
+  });
+
+  it('validate: racha rara vale vacía; dias solo con día válido; recetasRegalo se recorta a recipes', () => {
+    const base = newState(T0);
+    expect(validate({ ...base, racha: { dias: 3, ultimoDia: '2026-11-05' } })?.racha).toEqual({
+      dias: 3,
+      ultimoDia: '2026-11-05',
+    });
+    expect(validate({ ...base, racha: { dias: 3, ultimoDia: null } })?.racha).toEqual({ dias: 0, ultimoDia: null });
+    expect(validate({ ...base, racha: { dias: 3, ultimoDia: 20261105 } })?.racha).toEqual({ dias: 0, ultimoDia: null });
+    expect(validate({ ...base, racha: { dias: -1, ultimoDia: '2026-11-05' } })?.racha).toEqual({
+      dias: 0,
+      ultimoDia: '2026-11-05',
+    });
+    expect(validate({ ...base, racha: null })?.racha).toEqual({ dias: 0, ultimoDia: null });
+    expect(validate({ ...base, racha: { dias: 1.5, ultimoDia: '2026-11-05' } })?.racha).toEqual({
+      dias: 0,
+      ultimoDia: '2026-11-05',
+    });
+    expect(validate({ ...base, recipes: 1, recetasRegalo: 5 })?.recetasRegalo).toBe(1);
+    expect(validate({ ...base, recetasRegalo: 1.5 })).toBeNull();
+  });
+
+  it('una semilla sin racha queda vista hoy al cargar; con racha de ayer se respeta', () => {
+    const sin: Record<string, unknown> = { ...newState(T0) };
+    delete sin.racha;
+    expect(load(memory({ [SAVE_KEY]: JSON.stringify(sin) }), T0).state.racha).toEqual({ dias: 0, ultimoDia: HOY });
+    const ayer = { ...newState(T0), racha: { dias: 4, ultimoDia: '2026-11-13' } };
+    expect(load(memory({ [SAVE_KEY]: JSON.stringify(ayer) }), T0).state.racha).toEqual(ayer.racha);
+    expect(importSave(exportSave({ ...newState(T0), racha: { dias: 0, ultimoDia: null } }), T0)?.racha).toEqual({
+      dias: 0,
+      ultimoDia: HOY,
+    });
+  });
+
+  it('un guardado de una versión más nueva se deja intacto: partida nueva en memoria, sin copia ilegible', () => {
+    const futuro = JSON.stringify({ ...newState(T0), version: SAVE_VERSION + 1 });
+    const kv = memory({ [SAVE_KEY]: futuro });
+    const { state, source, problem } = load(kv, T0);
+    expect(source).toBe('newer');
+    expect(problem).toBe(false);
+    expect(state.money).toBe(0);
+    expect(kv.data[SAVE_KEY]).toBe(futuro);
+    expect(kv.data[UNREADABLE_KEY]).toBeUndefined();
+  });
+
+  it('principal ilegible pero respaldo de una versión más nueva: tampoco se pisa', () => {
+    const futuro = JSON.stringify({ ...newState(T0), version: SAVE_VERSION + 1 });
+    const kv = memory({ [SAVE_KEY]: '{basura', [BACKUP_KEY]: futuro });
+    const { source, problem } = load(kv, T0);
+    expect(source).toBe('newer');
+    expect(problem).toBe(true);
+    expect(kv.data[BACKUP_KEY]).toBe(futuro);
   });
 });

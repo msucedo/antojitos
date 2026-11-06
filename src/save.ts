@@ -8,10 +8,12 @@ import {
   SAVE_VERSION,
   TRABAJADO_TOPE_MS,
   type BizState,
+  type Racha,
   type State,
   type Stats,
 } from './game';
 import { LOGRO_IDS } from './logros';
+import { iniciarRacha } from './racha';
 
 export const SAVE_KEY = 'antojitos.save';
 export const BACKUP_KEY = 'antojitos.bak';
@@ -56,7 +58,20 @@ const MIGRATIONS: Record<number, (o: Raw) => Raw> = {
   }),
   // v4: contadores de la Libreta y logros. Todo empieza en cero; nada más cambia.
   3: (o) => ({ ...o, version: 4, stats: {}, logros: [], logrosVistos: 0 }),
+  // v5: racha diaria y recetas de regalo. No añade campos: los faltantes los rellena validate (y
+  // una semilla v3/v4 que ya traiga `racha` no se pisa); load/importSave inician la racha hoy.
+  4: (o) => ({ ...o, version: 5 }),
 };
+
+const DIA_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+/** Faltante o raro → racha vacía (contador, no cuesta la partida). `dias` solo vale con un día válido. */
+function parseRacha(raw: unknown): Racha {
+  if (!isObj(raw)) return { dias: 0, ultimoDia: null };
+  const ultimoDia = typeof raw.ultimoDia === 'string' && DIA_RE.test(raw.ultimoDia) ? raw.ultimoDia : null;
+  const dias = ultimoDia !== null && isInt(raw.dias) ? raw.dias : 0;
+  return { dias, ultimoDia };
+}
 
 /** Ids conocidos, sin duplicados; cualquier otra cosa invalida el guardado. */
 function parseUpgrades(raw: unknown): string[] | null {
@@ -148,6 +163,8 @@ export function validate(input: unknown): State | null {
   if (!isNum(money) || !isNum(runEarned) || !isNum(lifetimeEarned) || !isInt(recipes) || !isNum(lastSeen)) return null;
   const vistos = o.logrosVistos === undefined ? 0 : o.logrosVistos;
   if (!isInt(vistos)) return null;
+  const regaladas = o.recetasRegalo === undefined ? 0 : o.recetasRegalo;
+  if (!isInt(regaladas)) return null;
   if (!isObj(businesses)) return null;
   const out: Record<string, BizState> = {};
   for (const def of BUSINESSES) {
@@ -167,6 +184,8 @@ export function validate(input: unknown): State | null {
     stats,
     logros,
     logrosVistos: Math.min(vistos, logros.length), // fuera de rango se recorta, como el resto
+    racha: parseRacha(o.racha),
+    recetasRegalo: Math.min(regaladas, recipes), // no puede haber más regaladas que recetas
   };
 }
 
@@ -198,18 +217,35 @@ function safeSet(kv: KV, key: string, value: string): boolean {
 
 export interface Loaded {
   state: State;
-  source: 'save' | 'backup' | 'new';
+  /** `newer`: el guardado es de una versión más nueva del juego; se juega sin guardar (ver main.ts). */
+  source: 'save' | 'backup' | 'new' | 'newer';
   /** Había datos pero no se pudieron leer: avisar al jugador. */
   problem: boolean;
 }
 
+/** Versión declarada por un guardado, o null si no se puede leer. */
+function versionDe(text: string | null): number | null {
+  if (text === null) return null;
+  try {
+    const o: unknown = JSON.parse(text);
+    return isObj(o) && isInt(o.version) ? o.version : null;
+  } catch {
+    return null;
+  }
+}
+
 export function load(kv: KV, now: number): Loaded {
   const main = safeGet(kv, SAVE_KEY);
+  // Build viejo en caché con una partida más nueva: no se toca nada (ni UNREADABLE ni autosave).
+  if ((versionDe(main) ?? 0) > SAVE_VERSION) return { state: newState(now), source: 'newer', problem: false };
   const fromMain = parseJson(main);
-  if (fromMain) return { state: fromMain, source: 'save', problem: false };
+  if (fromMain) return { state: iniciarRacha(fromMain, now), source: 'save', problem: false };
+  const bak = safeGet(kv, BACKUP_KEY);
+  // Principal ilegible o ausente pero respaldo más nuevo: tampoco se pisa (el respaldo se reescribe cada minuto).
+  if ((versionDe(bak) ?? 0) > SAVE_VERSION) return { state: newState(now), source: 'newer', problem: main !== null };
   if (main !== null) safeSet(kv, UNREADABLE_KEY, main);
-  const fromBak = parseJson(safeGet(kv, BACKUP_KEY));
-  if (fromBak) return { state: fromBak, source: 'backup', problem: main !== null };
+  const fromBak = parseJson(bak);
+  if (fromBak) return { state: iniciarRacha(fromBak, now), source: 'backup', problem: main !== null };
   return { state: newState(now), source: 'new', problem: main !== null };
 }
 
@@ -229,13 +265,14 @@ export function exportSave(state: State): string {
   return btoa(bin);
 }
 
-export function importSave(text: string): State | null {
+export function importSave(text: string, now: number): State | null {
   const trimmed = text.trim();
   if (trimmed.length === 0 || trimmed.length > MAX_IMPORT_CHARS) return null;
   try {
     const bin = atob(trimmed);
     const bytes = Uint8Array.from(bin, (c) => c.charCodeAt(0));
-    return validate(JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes)));
+    const s = validate(JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes)));
+    return s && iniciarRacha(s, now);
   } catch {
     return null;
   }

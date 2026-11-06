@@ -13,8 +13,8 @@ const conNegocios = (count: number, manager = false, trabajadoMs = 0): State => 
 };
 
 describe('catálogo', () => {
-  it('24 logros con ids únicos, nombre y pista cortos, sin pictogramas', () => {
-    expect(LOGROS.length).toBe(24);
+  it('25 logros con ids únicos, nombre y pista cortos, sin pictogramas', () => {
+    expect(LOGROS.length).toBe(25);
     expect(LOGRO_IDS.size).toBe(LOGROS.length);
     for (const l of LOGROS) {
       expect(l.nombre.length).toBeLessThanOrEqual(22);

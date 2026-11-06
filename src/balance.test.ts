@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { BUSINESSES, UPGRADES } from './data';
 import { desbloquear, nuevos } from './logros';
+import { claveDia, diaVecino } from './fecha';
+import { cobrar } from './racha';
 import {
   buy,
   buyUpgrade,
@@ -76,8 +78,8 @@ interface Result {
   upgradesBought: number;
 }
 
-function simulate(): Result {
-  let s = newState(0);
+function simulate(inicio: State = newState(0)): Result {
+  let s = inicio;
   const idleSince: Record<string, number> = {};
   const res: Result = { firstManagerMs: null, firstPrestigeMs: null, unlockMs: {}, upgradesBought: 0 };
   for (let t = 0; t <= LIMIT_MS; t += STEP_MS) {
@@ -136,5 +138,21 @@ describe('balance', () => {
 
   it('se desbloquean los 8 negocios antes de la herencia', () => {
     for (const def of BUSINESSES) expect(r.unlockMs[def.id]).toBeDefined();
+  });
+});
+
+describe('balance con el regalo del día 1 de racha', () => {
+  // Partida de ayer (1 elote, sin dinero) que vuelve hoy y cobra el día 1: 2 min de ventas = $120.
+  const HOY = 1_700_000_000_000;
+  const ayer = { ...newState(HOY), racha: { dias: 0, ultimoDia: diaVecino(claveDia(HOY), -1) } };
+  const cobrado = cobrar(ayer, HOY);
+  const r = simulate(cobrado!.state);
+
+  it('regala $120: adelanta el primer gerente (≈ 25 s en vez de 1.7 min) sin mover la herencia de 1–2 h', () => {
+    expect(cobrado?.state.money).toBe(120);
+    expect(r.firstManagerMs).not.toBeNull();
+    expect(r.firstManagerMs!).toBeLessThanOrEqual(4 * 60_000);
+    expect(r.firstPrestigeMs!).toBeGreaterThanOrEqual(60 * 60_000);
+    expect(r.firstPrestigeMs!).toBeLessThanOrEqual(120 * 60_000);
   });
 });

@@ -2,7 +2,8 @@ import type { CharacterId } from './characters';
 import type { PlatoId } from './platos';
 
 export type ManagerEvent = 'hire' | 'milestone' | 'upgrade' | 'estrella';
-export type CheloEvent = 'milestone' | 'upgrade' | 'upgradeOne' | 'prestige' | 'empleado' | 'logro';
+export type CheloEvent =
+  'milestone' | 'upgrade' | 'upgradeOne' | 'prestige' | 'empleado' | 'logro' | 'racha' | 'rachaReceta';
 
 /** Frases de un gerente: una por evento, y una por hito en el orden de MILESTONES. */
 export interface ManagerSays {
@@ -300,6 +301,8 @@ export const CHELO = {
   says: {
     milestone: '¡Son muchos puestos, mijo! Ahora rinden el doble.',
     logro: '¡Un logro, mijo! Ya lo pegué en el álbum: todo vende más.',
+    racha: '¡Volviste, mijo! Un día más y la racha crece.',
+    rachaReceta: '¡Siete días seguidos, mijo! Esta receta es tuya sin heredar.',
     upgrade: 'Esa mejora le sirve a todos los negocios, mijo.',
     upgradeOne: 'Esa mejora se nota en el puesto, mijo.',
     prestige: 'Qué orgullo. Con las recetas de la abuela todo vende más.',
@@ -326,6 +329,10 @@ export const CHELO = {
       a: 'Se ganan solas al vender: la primera al juntar un billón en total, y cada una pide más. Se cobran al heredar: +2 % a todo, para siempre.',
     },
     {
+      q: '¿Qué es la racha?',
+      a: 'Cada día que vuelves te doy un regalo que crece; al séptimo seguido, una receta sin heredar. Si faltas un día, vuelve a empezar.',
+    },
+    {
       q: '¿Cómo guardo mi partida?',
       a: 'Se guarda sola en este navegador. En Respaldo copias un código por si cambias de aparato.',
     },
@@ -345,6 +352,10 @@ export const CHELO = {
 export const MILESTONES: readonly number[] = [25, 50, 100, 200, 300, 400];
 
 export const OFFLINE_CAP_MS = 8 * 60 * 60 * 1000;
+/** Racha diaria: el día 7 de cada semana de racha regala una receta; los demás, minutos de ventas. */
+export const RACHA_SEMANA = 7;
+/** Día d (1–6) de la semana de racha = d × estos minutos de ventas (sin propina). */
+export const RACHA_MIN_POR_DIA = 2;
 /** Ausencia desde la que se avisa lo ganado; por debajo, el tiempo cuenta como jugado. */
 export const AUSENCIA_MS = 60_000;
 
