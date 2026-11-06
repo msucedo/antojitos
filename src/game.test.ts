@@ -17,6 +17,7 @@ import {
   buySound,
   buyUpgrade,
   canHireManager,
+  cicloMs,
   getUpgrade,
   nextUpgrades,
   upgradeMultiplier,
@@ -234,15 +235,47 @@ describe('ciclos', () => {
     expect(tick(s, Infinity)).toBe(s);
   });
 
-  it('hitos duplican el ingreso', () => {
+  it('hitos parten la vuelta; el ingreso por vuelta no cambia y el /s se duplica', () => {
     const s = newState(T0);
-    const at = (count: number) =>
-      revenuePerCycle({ ...s, businesses: { ...s.businesses, elotes: { ...s.businesses.elotes!, count } } }, 'elotes') /
-      count;
-    expect(at(24)).toBe(1);
-    expect(at(25)).toBe(2);
-    expect(at(50)).toBe(4);
-    expect(at(200)).toBe(16);
+    const con = (count: number): State => ({
+      ...s,
+      businesses: { ...s.businesses, elotes: { ...s.businesses.elotes!, count, manager: true } },
+    });
+    expect([24, 25, 50, 100, 200].map((n) => cicloMs(elotes, n))).toEqual([1000, 500, 250, 125, 62.5]);
+    for (const n of [24, 25, 50, 200]) expect(revenuePerCycle(con(n), 'elotes') / n).toBe(1);
+    expect(ventasPorSegundo(con(25), 'elotes') / 25).toBe(2);
+    expect(ventasPorSegundo(con(200), 'elotes') / 200).toBe(16);
+  });
+
+  it('comprar y cruzar un hito conserva la fracción de la barra', () => {
+    const base = withMoney(1e9);
+    const con = (b: Partial<State['businesses'][string]>): State => ({
+      ...base,
+      businesses: { ...base.businesses, elotes: { ...base.businesses.elotes!, ...b } },
+    });
+    // Con empleado, 900/1000 → la 25 parte la vuelta: 450/500.
+    const uno = buy(con({ count: 24, manager: true, progressMs: 900 }), 'elotes', 1).businesses.elotes!;
+    expect(uno.progressMs).toBe(450);
+    expect(uno.progressMs / cicloMs(elotes, uno.count)).toBe(0.9);
+    // Máx cruza dos hitos (24 → ≥ 50): la fracción se conserva.
+    const max = buy(con({ count: 24, running: true, progressMs: 600 }), 'elotes', 'max').businesses.elotes!;
+    expect(max.count).toBeGreaterThanOrEqual(50);
+    expect(max.progressMs / cicloMs(elotes, max.count)).toBe(0.6);
+    // Sin hito, el progreso no se toca.
+    expect(buy(con({ count: 10, running: true, progressMs: 300 }), 'elotes', 1).businesses.elotes!.progressMs).toBe(
+      300,
+    );
+  });
+
+  it('a mano, la vuelta dura el ciclo efectivo', () => {
+    const s = startCycle(
+      { ...withMoney(0), businesses: { ...newState(T0).businesses, elotes: { ...emptyBiz(25) } } },
+      'elotes',
+    );
+    expect(tick(s, 499).businesses.elotes!.running).toBe(true);
+    const fin = tick(s, 500);
+    expect(fin.businesses.elotes!.running).toBe(false);
+    expect(fin.money).toBe(25);
   });
 });
 
@@ -425,7 +458,23 @@ describe('propina y antigüedad', () => {
     const s = darPropina(s0, 'cadena');
     const extra = applyOffline(s, s.lastSeen + 30_000).earned;
     expect(extra).toBeCloseTo((PROPINA_MULT - 1) * ventasPorSegundo(s, 'cadena') * 30);
-    expect(cadena.cycleMs).toBeGreaterThan(30_000);
+    expect(cicloMs(cadena, 1)).toBeGreaterThan(30_000);
+  });
+
+  it('con hitos, la propina suma el mismo extra continuo aunque cierre varias vueltas', () => {
+    const cadena = getDef('cadena');
+    const base0 = withMoney(1e30);
+    const s0: State = {
+      ...base0,
+      businesses: { ...base0.businesses, cadena: { ...emptyBiz(200), manager: true } },
+    };
+    expect(cicloMs(cadena, 200)).toBe(12_000);
+    const s = darPropina(s0, 'cadena');
+    const r = applyOffline(s, s.lastSeen + 30_000);
+    // 2 vueltas de 12 s + 0.5 × 30 s de ventas por segundo.
+    const porVuelta = revenuePerCycle(s, 'cadena');
+    expect(r.earned).toBeCloseTo(2 * porVuelta + (PROPINA_MULT - 1) * ventasPorSegundo(s, 'cadena') * 30);
+    expect(r.state.businesses.cadena!.progressMs).toBe(6_000);
   });
 
   it('el /s cuenta la propina mientras dura', () => {
@@ -442,6 +491,25 @@ describe('propina y antigüedad', () => {
     for (let i = 0; i < 4 * 3600; i++) abierta = tick(abierta, 1_000);
     expect(fuera.money).toBeCloseTo(abierta.money, 6);
     expect(fuera.businesses.elotes).toEqual(abierta.businesses.elotes);
+  });
+
+  it('con 4 hitos (62.5 ms) y propina, la ausencia cobra lo mismo que la pestaña abierta', () => {
+    const base = conBeto();
+    const s = darPropina(
+      { ...base, businesses: { ...base.businesses, elotes: { ...b(base), count: 200 } }, money: 1e9 },
+      'elotes',
+    );
+    expect(cicloMs(elotes, 200)).toBe(62.5);
+    const fuera = applyOffline(s, s.lastSeen + 4 * 3_600_000);
+    let abierta = s;
+    for (let i = 0; i < 4 * 3600; i++) abierta = tick(abierta, 1_000);
+    expect(fuera.state.money).toBeCloseTo(abierta.money, 2);
+    expect(fuera.state.businesses.elotes).toEqual(abierta.businesses.elotes);
+    // Frames de 60 Hz (no diádicos): error de punto flotante mínimo.
+    let frames = s;
+    for (let i = 0; i < 60 * 60; i++) frames = tick(frames, 1000 / 60);
+    const minuto = applyOffline(s, s.lastSeen + 60_000).state;
+    expect(frames.money / minuto.money).toBeCloseTo(1, 9);
   });
 
   it('el reloj atrasado no avanza la propina', () => {

@@ -15,6 +15,7 @@ import {
 import {
   canBuyUpgrade,
   canHireManager,
+  cicloMs,
   costOf,
   estrellas,
   getDef,
@@ -33,6 +34,7 @@ import {
   puedeDarPropina,
   quantityFor,
   revenuePerCycle,
+  ventasConPropina,
   type BizState,
   type BuyMode,
   type State,
@@ -40,7 +42,7 @@ import {
 import { formatDuration, formatMoney, formatNumber, formatReloj } from './format';
 import { icon, setIcon, tabla, use, type IconName } from './icons';
 import { portrait } from './characters';
-import { coin, confetti, flip, pop, pulse, stamp, tilt } from './fx';
+import { aparecer, coin, completar, confetti, flip, pop, pulse, stamp, tilt } from './fx';
 
 export interface Handlers {
   onStart(id: string): void;
@@ -126,7 +128,16 @@ interface Card {
   /** Imagen del plato: se tilda al vender (clic, ciclo manual o vuelta del empleado). */
   art: Element;
   count: HTMLElement;
+  bar: HTMLElement;
   fill: HTMLElement;
+  /** Hasta cuándo (performance.now) la barra se sostiene llena tras completar una vuelta. */
+  llenoHasta: number;
+  /** Vuelta de CICLO_RAPIDO_MS o menos (con los hitos): tilt suave. Lo pone renderBars. */
+  rapido: boolean;
+  /** Barra fija (`barraFija`): llena, rayas corriendo, "$X/s". Lo pone renderBars. */
+  fija: boolean;
+  /** Último tilt por vuelta de empleado: con barra fija se limita a uno por CICLO_RAPIDO_MS. */
+  ultimoTilt: number;
   /** Línea bajo la barra: cuánto deja cada vuelta. */
   meta: HTMLElement;
   gana: HTMLElement;
@@ -177,11 +188,48 @@ const FLAG_W = 24;
 const FLAG_H = 28;
 const FLAG_COLORS = 4;
 
-/** Ciclos de hasta este largo (hoy solo elote) tildan suave: lo hacen cada segundo. */
-const TILT_SUAVE_MS = 1_000;
+/**
+ * Vueltas efectivas (`cicloMs`: los hitos las parten) de hasta este largo dan una o más vueltas por
+ * segundo: tildan suave y, con empleado, la barra se queda llena en vez de barrer (y sin cierre por
+ * vuelta) y la tarjeta dice "$X/s".
+ */
+const CICLO_RAPIDO_MS = 1_000;
 
-function tiltCard(def: BusinessDef, art: Element): void {
-  tilt(art, def.cycleMs <= TILT_SUAVE_MS);
+/**
+ * Cierre de una vuelta: la barra se sostiene llena este tiempo mientras se desvanece
+ * (`completar` en fx.ts); luego vuelve a su progreso real.
+ */
+const LLENO_MS = 300;
+
+/**
+ * Con barra fija, tilt por vuelta de empleado como mucho cada tanto. Algo menos que CICLO_RAPIDO_MS:
+ * el elote (1 s exacto) llega cada 983–1017 ms según el frame y no debe perder tilts.
+ */
+const TILT_FIJA_MS = 900;
+
+function cicloRapido(def: BusinessDef, count: number): boolean {
+  return cicloMs(def, count) <= CICLO_RAPIDO_MS;
+}
+
+/** Con empleado y vuelta rápida: la barra queda llena con las rayas corriendo y se lee el /s. */
+function barraFija(def: BusinessDef, b: BizState): boolean {
+  return b.count > 0 && b.manager && cicloRapido(def, b.count);
+}
+
+function tiltCard(c: Card): void {
+  tilt(c.art, c.rapido);
+}
+
+/** Vuelta completa: la barra se queda llena LLENO_MS y se desvanece. */
+function llenar(c: Card): void {
+  c.llenoHasta = performance.now() + LLENO_MS;
+  completar(c.fill, LLENO_MS);
+}
+
+/** Termina o corta el cierre de vuelta: la barra vuelve a opacidad 1 en su progreso real. */
+function soltar(c: Card): void {
+  c.llenoHasta = 0;
+  for (const a of c.fill.getAnimations()) if (a.id === 'completar') a.cancel();
 }
 
 export function bubbleVisible(now: number, until: number): boolean {
@@ -192,7 +240,7 @@ const modeLabel = (m: BuyMode) => (m === 'max' ? 'Máx' : `×${m}`);
 const modeIcon = (m: BuyMode): IconName => (m === 'max' ? 'costal' : m === 10 ? 'monedas' : 'moneda');
 const UPGRADE_SLOTS = 4;
 const UPGRADE_LOCK_MS = 500;
-/** Chelo avisa del siguiente hito ×2 cuando faltan esto o menos unidades. */
+/** Chelo avisa del siguiente hito (vuelta ×2 más rápida) cuando faltan esto o menos unidades. */
 const MILESTONE_TIP_FALTAN = 5;
 
 function tipFor(s: State): string | null {
@@ -208,12 +256,12 @@ function tipFor(s: State): string | null {
       return 'Junta para un puesto de aguas frescas; deja más por vuelta.';
     if (s.upgrades.length === 0 && nextUpgrades(s, 1).some((u) => canBuyUpgrade(s, u.id)))
       return 'Ya te alcanza para una mejora: multiplica lo que vende un negocio.';
-    // Siguiente hito (×2) cercano: la tarjeta ya no lo escribe, lo cuenta Chelo.
+    // Siguiente hito cercano: la tarjeta ya no lo escribe, lo cuenta Chelo.
     for (const d of BUSINESSES) {
       const count = s.businesses[d.id]?.count ?? 0;
       const m = count > 0 ? nextMilestone(count) : null;
       if (m !== null && m - count <= MILESTONE_TIP_FALTAN)
-        return `Con ${m} de ${d.name} vende el doble: te faltan ${m - count}.`;
+        return `Con ${m} de ${d.name} vende el doble de rápido: te faltan ${m - count}.`;
     }
     return null;
   }
@@ -247,6 +295,8 @@ export interface UI {
   turned(id: string): void;
   /** Se dio propina: el plato se tilda (el anuncio lo hace main.ts). */
   tipped(id: string): void;
+  /** Se cruzaron `n` hitos: "×2 rápido" (×4 con Máx que cruza dos…) sube desde el plato, como la moneda de venta. */
+  hito(id: string, n: number): void;
   confirm(kind: 'buy' | 'hire' | 'upgrade', id: string): void;
   celebrate(): void;
   /** `estrellas`: nombres de los empleados que ganaron estrella mientras no estabas. */
@@ -492,13 +542,15 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
         label: `Vender: ${def.name}`,
         onclick: () => {
           handlers.onStart(def.id);
-          tiltCard(def, art);
+          const c = cards.find((x) => x.def.id === def.id);
+          if (c) tiltCard(c);
         },
       },
       [art],
     );
     const count = h('span', { class: 'count' });
-    const fill = h('div', { class: 'fill' });
+    // Rayas en su propia capa: con barra fija corren en bucle (barbería) solo con transform.
+    const fill = h('div', { class: 'fill' }, [h('span', { class: 'rayas' })]);
     const bar = h('div', { class: 'bar' }, [fill]);
     bar.setAttribute('aria-hidden', 'true');
     const gana = h('strong', { class: 'gana' });
@@ -528,7 +580,26 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
       ]),
     ]);
     cardRoot.dataset.papel = def.papel;
-    return { def, root: cardRoot, sell, art, count, fill, meta, gana, por, buy, mark, bubble, bubbleUntil: 0 };
+    return {
+      def,
+      root: cardRoot,
+      sell,
+      art,
+      count,
+      bar,
+      fill,
+      llenoHasta: 0,
+      rapido: false,
+      fija: false,
+      ultimoTilt: 0,
+      meta,
+      gana,
+      por,
+      buy,
+      mark,
+      bubble,
+      bubbleUntil: 0,
+    };
   });
 
   const appTitle = h('h1', { text: 'Imperio de Antojitos' });
@@ -1078,12 +1149,19 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
         setText(c.count, owned ? `×${formatNumber(b.count)}` : '');
         setDisabled(c.sell, !owned || b.running || b.manager);
 
-        // "$10 por vuelta": la barra ya enseña el ritmo, el tiempo no se escribe; el siguiente hito
-        // lo cuenta Chelo, no la tarjeta.
-        // Con propina, lo que de verdad entra por vuelta (vuelta + extra ×PROPINA_MULT).
-        const mult = b.manager && propinaActiva(b) ? PROPINA_MULT : 1;
-        setText(c.gana, owned ? formatMoney(revenuePerCycle(s, c.def.id) * mult) : '');
-        setText(c.por, owned ? ' por vuelta' : 'Sin abrir');
+        // El tiempo de la vuelta no se escribe (la barra enseña el ritmo); el siguiente hito lo cuenta Chelo.
+        // Con empleado el negocio corre solo: "$X/s", lo que de verdad entra (con propina) y lo mismo
+        // que suma el /s del header; un hito lo duplica a la vista. A mano, "$X por vuelta": lo que
+        // deja cada toque.
+        setText(
+          c.gana,
+          !owned
+            ? ''
+            : b.manager
+              ? `${formatMoney(ventasConPropina(s, c.def.id))}/s`
+              : formatMoney(revenuePerCycle(s, c.def.id)),
+        );
+        setText(c.por, !owned ? 'Sin abrir' : b.manager ? '' : ' por vuelta');
 
         const q = quantityFor(s, c.def.id, mode);
         const k = q > 0 ? q : mode === 'max' ? 1 : mode;
@@ -1112,10 +1190,31 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
     },
 
     renderBars(s) {
+      const now = performance.now();
       for (const c of cards) {
         const b = s.businesses[c.def.id];
         if (!b || c.root.hidden) continue;
-        const p = b.count > 0 && (b.running || b.manager) ? Math.min(b.progressMs / c.def.cycleMs, 1) : 0;
+        // Fin del cierre (o venta manual nueva que lo corta): se suelta en este mismo frame en que la
+        // barra salta, así no asoma llena. Con empleado ya avanzó un poco: reaparece suave.
+        if (c.llenoHasta > 0 && (now >= c.llenoHasta || (b.running && !b.manager))) {
+          const terminado = now >= c.llenoHasta;
+          soltar(c);
+          if (terminado && b.manager) aparecer(c.fill);
+        }
+        // Fija con empleado en ciclo rápido: siempre llena y con las rayas corriendo.
+        c.rapido = cicloRapido(c.def, b.count);
+        const fija = barraFija(c.def, b);
+        c.fija = fija;
+        // Recién fija (comprar cruzó un hito) con un cierre en curso: la barra no se desvanece.
+        if (fija && c.llenoHasta > 0) soltar(c);
+        c.bar.classList.toggle('fija', fija);
+        // Llena: recién completada (se sostiene LLENO_MS) o fija.
+        const llena = fija || (b.count > 0 && now < c.llenoHasta);
+        const p = llena
+          ? 1
+          : b.count > 0 && (b.running || b.manager)
+            ? Math.min(b.progressMs / cicloMs(c.def, b.count), 1)
+            : 0;
         // Relleno a todo el ancho que se desliza desde la izquierda: rayas y brillo no se estiran.
         c.fill.style.transform = `translateX(${(p - 1) * 100}%)`;
       }
@@ -1159,17 +1258,29 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
       const c = cards.find((x) => x.def.id === id);
       if (!c) return;
       coin(c.sell, `+${formatMoney(amount)}`);
-      tiltCard(c.def, c.art);
+      tiltCard(c);
+      llenar(c);
     },
 
     turned(id) {
       const c = cards.find((x) => x.def.id === id);
-      if (c) tiltCard(c.def, c.art);
+      if (!c) return;
+      // Con barra fija las vueltas llegan casi cada frame (62.5 ms con 4 hitos): un tilt por segundo.
+      const now = performance.now();
+      if (c.fija && now - c.ultimoTilt < TILT_FIJA_MS) return;
+      c.ultimoTilt = now;
+      tiltCard(c);
+      if (!c.fija) llenar(c);
     },
 
     tipped(id) {
       const c = cards.find((x) => x.def.id === id);
-      if (c) tiltCard(c.def, c.art);
+      if (c) tiltCard(c);
+    },
+
+    hito(id, n) {
+      const c = cards.find((x) => x.def.id === id);
+      if (c && !c.root.hidden) coin(c.sell, `×${2 ** n} rápido`);
     },
 
     confirm(kind, id) {

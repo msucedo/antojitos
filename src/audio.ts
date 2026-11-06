@@ -87,7 +87,7 @@ export const SOUNDS: Record<Sound, readonly Note[]> = {
     { freq: E5, at: 0.05, dur: 0.12, type: 'triangle' },
     { freq: G5, at: 0.1, dur: 0.16, type: 'triangle' },
   ],
-  // Hito ×2 a las 25: campana (dos notas a la vez, larga). Sustituye a `buy` en esa compra.
+  // Hito (vuelta ×2 más rápida, a las 25/50/100/200): campana (dos notas a la vez, larga). Sustituye a `buy` en esa compra.
   milestone: [
     { freq: C6, at: 0, dur: 0.4, type: 'sine', level: 0.6 },
     { freq: 1318.5, at: 0, dur: 0.4, type: 'sine', level: 0.4 },

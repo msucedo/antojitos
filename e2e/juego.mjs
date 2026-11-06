@@ -128,6 +128,27 @@ test('vender un elote a mano: cobra al terminar la barra', async () => {
   await context.close();
 });
 
+test('con empleado la tarjeta dice /s y la barra queda fija si la vuelta es rápida; a mano, por vuelta', async () => {
+  // Aguas con 50 (dos hitos: 3 s → 750 ms) y empleado; tacos con 25 (6 s → 3 s) barre; elote a mano.
+  const semilla = partida(
+    { lifetimeEarned: 1e6, runEarned: 1e6 },
+    { elotes: { count: 1 }, aguas: { count: 50, manager: true }, tacos: { count: 25, manager: true } },
+  );
+  const { context, page, errores } = await abrir({ semilla });
+  await sinPaneles(page);
+  const aguas = page.locator('.card').nth(1);
+  const tacos = page.locator('.card').nth(2);
+  await aguas.locator('.bar.fija').waitFor();
+  assert.match(await aguas.locator('.gana').textContent(), /\/s$/);
+  assert.equal(await tacos.locator('.bar.fija').count(), 0);
+  assert.match(await tacos.locator('.gana').textContent(), /\/s$/);
+  const elotes = page.locator('.card').nth(0); // sin empleado
+  assert.match(await elotes.locator('.por').textContent(), /por vuelta/);
+  assert.doesNotMatch(await elotes.locator('.gana').textContent(), /\/s$/);
+  assert.deepEqual(errores, []);
+  await context.close();
+});
+
 test('el progreso sobrevive a una recarga', async () => {
   const { context, page } = await abrir({ semilla: partida({ money: 100 }, { elotes: { count: 1 } }) });
   await sinPaneles(page);

@@ -4,6 +4,7 @@ import {
   buy,
   buyUpgrade,
   canBuyUpgrade,
+  cicloMs,
   canHireManager,
   costOf,
   getDef,
@@ -26,6 +27,17 @@ function efficiency(cycleMs: number, manager: boolean): number {
   return manager ? 1 : cycleMs / (cycleMs + REACTION_MS);
 }
 
+/**
+ * Ingreso por segundo de un negocio en `s` con el ciclo efectivo (los hitos lo parten). Una compra
+ * puede cambiar el ciclo, así que la ganancia es rate(después) − rate(antes), no Δingreso / ciclo.
+ */
+function rate(s: State, id: string): number {
+  const def = getDef(id);
+  const b = s.businesses[id]!;
+  const c = cicloMs(def, b.count);
+  return (revenuePerCycle(s, id) * 1000 * efficiency(c, b.manager)) / c;
+}
+
 /** Mejor compra por retorno (ingreso/s ganado ÷ costo) entre las que alcanza. */
 function bestAction(s: State): State | null {
   let best: { score: number; apply: () => State } | null = null;
@@ -34,14 +46,13 @@ function bestAction(s: State): State | null {
     const cost = costOf(def, b.count, 1);
     if (cost <= s.money) {
       const after = { ...s, businesses: { ...s.businesses, [def.id]: { ...b, count: b.count + 1 } } };
-      const gain =
-        ((revenuePerCycle(after, def.id) - revenuePerCycle(s, def.id)) * 1000 * efficiency(def.cycleMs, b.manager)) /
-        def.cycleMs;
+      const gain = rate(after, def.id) - rate(s, def.id);
       const score = gain / cost;
       if (!best || score > best.score) best = { score, apply: () => buy(s, def.id, 1) };
     }
     if (canHireManager(s, def.id)) {
-      const gain = ((revenuePerCycle(s, def.id) * 1000) / def.cycleMs) * (1 - efficiency(def.cycleMs, false));
+      const c = cicloMs(def, b.count);
+      const gain = ((revenuePerCycle(s, def.id) * 1000) / c) * (1 - efficiency(c, false));
       const score = gain / def.manager.cost;
       if (!best || score > best.score) best = { score, apply: () => hireManager(s, def.id) };
     }
@@ -50,12 +61,7 @@ function bestAction(s: State): State | null {
     if (!canBuyUpgrade(s, u.id)) continue;
     const after = { ...s, upgrades: [...s.upgrades, u.id] };
     let gain = 0;
-    for (const def of BUSINESSES) {
-      const b = s.businesses[def.id]!;
-      gain +=
-        ((revenuePerCycle(after, def.id) - revenuePerCycle(s, def.id)) * 1000 * efficiency(def.cycleMs, b.manager)) /
-        def.cycleMs;
-    }
+    for (const def of BUSINESSES) gain += rate(after, def.id) - rate(s, def.id);
     const score = gain / u.cost;
     if (!best || score > best.score) best = { score, apply: () => buyUpgrade(s, u.id) };
   }

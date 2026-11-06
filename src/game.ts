@@ -118,6 +118,14 @@ export function buySound(before: State, after: State, id: string): 'buy' | 'open
   return biz(before, id).count === 0 ? 'open' : 'buy';
 }
 
+/**
+ * Largo de la vuelta: cada hito la parte a la mitad (como AdVenture Capitalist). Única fuente del
+ * ciclo; con 4 hitos el elote queda en 62.5 ms, más que un frame. Divide entre potencias de 2: exacto.
+ */
+export function cicloMs(def: BusinessDef, count: number): number {
+  return def.cycleMs / 2 ** milestonesReached(count);
+}
+
 /** Siguiente hito no alcanzado, o null si ya están todos. */
 export function nextMilestone(count: number): number | null {
   return MILESTONES.find((m) => count < m) ?? null;
@@ -134,7 +142,6 @@ function revenueWithStars(state: State, id: string, stars: number): number {
   return Math.min(
     def.baseRevenue *
       count *
-      2 ** milestonesReached(count) *
       (1 + RECIPE_BONUS * state.recipes) *
       (1 + ESTRELLA_BONO * stars) *
       upgradeMultiplier(state, id),
@@ -182,7 +189,13 @@ export function buy(state: State, id: string, mode: BuyMode): State {
   if (k === 0) return state;
   const b = biz(state, id);
   const cost = costOf(getDef(id), b.count, k);
-  return withBiz({ ...state, money: state.money - cost }, id, { count: b.count + k });
+  // Cada hito cruzado parte la vuelta: el progreso se parte igual y la barra conserva su fracción
+  // (sin vuelta regalada ni salto). Potencia de 2: exacto.
+  const crossed = milestonesReached(b.count + k) - milestonesReached(b.count);
+  return withBiz({ ...state, money: state.money - cost }, id, {
+    count: b.count + k,
+    progressMs: b.progressMs / 2 ** crossed,
+  });
 }
 
 export function startCycle(state: State, id: string): State {
@@ -239,7 +252,13 @@ export function propinaLista(b: BizState): boolean {
 
 /** Lo que vende el negocio por segundo (con empleado; base del /s y de la propina). */
 export function ventasPorSegundo(state: State, id: string): number {
-  return (revenuePerCycle(state, id) * 1000) / getDef(id).cycleMs;
+  return (revenuePerCycle(state, id) * 1000) / cicloMs(getDef(id), biz(state, id).count);
+}
+
+/** Lo que entra por segundo de un negocio con empleado, con la propina si está activa (el /s). */
+export function ventasConPropina(state: State, id: string): number {
+  const b = biz(state, id);
+  return ventasPorSegundo(state, id) * (propinaActiva(b) ? PROPINA_MULT : 1);
 }
 
 /** Precio de la propina: lo que el negocio vende en PROPINA_COSTO_MS. Entero, como costOf. */
@@ -283,7 +302,7 @@ function advance(state: State, dtMs: number): { state: State; earned: number } {
       continue;
     }
     const total = b.progressMs + dtMs;
-    const cycles = Math.floor(total / def.cycleMs);
+    const cycles = Math.floor(total / cicloMs(def, b.count));
     const perCycle = revenuePerCycle(state, def.id);
     if (cycles >= 1) {
       earned = capAdd(earned, perCycle);
@@ -311,6 +330,7 @@ function advance(state: State, dtMs: number): { state: State; earned: number } {
  */
 function advanceManaged(state: State, def: BusinessDef, b: BizState, dtMs: number): { biz: BizState; earned: number } {
   let { progressMs, propinaMs, trabajadoMs } = b;
+  const ciclo = cicloMs(def, b.count); // el conteo no cambia dentro de un avance
   let earned = 0;
   let left = dtMs;
   while (left > 0) {
@@ -320,12 +340,12 @@ function advanceManaged(state: State, def: BusinessDef, b: BizState, dtMs: numbe
     let seg = next === undefined ? left : Math.min(left, next - trabajadoMs);
     if (ventana > 0) seg = Math.min(seg, ventana);
     const total = progressMs + seg;
-    const cycles = Math.floor(total / def.cycleMs);
+    const cycles = Math.floor(total / ciclo);
     const perCycle = revenueWithStars(state, def.id, estrellas({ ...b, trabajadoMs }));
     earned = capAdd(earned, cycles * perCycle);
     // Propina: extra continuo al dinero (no por vueltas), así un negocio lento cobra igual que uno rápido.
-    if (ventana > 0) earned = capAdd(earned, ((PROPINA_MULT - 1) * perCycle * seg) / def.cycleMs);
-    progressMs = total - cycles * def.cycleMs;
+    if (ventana > 0) earned = capAdd(earned, ((PROPINA_MULT - 1) * perCycle * seg) / ciclo);
+    progressMs = total - cycles * ciclo;
     propinaMs = Math.max(propinaMs - seg, 0);
     trabajadoMs = Math.min(trabajadoMs + seg, TRABAJADO_TOPE_MS);
     left -= seg;
@@ -344,7 +364,7 @@ export function incomePerSecond(state: State): number {
   let total = 0;
   for (const def of BUSINESSES) {
     const b = biz(state, def.id);
-    if (b.manager && b.count > 0) total += ventasPorSegundo(state, def.id) * (propinaActiva(b) ? PROPINA_MULT : 1);
+    if (b.manager && b.count > 0) total += ventasConPropina(state, def.id);
   }
   return total;
 }

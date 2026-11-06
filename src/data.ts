@@ -227,7 +227,7 @@ export const CHELO = {
   name: 'Doña Chelo',
   id: 'chelo',
   says: {
-    milestone: '¡Son muchos puestos, mijo! Ahora venden mucho más.',
+    milestone: '¡Son muchos puestos, mijo! Ahora venden el doble de rápido.',
     upgrade: 'Esa mejora le sirve a todos los negocios, mijo.',
     upgradeOne: 'Esa mejora se nota en el puesto, mijo.',
     prestige: 'Qué orgullo. Con las recetas de la abuela todo vende más.',
@@ -262,7 +262,7 @@ export const CHELO = {
   faq: readonly CheloFaq[];
 };
 
-/** Unidades en las que cada hito duplica el ingreso. */
+/** Unidades en las que cada hito parte la vuelta a la mitad (`cicloMs` en game.ts). */
 export const MILESTONES: readonly number[] = [25, 50, 100, 200];
 
 export const OFFLINE_CAP_MS = 8 * 60 * 60 * 1000;

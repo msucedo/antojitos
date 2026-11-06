@@ -5,6 +5,7 @@ import {
   buy,
   buySound,
   buyUpgrade,
+  cicloMs,
   getDef,
   getUpgrade,
   hireManager,
@@ -84,7 +85,9 @@ function start(root: HTMLElement): void {
       const next = buy(state, id, mode);
       if (!act(next, 'buy', id, buySound(before, next, id))) return;
       // Al cruzar un hito habla el gerente; si aún no hay, Doña Chelo.
-      if (milestonesCrossed(before, state, id) === 0) return;
+      const hitos = milestonesCrossed(before, state, id);
+      if (hitos === 0) return;
+      ui.hito(id, hitos);
       const { manager } = getDef(id);
       if (state.businesses[id]?.manager) {
         ui.say(id, 'milestone');
@@ -204,7 +207,11 @@ function start(root: HTMLElement): void {
       if (b0?.running && b1 && !b1.running && !b1.manager) {
         ui.sold(def.id, revenuePerCycle(before, def.id));
         audio.play('sell');
-      } else if (b0?.manager && b1?.manager && (b1.progressMs < b0.progressMs || r.elapsedMs >= def.cycleMs)) {
+      } else if (
+        b0?.manager &&
+        b1?.manager &&
+        (b1.progressMs < b0.progressMs || r.elapsedMs >= cicloMs(def, b1.count))
+      ) {
         // Vuelta de empleado: la barra volvió a empezar (o pasó un ciclo entero entre frames).
         // Tras una ausencia larga, un solo tilt.
         ui.turned(def.id);

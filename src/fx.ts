@@ -136,3 +136,27 @@ export function tilt(el: Element, suave = false): void {
   );
   anim.id = 'tilt';
 }
+
+/**
+ * Cierre de una vuelta de la barra: el relleno, todavía lleno, se desvanece en un solo gesto y se
+ * queda invisible (`fill: 'forwards'`) hasta que quien lo llamó lo cancela en el mismo frame en que
+ * la barra salta a su progreso real; así no asoma lleno entre el final y el salto. Uno nuevo
+ * reemplaza al que corre.
+ */
+export function completar(fill: Element, ms: number): void {
+  if (reducedMotion()) return;
+  for (const a of fill.getAnimations()) if (a.id === 'completar') a.cancel();
+  const anim = fill.animate([{ opacity: 1 }, { opacity: 0 }], {
+    duration: ms,
+    easing: 'ease-in-out',
+    fill: 'forwards',
+  });
+  anim.id = 'completar';
+}
+
+/** Tras el cierre, el relleno reaparece suave en su progreso (vuelta de empleado: ya avanzó un poco). */
+export function aparecer(fill: Element): void {
+  if (reducedMotion()) return;
+  const anim = fill.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 180, easing: 'ease-out' });
+  anim.id = 'completar';
+}

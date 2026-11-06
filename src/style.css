@@ -1173,7 +1173,7 @@ p {
   width: 100%;
   height: 100%;
   border-radius: 999px;
-  background: repeating-linear-gradient(-45deg, var(--brillo-raya) 0 7px, transparent 7px 14px), var(--nopal);
+  background: var(--nopal);
   transform: translateX(-100%);
   will-change: transform; /* capa propia: la barra anima sin repintar la tarjeta */
 }
@@ -1194,6 +1194,37 @@ p {
   inset: auto 0 0 0;
   height: 1.5px;
   background: var(--marco-tinta);
+}
+
+/*
+ * Rayas diagonales de boleto en su propia capa, bajo el brillo (z-index -1 dentro de la capa del
+ * relleno). Azulejo de 20 px a −45°: bandas de ~7 px y periodo horizontal de 20 px, así correr 20 px
+ * cierra el bucle. Sobra 20 px a la izquierda, fuera de la vista, para tener de dónde correr.
+ */
+.rayas {
+  position: absolute;
+  inset: 0 0 0 -20px;
+  z-index: -1;
+  border-radius: inherit;
+  background: linear-gradient(
+      -45deg,
+      var(--brillo-raya) 25%,
+      transparent 25% 50%,
+      var(--brillo-raya) 50% 75%,
+      transparent 75%
+    )
+    0 0 / 20px 20px;
+}
+
+/* Barra fija (empleado en ciclo rápido): las rayas corren como poste de barbería. */
+.bar.fija .rayas {
+  animation: barberia 0.8s linear infinite;
+}
+
+@keyframes barberia {
+  to {
+    transform: translateX(20px);
+  }
 }
 
 /* "$10 por vuelta" o "Sin abrir". */

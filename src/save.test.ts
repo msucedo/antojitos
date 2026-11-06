@@ -86,6 +86,13 @@ describe('validate', () => {
     const v = validate({ ...s, businesses: { ...s.businesses, elotes: { ...s.businesses.elotes, progressMs: 1e12 } } });
     expect(v!.businesses.elotes!.progressMs).toBeLessThanOrEqual(1_000);
   });
+
+  it('limita progressMs al ciclo efectivo (los hitos lo parten)', () => {
+    const s = newState(T0);
+    const elotes = { ...s.businesses.elotes!, count: 25, progressMs: 1e12 };
+    const v = validate({ ...s, businesses: { ...s.businesses, elotes } });
+    expect(v!.businesses.elotes!.progressMs).toBe(500);
+  });
 });
 
 describe('load / save', () => {

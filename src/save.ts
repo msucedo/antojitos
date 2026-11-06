@@ -1,5 +1,6 @@
-import { BUSINESSES, RECIPE_DIVISOR, UPGRADES } from './data';
+import { BUSINESSES, RECIPE_DIVISOR, UPGRADES, type BusinessDef } from './data';
 import {
+  cicloMs,
   emptyBiz,
   newState,
   PROPINA_TOTAL_MS,
@@ -77,7 +78,7 @@ function migrate(o: Raw): Raw | null {
   return cur;
 }
 
-function parseBiz(raw: unknown, cycleMs: number): BizState | null {
+function parseBiz(raw: unknown, def: BusinessDef): BizState | null {
   if (raw === undefined) return emptyBiz();
   if (!isObj(raw)) return null;
   const { count, progressMs, running, manager, propinaMs, trabajadoMs } = raw;
@@ -90,7 +91,7 @@ function parseBiz(raw: unknown, cycleMs: number): BizState | null {
   // Fuera de rango se recorta en vez de rechazar: un campo raro no debe costar la partida.
   return {
     count,
-    progressMs: Math.min(progressMs, cycleMs),
+    progressMs: Math.min(progressMs, cicloMs(def, count)), // ciclo efectivo: con hitos es más corto
     running: running && count > 0,
     manager,
     propinaMs: manager ? Math.min(propina, PROPINA_TOTAL_MS) : 0,
@@ -110,7 +111,7 @@ export function validate(input: unknown): State | null {
   if (!isObj(businesses)) return null;
   const out: Record<string, BizState> = {};
   for (const def of BUSINESSES) {
-    const b = parseBiz(Object.hasOwn(businesses, def.id) ? businesses[def.id] : undefined, def.cycleMs);
+    const b = parseBiz(Object.hasOwn(businesses, def.id) ? businesses[def.id] : undefined, def);
     if (!b) return null;
     out[def.id] = b;
   }
