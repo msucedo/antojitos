@@ -47,6 +47,7 @@
   --tinta: #1b2a3a; /* texto, bordes y sombra sobre papel */
   --tinta-suave: #3d4f61; /* secundario sobre papel: 5.2:1 sobre mostaza */
   --tinta-rosa: #c2006a; /* primario, aro del plato y foco sobre papel */
+  --tinta-roja: #c0392b; /* sello de goma "Bloqueado" del Álbum (decorativo, aria-hidden) */
   --tinta-nopal: #2a7239; /* barra de progreso y heredar sobre papel */
   --marco-tinta: rgb(27 42 58 / 0.4); /* línea interior y puntos de esquina sobre papel, decorativo */
   --marco: var(--marco-tinta); /* en el chrome sigue el tema (claro sobre azul noche) */
@@ -658,8 +659,29 @@ p {
 }
 
 .estampilla-card {
+  position: relative; /* ancla del sello "Bloqueado" */
   padding: 10px 6px 8px;
   gap: 3px;
+}
+
+/* Sello de goma "Bloqueado" cruzado sobre la estampilla sin lograr; el mismo .sello-goma de Empleados, en gris. */
+.sello-bloqueado {
+  position: absolute;
+  inset: 0; /* centrado en la estampilla entera */
+  display: none;
+  place-items: center;
+  pointer-events: none;
+}
+
+.estampilla.bloqueada .sello-bloqueado {
+  display: grid;
+}
+
+.sello-bloqueado .sello-goma {
+  --primary: var(--tinta-roja);
+  font-size: 0.68rem; /* "BLOQUEADO" cabe en los ~100 px de la estampilla sin que la máscara lo recorte */
+  letter-spacing: 0.04em;
+  transform: rotate(-14deg);
 }
 
 .estampilla-card .up-icon {
@@ -690,22 +712,99 @@ p {
   opacity: 0.45;
 }
 
-.libreta-title {
-  font-size: 0.95rem;
+/*
+ * Pestañas del Álbum: "Logros | Libreta" en Rye, hacen de título del panel. Una regla de tinta
+ * recorre la fila; la activa se cose a la regla con un subrayado grueso en --primary.
+ */
+.tabs {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  gap: 12px;
+  margin-bottom: 12px;
+  border-bottom: 2px solid var(--ink);
+}
+
+.tab {
+  min-height: 44px;
+  padding: 0 6px;
+  border: 0;
+  background: transparent;
   color: var(--muted);
-  margin: 14px 0 6px;
+  font: 400 0.95rem/1.2 var(--fuente-rotulo); /* mismo cuerpo que .section-title de los otros paneles */
+  font-synthesis: none;
+  cursor: var(--cursor-mano);
+  transition: color 0.15s;
+}
+
+.tab[aria-selected='true'] {
+  color: var(--primary);
+}
+
+/* Subrayado de la activa: 1 px de base que se traslada y escala (solo transform) hasta la pestaña; pisa la regla. */
+.tab-ind {
+  position: absolute;
+  left: 0;
+  bottom: -2px;
+  width: 1px;
+  height: 4px;
+  background: var(--primary);
+  transform-origin: left;
+  transition: transform 0.32s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.tab-sep {
+  align-self: center;
+  width: 2px;
+  height: 1.1em;
+  background: var(--ink);
+}
+
+/* Marcador "Nuevo" sobre la estampilla recién desbloqueada: pastilla maíz, como el badge del lateral. Estático. */
+.estampilla .nuevo {
+  display: none;
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  z-index: 1;
+  padding: 0 6px;
+  border-radius: 999px;
+  border: 2px solid var(--ink);
+  background: var(--corn);
+  color: var(--on-corn);
+  font-size: 0.6rem;
+  font-weight: 700;
+  line-height: 1.5;
+  text-transform: uppercase;
+  transform: rotate(8deg);
+  pointer-events: none;
+}
+
+.estampilla.nueva .nuevo {
+  display: block;
 }
 
 .libreta {
   margin: 0;
   display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 4px 12px;
+  gap: 2px;
   font-size: 0.85rem;
+}
+
+/* Fila etiqueta + valor; el padding negativo compensado deja el resaltado al ras del texto. */
+.libreta .fila {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 -4px;
+  padding: 1px 4px;
+  border-radius: 4px;
+  transition: background-color 0.15s;
 }
 
 .libreta dt {
   color: var(--muted);
+  transition: color 0.15s;
 }
 
 .libreta dd {
@@ -1668,6 +1767,33 @@ p {
   .seg:not([aria-pressed='true']):hover,
   .icon-btn:hover {
     background: var(--track);
+  }
+
+  /*
+   * Estampilla del Álbum bajo el ratón: la tarjeta se levanta 3 px y la sombra (::before del li) se
+   * queda, como despegarla del álbum. Nada de scale: la tarjeta enmascarada se rasteriza a 1× y se
+   * vería borrosa hasta el final de la transición.
+   */
+  .estampilla .up-card {
+    transition: transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+
+  .estampilla:hover .up-card {
+    transform: translateY(-3px);
+  }
+
+  /* Fila de la Libreta bajo el ratón: fondo suave y etiqueta y valor en negrita. */
+  .libreta .fila:hover {
+    background: var(--track);
+  }
+
+  .libreta .fila:hover dt {
+    color: var(--text);
+    font-weight: 700;
+  }
+
+  .libreta .fila:hover dd {
+    font-weight: 800;
   }
 
   .lat-btn:not(:disabled):hover .lat-disc {

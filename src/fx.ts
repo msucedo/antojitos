@@ -160,3 +160,15 @@ export function aparecer(fill: Element): void {
   const anim = fill.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 180, easing: 'ease-out' });
   anim.id = 'completar';
 }
+
+/** Contenido de una pestaña que entra desde el lado por el que se cambió (`dir` 1 = derecha). */
+export function deslizar(el: Element, dir: 1 | -1): void {
+  if (reducedMotion()) return;
+  el.animate(
+    [
+      { transform: `translateX(${dir * 28}px)`, opacity: 0 },
+      { transform: 'translateX(0)', opacity: 1 },
+    ],
+    { duration: 320, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)' },
+  );
+}

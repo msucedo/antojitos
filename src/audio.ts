@@ -24,7 +24,8 @@ export type Sound =
   | 'modeMax'
   | 'ask'
   | 'tip'
-  | 'logro';
+  | 'logro'
+  | 'tab';
 
 export interface Prefs {
   sound: boolean;
@@ -120,6 +121,11 @@ export const SOUNDS: Record<Sound, readonly Note[]> = {
   modeMax: [{ freq: G5, at: 0, dur: 0.05, type: 'sine', level: 0.6 }],
   // Pregunta a Chelo: tap suave.
   ask: [{ freq: 600, at: 0, dur: 0.04, type: 'sine', level: 0.4 }],
+  // Cambio de pestaña en el Álbum: dos tics cortos, como pasar la hoja.
+  tab: [
+    { freq: C5, at: 0, dur: 0.04, type: 'triangle', level: 0.35 },
+    { freq: G5, at: 0.05, dur: 0.05, type: 'triangle', level: 0.35 },
+  ],
   // Punto de "consejo nuevo": tin discreto.
   tip: [{ freq: 1760, at: 0, dur: 0.15, type: 'sine', level: 0.4 }],
 };

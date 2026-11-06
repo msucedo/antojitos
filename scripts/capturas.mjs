@@ -30,6 +30,7 @@ const TEMAS = { claro: 'light', oscuro: 'dark' };
 const { values: flags } = parseArgs({
   options: {
     sprite: { type: 'boolean', default: false },
+    album: { type: 'boolean', default: false }, // abre el Álbum y captura sus dos pestañas
     semilla: { type: 'string' },
   },
 });
@@ -39,7 +40,7 @@ async function leerSemilla(ruta) {
   return JSON.parse(await readFile(path.resolve(ruta), 'utf8'));
 }
 
-async function capturar(browser, { viewport, tema, url, archivo, fullPage, semilla, esperar }) {
+async function capturar(browser, { viewport, tema, url, archivo, fullPage, semilla, esperar, despues }) {
   const context = await browser.newContext({
     viewport,
     colorScheme: TEMAS[tema],
@@ -59,15 +60,35 @@ async function capturar(browser, { viewport, tema, url, archivo, fullPage, semil
     await page.goto(url, { waitUntil: 'networkidle' });
     await esperar(page);
     await page.waitForTimeout(ASIENTO_MS);
-    const destino = path.join(SALIDA, archivo);
-    await page.screenshot({ path: destino, fullPage });
-    console.log(destino);
+    const guardar = async (nombre) => {
+      const destino = path.join(SALIDA, nombre);
+      await page.screenshot({ path: destino, fullPage });
+      console.log(destino);
+    };
+    await guardar(archivo);
+    if (despues) await despues(page, guardar);
   } finally {
     await context.close();
   }
 }
 
 const esperarJuego = (page) => page.waitForSelector('#app > *', { state: 'attached' });
+
+/** Cierra lo que abra solo (bienvenida de Chelo) y abre el Álbum: lateral en web, barra inferior en móvil. */
+const esperarAlbum = (vista) => async (page) => {
+  await esperarJuego(page);
+  await page.waitForTimeout(ASIENTO_MS);
+  await page.keyboard.press('Escape');
+  if (vista === 'movil') await page.locator('.album-btn').click();
+  else await page.locator('.lateral button[aria-label^="Álbum"]').click();
+  await page.waitForTimeout(400);
+};
+
+const capturarLibreta = (vista, tema) => async (page, guardar) => {
+  await page.getByRole('tab', { name: 'Libreta' }).click();
+  await page.waitForTimeout(ASIENTO_MS);
+  await guardar(`libreta-${vista}-${tema}.png`);
+};
 const esperarSprite = (page) => page.waitForFunction(() => [...document.images].every((img) => img.complete));
 
 function tareas(semilla) {
@@ -88,15 +109,28 @@ function tareas(semilla) {
   }
   for (const [vista, viewport] of Object.entries(VISTAS)) {
     for (const tema of Object.keys(TEMAS)) {
-      lista.push({
-        viewport,
-        tema,
-        url: `${ORIGEN}/`,
-        archivo: `juego-${vista}-${tema}.png`,
-        fullPage: false,
-        semilla,
-        esperar: esperarJuego,
-      });
+      lista.push(
+        flags.album
+          ? {
+              viewport,
+              tema,
+              url: `${ORIGEN}/`,
+              archivo: `album-${vista}-${tema}.png`,
+              fullPage: false,
+              semilla,
+              esperar: esperarAlbum(vista),
+              despues: capturarLibreta(vista, tema),
+            }
+          : {
+              viewport,
+              tema,
+              url: `${ORIGEN}/`,
+              archivo: `juego-${vista}-${tema}.png`,
+              fullPage: false,
+              semilla,
+              esperar: esperarJuego,
+            },
+      );
     }
   }
   return lista;

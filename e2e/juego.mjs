@@ -241,7 +241,24 @@ test('logro: la primera venta a mano lo desbloquea y el badge del Álbum se apag
   assert.equal(await page.locator('#album .estampilla:not(.bloqueada)').count(), 1);
   assert.equal(await page.locator('#album .estampilla').count(), 25);
   assert.equal(await albumBtn.getAttribute('aria-label'), 'Álbum');
+  // Abre en Logros con el recién desbloqueado marcado como nuevo; la Libreta se escribe aunque esté oculta.
+  assert.equal(await page.locator('#album [role="tab"][aria-selected="true"]').textContent(), 'Logros');
+  assert.equal(await page.locator('#album .estampilla.nueva').count(), 1);
+  assert.match(await page.locator('#album .estampilla.nueva .up-name').textContent(), /Primer elote/);
   assert.match(await page.locator('#album .libreta').textContent(), /Logros1 de 25/);
+  // Teclado: → activa Libreta, ← vuelve.
+  await page.locator('#album [role="tab"][aria-selected="true"]').focus();
+  await page.keyboard.press('ArrowRight');
+  assert.equal(await page.locator('#album [role="tab"][aria-selected="true"]').textContent(), 'Libreta');
+  assert.equal(await page.locator('#album .estampillas').isHidden(), true);
+  await page.keyboard.press('ArrowLeft');
+  assert.equal(await page.locator('#album [role="tab"][aria-selected="true"]').textContent(), 'Logros');
+  // Cerrar y reabrir: ya nada es nuevo.
+  await albumBtn.click();
+  await page.waitForTimeout(200);
+  await albumBtn.click();
+  await page.waitForTimeout(400);
+  assert.equal(await page.locator('#album .estampilla.nueva').count(), 0);
   assert.deepEqual(errores, []);
   await context.close();
 });
@@ -257,7 +274,8 @@ test('logro por tiempo con el Álbum abierto: se sella a la vista y el badge no 
     timeout: 4000,
   });
   await page.waitForTimeout(200);
-  assert.equal(await page.locator('#album .estampilla:not(.bloqueada) .up-name').textContent(), 'Una hora');
+  assert.match(await page.locator('#album .estampilla:not(.bloqueada) .up-name').textContent(), /Una hora/);
+  assert.equal(await page.locator('#album .estampilla.nueva').count(), 1); // cayó a la vista: marcado
   assert.equal(await albumBtn.getAttribute('aria-label'), 'Álbum');
   assert.equal(await albumBtn.locator('.lat-badge').isHidden(), true);
   assert.deepEqual(errores, []);
@@ -272,6 +290,10 @@ test('móvil: el Álbum abre en diálogo desde la barra inferior y el cuerpo vue
   await dlg.waitFor();
   assert.equal(await dlg.locator('.estampilla').count(), 25);
   assert.equal(await dlg.locator('.libreta dt').count(), 16);
+  assert.equal(await dlg.locator('.libreta').isHidden(), true); // abre en Logros
+  await dlg.getByRole('tab', { name: 'Libreta' }).tap();
+  assert.equal(await dlg.locator('.estampillas').isHidden(), true);
+  assert.equal(await dlg.locator('.libreta').isVisible(), true);
   await page.keyboard.press('Escape');
   await page.waitForTimeout(300);
   assert.equal(await page.locator('#album .estampilla').count(), 25);

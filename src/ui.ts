@@ -11,7 +11,6 @@ import {
   RACHA_SEMANA,
   type BusinessDef,
   fraseDe,
-  LOGRO_BONO,
   type CheloEvent,
   type ManagerEvent,
 } from './data';
@@ -48,7 +47,7 @@ import { icon, setIcon, tabla, use, type IconName } from './icons';
 import { portrait } from './characters';
 import { LOGROS, type LogroDef, type LogroIcono } from './logros';
 import { diaDeSemana, estadoRacha, type Regalo } from './racha';
-import { aparecer, coin, completar, confetti, flip, pop, pulse, stamp, tilt } from './fx';
+import { aparecer, coin, completar, confetti, deslizar, flip, pop, pulse, stamp, tilt } from './fx';
 
 export interface Handlers {
   onStart(id: string): void;
@@ -484,8 +483,18 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
   latChars.disc.append(latCharsBadge);
   const latAlbum = latBtn('Álbum', 'album', () => {
     const abre = activePanel !== albumPanel;
+    if (abre) setTab('logros'); // antes de abrir: así no dispara el marcado dos veces
     albumPanel.toggle();
-    if (abre) handlers.onAlbumVisto();
+    if (abre) {
+      // Los ids se toman ahora (onAlbumVisto los marca vistos y render() actualiza `last` antes del rAF);
+      // el marcado va en un rAF porque el panel entra en transición, como el foco en sidePanel.open.
+      const nuevos = sinVer();
+      requestAnimationFrame(() => {
+        colocarIndicador();
+        marcarNuevas(nuevos);
+      });
+      handlers.onAlbumVisto();
+    } else limpiarNuevas();
   });
   const latAlbumBadge = h('span', { class: 'lat-badge', hidden: true });
   latAlbumBadge.setAttribute('aria-hidden', 'true');
@@ -795,53 +804,176 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
   chars.setAttribute('aria-labelledby', 'personajes-title');
   chars.id = 'personajes';
 
-  // Álbum: una estampilla por logro (siempre las 24, bloqueadas en gris con su pista) y la Libreta.
+  // Álbum: dos pestañas. Logros: una estampilla por logro (siempre las 25, bloqueadas en gris con su
+  // pista); Libreta: los contadores. Los logros sin ver desde la última visita se marcan "Nuevo".
   interface Estampilla {
     def: LogroDef;
     root: HTMLElement;
     card: HTMLElement;
+    nombre: HTMLElement;
     estado: HTMLElement;
     lograda: boolean;
   }
-  const logroBono = `+${Math.round(LOGRO_BONO * 100)} % ventas`; // corto: en 3 columnas "de ventas" partía
+  const resaltadas = new Set<string>(); // ids marcados "Nuevo" (antes de las estampillas: setEstado ya los consulta)
   function setEstado(e: Estampilla, lograda: boolean): void {
     e.lograda = lograda;
     e.root.classList.toggle('bloqueada', !lograda);
-    if (lograda) e.estado.replaceChildren(document.createTextNode(logroBono));
-    else
+    if (lograda)
+      e.estado.replaceChildren(document.createTextNode(e.def.logrado)); // qué se logró, no el +2 % repetido
+    else {
       e.estado.replaceChildren(
         h('span', { class: 'sr-only', text: 'Bloqueado. ' }),
         document.createTextNode(e.def.pista),
       );
+      desmarcar(e); // una partida importada con menos logros: lo que ya no está, no es nuevo
+    }
   }
   const estampillas: Estampilla[] = LOGROS.map((def) => {
     const estado = h('p', { class: 'up-effect' });
-    const card = h('div', { class: 'up-card estampilla-card' }, [
-      logroArte(def.icono),
-      h('h3', { class: 'up-name', text: def.nombre }),
-      estado,
-    ]);
-    const root = h('li', { class: 'up-slot estampilla' }, [card]);
-    const e: Estampilla = { def, root, card, estado, lograda: true };
+    const nombre = h('h3', { class: 'up-name', text: def.nombre });
+    // Sello de goma "Bloqueado" en diagonal sobre la estampilla, como el de "Contratado" (solo con .bloqueada).
+    const sello = h('span', { class: 'sello-bloqueado' }, [h('span', { class: 'sello-goma', text: 'Bloqueado' })]);
+    sello.setAttribute('aria-hidden', 'true'); // el sr-only de la pista ya lo dice
+    const card = h('div', { class: 'up-card estampilla-card' }, [logroArte(def.icono), nombre, estado, sello]);
+    const nuevo = h('span', { class: 'nuevo', text: 'Nuevo' });
+    nuevo.setAttribute('aria-hidden', 'true'); // el sr-only del nombre ya lo dice
+    // El marcador va después de la tarjeta enmascarada: el orden del árbol lo pinta encima.
+    const root = h('li', { class: 'up-slot estampilla' }, [card, nuevo]);
+    const e: Estampilla = { def, root, card, nombre, estado, lograda: true };
     setEstado(e, false);
     return e;
   });
+
+  // Logros nuevos: se marcan al abrir el Álbum (desde logrosVistos) o al caer con la pestaña Logros
+  // a la vista, y se limpian al cerrar. Clase y texto se ponen en el acto, no en render().
+  function marcar(e: Estampilla): void {
+    if (resaltadas.has(e.def.id) || !e.lograda) return;
+    resaltadas.add(e.def.id);
+    e.root.classList.add('nueva');
+    e.nombre.prepend(h('span', { class: 'sr-only', text: 'Nuevo. ' }));
+  }
+  function desmarcar(e: Estampilla): void {
+    if (!resaltadas.delete(e.def.id)) return;
+    e.root.classList.remove('nueva');
+    e.nombre.querySelector('.sr-only')?.remove();
+  }
+  function limpiarNuevas(): void {
+    for (const e of estampillas) desmarcar(e);
+  }
+  /** Ids sin ver según el último estado pintado. Tomarlos ANTES de onAlbumVisto (que los marca vistos). */
+  const sinVer = (): string[] => (last ? last.logros.slice(last.logrosVistos) : []);
+  /** Marca esos logros como nuevos y trae el primero a la vista. */
+  function marcarNuevas(nuevos: readonly string[]): void {
+    const ids = new Set(nuevos);
+    let primera: Estampilla | null = null;
+    for (const e of estampillas) {
+      if (!ids.has(e.def.id)) continue;
+      marcar(e);
+      primera ??= e;
+    }
+    primera?.root.scrollIntoView({ block: 'nearest' });
+  }
+
   const libretaFilas = LIBRETA.map((fila) => ({ fila, dd: h('dd') }));
+  // Cada fila en su div (dl > div > dt + dd es válido): así el hover toma etiqueta y valor juntos.
   const libreta = h(
     'dl',
     { class: 'libreta' },
-    libretaFilas.flatMap(({ fila, dd }) => [h('dt', { text: fila.label }), dd]),
+    libretaFilas.map(({ fila, dd }) => h('div', { class: 'fila' }, [h('dt', { text: fila.label }), dd])),
   );
-  const albumBody = h('div', { class: 'album-body' }, [
-    h(
-      'ul',
-      { class: 'estampillas' },
-      estampillas.map((e) => e.root),
-    ),
-    h('h3', { class: 'libreta-title', text: 'Libreta' }),
-    libreta,
+  // Pestañas (patrón tablist sobre el segmentado): viajan al diálogo móvil dentro de albumBody.
+  type Tab = 'logros' | 'libreta';
+  let tabActiva: Tab = 'logros';
+  const tabEls = (
+    [
+      {
+        id: 'logros',
+        titulo: 'Logros',
+        contenido: h(
+          'ul',
+          { class: 'estampillas' },
+          estampillas.map((e) => e.root),
+        ),
+      },
+      { id: 'libreta', titulo: 'Libreta', contenido: libreta },
+    ] as const
+  ).map(({ id, titulo, contenido }) => {
+    const btn = h('button', { class: 'tab', type: 'button', text: titulo, onclick: () => setTab(id, true) });
+    btn.id = `album-tab-${id}`;
+    btn.setAttribute('role', 'tab');
+    btn.setAttribute('aria-controls', `album-panel-${id}`);
+    const panel = h('div', {}, [contenido]);
+    panel.id = `album-panel-${id}`;
+    panel.setAttribute('role', 'tabpanel');
+    panel.setAttribute('aria-labelledby', btn.id);
+    return { id, btn, panel };
+  });
+  // "Logros | Libreta" en Rye, con un divisor de tinta entre ambas: hace de título del panel.
+  const divisor = h('span', { class: 'tab-sep' });
+  divisor.setAttribute('aria-hidden', 'true');
+  // Subrayado de la activa: un solo indicador que se desliza y estira (transform) hasta la pestaña.
+  const indicador = h('span', { class: 'tab-ind' });
+  indicador.setAttribute('aria-hidden', 'true');
+  const tablist = h('div', { class: 'tabs', label: 'Secciones del Álbum' }, [
+    tabEls[0]!.btn,
+    divisor,
+    tabEls[1]!.btn,
+    indicador,
   ]);
-  const albumTitle = h('h2', { class: 'section-title', text: 'Álbum' });
+  /** Coloca el subrayado bajo la pestaña activa; medir exige el Álbum en el layout (tras abrir, en un rAF). */
+  function colocarIndicador(): void {
+    const btn = tabEls.find((t) => t.id === tabActiva)?.btn;
+    if (!btn || btn.offsetWidth === 0) return;
+    indicador.style.transform = `translateX(${btn.offsetLeft}px) scaleX(${btn.offsetWidth})`;
+  }
+  tablist.setAttribute('role', 'tablist');
+  tablist.addEventListener('keydown', (ev) => {
+    const n = tabEls.length;
+    const i = tabEls.findIndex((t) => t.id === tabActiva);
+    const destino =
+      ev.key === 'ArrowRight'
+        ? (i + 1) % n
+        : ev.key === 'ArrowLeft'
+          ? (i + n - 1) % n
+          : ev.key === 'Home'
+            ? 0
+            : ev.key === 'End'
+              ? n - 1
+              : -1;
+    const t = tabEls[destino];
+    if (!t) return;
+    ev.preventDefault(); // si no, el panel o el diálogo hacen scroll
+    setTab(t.id, true);
+    t.btn.focus();
+  });
+  /** `gesto`: cambio pedido por el jugador (clic o flechas): suena y el contenido entra deslizando. */
+  function setTab(cual: Tab, gesto = false): void {
+    const desde = tabEls.findIndex((t) => t.id === tabActiva);
+    for (const t of tabEls) {
+      const activa = t.id === cual;
+      setAttr(t.btn, 'aria-selected', String(activa));
+      t.btn.tabIndex = activa ? 0 : -1;
+      t.panel.tabIndex = activa ? 0 : -1;
+      setHidden(t.panel, !activa);
+    }
+    const cambio = tabActiva !== cual;
+    tabActiva = cual;
+    colocarIndicador();
+    if (cambio && gesto) {
+      handlers.onSound('tab');
+      const hacia = tabEls.findIndex((t) => t.id === cual);
+      const panel = tabEls[hacia]?.panel;
+      if (panel) deslizar(panel, hacia > desde ? 1 : -1);
+    }
+    // Volver a Logros con el Álbum abierto: lo que cayó mientras miraba la Libreta se marca y queda visto.
+    if (cambio && cual === 'logros' && albumAbierto()) {
+      marcarNuevas(sinVer());
+      handlers.onAlbumVisto();
+    }
+  }
+  setTab('logros');
+  const albumBody = h('div', { class: 'album-body' }, [tablist, ...tabEls.map((t) => t.panel)]);
+  const albumTitle = h('h2', { class: 'sr-only', text: 'Álbum' }); // nombre del panel para el lector; a la vista, las pestañas
   albumTitle.id = 'album-title';
   albumTitle.tabIndex = -1;
   const album = h('section', { class: 'album panel' }, [albumTitle, albumBody]);
@@ -968,9 +1100,13 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
   let albumDialogTitle: HTMLElement | null = null;
   function openAlbum(): void {
     if (albumDialogTitle) return;
+    setTab('logros');
     albumDialogTitle = openInDialog('Álbum', albumBody, albumTitle, () => {
       albumDialogTitle = null;
+      limpiarNuevas();
     });
+    colocarIndicador(); // ya en el diálogo: hay layout
+    marcarNuevas(sinVer()); // tras asignar albumDialogTitle (lo consulta albumAbierto) y del scrollTop = 0 del diálogo
     handlers.onAlbumVisto();
   }
   const albumAbierto = () => activePanel === albumPanel || albumDialogTitle !== null;
@@ -1210,7 +1346,11 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
     }
     const tiene = new Set(s.logros);
     for (const e of estampillas) if (tiene.has(e.def.id) !== e.lograda) setEstado(e, tiene.has(e.def.id));
-    if (!albumAbierto()) return;
+    if (!albumAbierto()) {
+      if (resaltadas.size > 0) limpiarNuevas(); // cerrado con Esc o clic fuera (sin pasar por el botón)
+      return;
+    }
+    // La Libreta se reescribe también con la pestaña Logros a la vista: sin valores rancios al cambiar.
     for (const { fila, dd } of libretaFilas) setText(dd, fila.valor(s));
   }
 
@@ -1485,10 +1625,14 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
       if (silencioso) return;
       pop(latAlbumBadge);
       pop(albumBadge);
-      if (!albumAbierto()) return;
+      // En la Libreta no lo ve: el badge se enciende como si estuviera cerrado y se marca al volver a Logros.
+      if (!albumAbierto() || tabActiva !== 'logros') return;
       for (const def of defs) {
         const e = estampillas.find((x) => x.def.id === def.id);
-        if (e) stamp(e.card);
+        if (!e) continue;
+        setEstado(e, true); // render() aún no corrió: la estampilla sigue bloqueada
+        marcar(e);
+        stamp(e.card);
       }
       handlers.onAlbumVisto(); // lo está viendo: el badge no debe encenderse
     },

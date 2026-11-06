@@ -19,7 +19,10 @@ describe('catálogo', () => {
     for (const l of LOGROS) {
       expect(l.nombre.length).toBeLessThanOrEqual(22);
       expect(l.pista.length).toBeLessThanOrEqual(40);
-      expect(l.nombre + l.pista).not.toMatch(/\p{Extended_Pictographic}/u);
+      expect(l.logrado.trim().length).toBeGreaterThan(0);
+      expect(l.logrado.length).toBeLessThanOrEqual(40);
+      expect(l.logrado).not.toBe(l.pista);
+      expect(l.nombre + l.pista + l.logrado).not.toMatch(/\p{Extended_Pictographic}/u);
     }
     expect(getLogro('venta').nombre).toBe('Primer elote');
     expect(() => getLogro('nada')).toThrow();

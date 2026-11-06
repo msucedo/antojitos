@@ -260,6 +260,7 @@ Rediseño de lo de dentro de las tarjetas de negocio (`li.card`) a partir de las
 - [x] UI: panel Álbum (web, noveno disco del lateral con badge; móvil, botón en la barra inferior y diálogo), estampillas y Libreta (ver `DESIGN.md` Álbum); icono `album` en el sprite; sonido `logro`; lateral compacto bajo 700 px; `.money` con factor 0.6 (a 390 px "$999.99 cuatrillones" ya cabe en una línea; medido).
 - [x] Verificación: 195 tests unitarios; e2e 15/15 (nuevos: logro por tiempo con el Álbum abierto queda visto y sin badge; primera venta desbloquea logro y el badge se apaga al abrir el Álbum; diálogo móvil del Álbum; carga de una partida v3 avanzada migra y apunta 8 logros con un solo anuncio); capturas 390/1280/1366×620 claro y oscuro con el Álbum abierto y la Libreta; GPU igual que `2114f5c` (29–30 %), renderer +2 puntos con el Álbum abierto.
 - [x] Revisión independiente de la tanda (10 hallazgos aplicados, sin bloqueantes).
+- [x] Álbum con pestañas Logros/Libreta y logros nuevos marcados "Nuevo" al abrir (2026-11-06, plan revisado por agente: 18 hallazgos). `npm run capturas -- --album`.
 - [x] Chelo explica recetas y herencia: pregunta nueva "¿Qué son las recetas?" (se ganan solas por lo ganado en total, se cobran al heredar), respuesta de herencia reescrita (qué se reinicia y qué se queda) y una línea más en el diálogo de confirmar (recetas y logros se quedan).
 - [ ] El user aprueba las 48 frases de hito y commitea.
 - [x] 3b: racha diaria (ver MVP3b).
