@@ -86,6 +86,17 @@ describe('retratos raster', () => {
       expect([w, h]).toEqual([480, 480]);
     }
   });
+
+  it('la variante chica de Chelo es WebP 240×240 con alfa y pesa como máximo 20 KB', async () => {
+    const fs = await import('node:fs/promises');
+    const bytes = await fs.readFile(new URL('./assets/personajes/chelo-240.webp', import.meta.url));
+    expect(bytes.length).toBeLessThanOrEqual(20 * 1024);
+    expect(String.fromCharCode(...bytes.subarray(12, 16))).toBe('VP8X');
+    const at = (i: number) => bytes[i] ?? 0;
+    expect(at(20) & 0x10).toBeTruthy();
+    expect(1 + (at(24) | (at(25) << 8) | (at(26) << 16))).toBe(240);
+    expect(1 + (at(27) | (at(28) << 8) | (at(29) << 16))).toBe(240);
+  });
 });
 
 describe('bocadillos', () => {

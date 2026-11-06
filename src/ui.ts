@@ -136,7 +136,7 @@ const ORDINALES = ['primero', 'segundo', 'tercero', 'cuarto', 'quinto', 'sexto',
 /** Arte de una estampilla del Álbum: plato, retrato o símbolo del sprite, al tamaño del cupón. */
 function logroArte(icono: LogroIcono): Element {
   if ('plato' in icono) return plato(icono.plato, 'icon up-icon');
-  if ('retrato' in icono) return portrait(icono.retrato, 'icon up-icon', true);
+  if ('retrato' in icono) return portrait(icono.retrato, 'icon up-icon', true, '44px');
   return icon(icono.sprite, 'icon up-icon sticker');
 }
 
@@ -514,7 +514,7 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
     'button',
     { class: 'lat-btn', type: 'button', label: CHELO.name, onclick: () => cheloPanel.toggle() },
     [
-      h('span', { class: 'lat-disc' }, [portrait(CHELO.id, 'lat-retrato'), latCheloDot]),
+      h('span', { class: 'lat-disc' }, [portrait(CHELO.id, 'lat-retrato', false, '42px'), latCheloDot]),
       h('span', { class: 'lat-label', text: 'Chelo' }),
     ],
   );
@@ -594,7 +594,11 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
     }),
   ]);
   guiaFaq.prepend(regaloLi);
-  const guiaBody = h('div', { class: 'guia-body' }, [portrait(CHELO.id, 'guia-retrato'), guiaTexto, guiaFaq]);
+  const guiaBody = h('div', { class: 'guia-body' }, [
+    portrait(CHELO.id, 'guia-retrato', false, '25vh'),
+    guiaTexto,
+    guiaFaq,
+  ]);
   const guiaTitle = h('h2', { class: 'section-title', text: CHELO.name });
   guiaTitle.id = 'chelo-title';
   guiaTitle.tabIndex = -1;
@@ -608,7 +612,7 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
   const guiaBtnDot = h('span', { class: 'lat-dot', hidden: true });
   guiaBtnDot.setAttribute('aria-hidden', 'true');
   const guiaBtn = h('button', { class: 'guia-btn', type: 'button', label: CHELO.name, onclick: openGuia }, [
-    portrait(CHELO.id, 'lat-retrato'),
+    portrait(CHELO.id, 'lat-retrato', false, '36px'),
     guiaBtnDot,
   ]);
   const toast = h('div', { class: 'toast', hidden: true });
@@ -1375,7 +1379,8 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
       setText(prestigeBtn, heirLabel);
       if (latHeir.btn.getAttribute('aria-label') !== heirLabel) latHeir.btn.setAttribute('aria-label', heirLabel);
       setHidden(latHeirBadge, n === 0);
-      setText(latHeirBadge, `+${formatNumber(n)}`);
+      // Con miles de recetas el badge taparía el disco: tope visual; el número completo va en el aria-label.
+      setText(latHeirBadge, n > 999 ? '+999+' : `+${formatNumber(n)}`);
     },
 
     renderBars(s) {
