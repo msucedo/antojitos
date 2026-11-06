@@ -37,6 +37,8 @@ Square 1:1 composition, the item centered and filling about 80% of the canvas, s
 
 ## Platos
 
+También `puestos` (cupón de mejora global, no es negocio): va en `RASTER`, no en `PLATOS`; mismo pipeline, `--plato`.
+
 Papel de cada tarjeta (color a evitar como dominante): elote rosa, agua crema, taco verde, torta rosa, olla crema, concha mostaza, tienda verde, camión mostaza.
 
 ### elote (Carrito de elotes · papel rosa)
@@ -80,6 +82,14 @@ A Mexican concha sweet bread: a round golden bun (#E8C99A) topped with a pink su
 ```
 A small Mexican storefront: a cream facade (#FFF6E5) with a striped awning in magenta and white (#E4007C), a dark wooden door (#6B4A3A), a window, and a little sign without any text. Avoid green as the dominant color.
 ```
+
+### puestos (Cupón "Todos los negocios" · papel crema del cupón)
+
+```
+A row of three small Mexican tianguis market stalls side by side, seen from the front three-quarter view: each stall is a simple wooden counter (#E8C99A, darker #D9A15B underneath) with a scalloped fabric awning on top, one awning magenta (#E4007C), one green (#3A7D44), one mustard yellow (#F4C430), each awning with a darker tone on its underside. The three stalls touch each other and read as one single compact object. No people, no goods on the counters, no poles sticking out, no signs or lettering. Avoid cream or beige as the dominant color: the awnings should carry the color.
+```
+
+Hecho (2026-11-06): `docs/refs/plato-puestos-v2.jpeg` (la v1 salió con contorno fino), `python3 scripts/retrato.py puestos --plato --version 2`.
 
 ### camion (Cadena nacional · papel mostaza)
 

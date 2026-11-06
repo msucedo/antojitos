@@ -1,16 +1,20 @@
 import { describe, expect, it } from 'vitest';
 import { BUSINESSES } from './data';
-import { PLATOS } from './platos';
+import { PLATOS, RASTER } from './platos';
 
 describe('platos raster', () => {
   it('cada negocio tiene plato y cada plato es de un negocio', () => {
     expect(Object.keys(PLATOS).sort()).toEqual(BUSINESSES.map((b) => b.icon).sort());
   });
 
-  it('cada plato apunta a su archivo y es WebP 256×256 con alfa de máximo 30 KB', async () => {
+  it('PLATOS son los negocios y RASTER añade solo puestos', () => {
+    expect(Object.keys(RASTER).sort()).toEqual([...Object.keys(PLATOS), 'puestos'].sort());
+  });
+
+  it('cada raster apunta a su archivo y es WebP 256×256 con alfa de máximo 30 KB', async () => {
     const fs = await import('node:fs/promises');
     const ascii = (b: Uint8Array, from: number) => String.fromCharCode(...b.subarray(from, from + 4));
-    for (const [id, url] of Object.entries(PLATOS)) {
+    for (const [id, url] of Object.entries(RASTER)) {
       expect(url).toMatch(new RegExp(`/${id}\\.webp$`));
       const bytes = await fs.readFile(new URL(`./assets/platos/${id}.webp`, import.meta.url));
       expect(bytes.length, id).toBeLessThanOrEqual(30 * 1024);

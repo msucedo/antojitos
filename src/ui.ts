@@ -1,5 +1,5 @@
 import type { Sound } from './audio';
-import { plato, type PlatoId } from './platos';
+import { plato, type RasterId } from './platos';
 import {
   ANTIGUEDAD_MS,
   BUSINESSES,
@@ -283,7 +283,7 @@ export function bubbleVisible(now: number, until: number): boolean {
 }
 
 const modeLabel = (m: BuyMode) => (m === 'max' ? 'Máx' : `×${m}`);
-const modeIcon = (m: BuyMode): IconName => (m === 'max' ? 'costal' : m === 10 ? 'monedas' : 'moneda');
+const modeIcon = (m: BuyMode): IconName => (m === 'max' ? 'pilas' : m === 10 ? 'monedas' : 'moneda');
 const UPGRADE_SLOTS = 4;
 const UPGRADE_LOCK_MS = 500;
 /** Chelo avisa del siguiente hito (vuelta ×2 más rápida) cuando faltan esto o menos unidades. */
@@ -317,15 +317,15 @@ function tipFor(s: State, regaloPendiente: boolean): string | null {
   return '¡Ándale, mijo! Toca el elote para hacer tu primera venta.';
 }
 
-/** Arte de un cupón de mejora: el plato del negocio, o el sprite `upgrade` para "Todos los negocios". */
-type UpgradeArt = PlatoId | 'upgrade';
+/** Arte de un cupón de mejora: el plato del negocio, o el raster `puestos` (tres toldos) para "Todos los negocios". */
+type UpgradeArt = RasterId;
 
 function upgradeArt(art: UpgradeArt): Element {
-  return art === 'upgrade' ? icon('upgrade', 'icon up-icon sticker') : plato(art, 'icon up-icon');
+  return plato(art, 'icon up-icon');
 }
 
 function upgradeTarget(target: string): { art: UpgradeArt; label: string } {
-  if (target === 'all') return { art: 'upgrade', label: 'Todos los negocios' };
+  if (target === 'all') return { art: 'puestos', label: 'Todos los negocios' };
   const def = getDef(target);
   return { art: def.icon, label: def.name };
 }
@@ -466,7 +466,7 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
     ajSoundIc,
     h('span', { text: 'Sonido' }),
   ]);
-  const ajMusicIc = icon('guitarra-off');
+  const ajMusicIc = icon('nota-off');
   const ajMusic = h('button', { class: 'btn ajuste', type: 'button', onclick: () => handlers.onToggleMusic() }, [
     ajMusicIc,
     h('span', { text: 'Música' }),
@@ -474,7 +474,7 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
   /** [botón, icono, canal, icono encendido, icono apagado]: sincronizados en render(). */
   const audioBtns: [Element, SVGSVGElement, 'sound' | 'music', IconName, IconName][] = [
     [ajSound, ajSoundIc, 'sound', 'bocina', 'bocina-off'],
-    [ajMusic, ajMusicIc, 'music', 'guitarra', 'guitarra-off'],
+    [ajMusic, ajMusicIc, 'music', 'nota', 'nota-off'],
   ];
   // Personajes en móvil: icono en el header que abre la lista en un diálogo.
   const charsBadge = h('span', { class: 'lat-badge', hidden: true });
@@ -703,10 +703,10 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
   let refocusAfterUpgrade = false;
 
   const slots: UpgradeSlot[] = Array.from({ length: UPGRADE_SLOTS }, () => {
-    const art = upgradeArt('upgrade');
+    const art = upgradeArt('puestos');
     const name = h('h3', { class: 'up-name' });
     const effect = h('p', { class: 'up-effect' });
-    const slot: UpgradeSlot = { root: h('li'), art, artName: 'upgrade', name, effect, buy: h('button'), id: null };
+    const slot: UpgradeSlot = { root: h('li'), art, artName: 'puestos', name, effect, buy: h('button'), id: null };
     slot.buy = h('button', {
       class: 'btn primary',
       type: 'button',

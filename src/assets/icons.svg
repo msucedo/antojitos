@@ -32,8 +32,8 @@
 
   <!--
     Iconos del menú lateral (web): ilustrados, dibujados para 30 px. Cantidad: moneda (×1),
-    monedas (×10), costal (Máx). Ajustes: engrane. Caja fuerte (Respaldo, hoy solo estampilla de logro),
-    bocina (Sonido) y guitarra (Música) viven en los botones del diálogo Ajustes.
+    monedas (×10), pilas (Máx). Ajustes: engrane. Caja fuerte (Respaldo, hoy solo estampilla de logro),
+    bocina (Sonido) y nota (Música) viven en los botones del diálogo Ajustes.
     Las variantes -off repiten el dibujo y añaden la barra diagonal de tinta con halo blanco (se ve sobre papel y sobre azul noche).
   -->
   <!-- moneda: disco de oro con aro interior y "$" en trazo. -->
@@ -43,22 +43,24 @@
     <path d="M24 15v18M28.5 19c-1.5-2-8-2.5-8 1.5s8 2 8 6-6.5 3.5-8.5 1.5" fill="none" stroke="#C99700" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
     <path d="M13.5 18a12 12 0 0 1 4.5-5" fill="none" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round"/>
   </symbol>
-  <!-- monedas: tres cantos apilados y la cara superior con "$". -->
+  <!-- monedas: dos cantos apilados al fondo y una moneda de frente con "10" en trazo. ×10 y estampilla de logro. -->
   <symbol id="monedas" viewBox="0 0 48 48">
-    <rect x="8" y="30" width="32" height="8" rx="4" fill="#F4C430" stroke="#1B2A3A" stroke-width="3"/>
-    <rect x="8" y="22" width="32" height="8" rx="4" fill="#F4C430" stroke="#1B2A3A" stroke-width="3"/>
-    <rect x="8" y="14" width="32" height="8" rx="4" fill="#F4C430" stroke="#1B2A3A" stroke-width="3"/>
-    <ellipse cx="24" cy="14" rx="16" ry="6" fill="#F4C430" stroke="#1B2A3A" stroke-width="3"/>
-    <path d="M24 10.5v7M26.5 12.5c-.8-1-4.5-1-4.5.7s4.5 1 4.5 2.6-3.7 1.6-4.7.8" fill="none" stroke="#C99700" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-    <path d="M12 13.5c1-1.5 3-2.5 5-3" fill="none" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round"/>
+    <rect x="5" y="30" width="26" height="8" rx="4" fill="#F4C430" stroke="#1B2A3A" stroke-width="3"/>
+    <rect x="5" y="22" width="26" height="8" rx="4" fill="#F4C430" stroke="#1B2A3A" stroke-width="3"/>
+    <circle cx="30" cy="27" r="14" fill="#F4C430" stroke="#1B2A3A" stroke-width="3"/>
+    <path d="M25 22.5l2.5-2v13M35 21.5c2.2 0 3.3 2.5 3.3 5.5s-1.1 5.5-3.3 5.5-3.3-2.5-3.3-5.5 1.1-5.5 3.3-5.5z" fill="none" stroke="#C99700" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M21.5 19.5c1.5-2 3.5-3 5.5-3.5" fill="none" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round"/>
   </symbol>
-  <!-- costal: bolsa de yute con cuerda y "$" grande. -->
-  <symbol id="costal" viewBox="0 0 48 48">
-    <path d="M18 13h12c0 4 3 5 6 9 4 5 5 10 4 15-1 4-5 6-16 6S9 41 8 37c-1-5 0-10 4-15 3-4 6-5 6-9z" fill="#E8C99A" stroke="#1B2A3A" stroke-width="3" stroke-linejoin="round"/>
-    <path d="M15 15h18" fill="none" stroke="#B5562B" stroke-width="3" stroke-linecap="round"/>
-    <path d="M20 18l-1.5 4M28 18l1.5 4" fill="none" stroke="#B07850" stroke-width="2" stroke-linecap="round"/>
-    <path d="M24 24v13M28.5 27.5c-1.5-2-8-2.5-8 1.5s8 2 8 6-6.5 3.5-8.5 1.5" fill="none" stroke="#B5562B" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
-    <path d="M34 27c1.5 2 2.5 4.5 2.5 7" fill="none" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round"/>
+  <!-- pilas: tres pilas de monedas de alturas distintas, cantos marcados en oro oscuro. Máx y estampillas de logro. -->
+  <symbol id="pilas" viewBox="0 0 48 48">
+    <path d="M5 28h12v12a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2z" fill="#F4C430" stroke="#1B2A3A" stroke-width="3" stroke-linejoin="round"/>
+    <path d="M18 14h12v26a2 2 0 0 1-2 2H20a2 2 0 0 1-2-2z" fill="#F4C430" stroke="#1B2A3A" stroke-width="3" stroke-linejoin="round"/>
+    <path d="M31 21h12v19a2 2 0 0 1-2 2H33a2 2 0 0 1-2-2z" fill="#F4C430" stroke="#1B2A3A" stroke-width="3" stroke-linejoin="round"/>
+    <path d="M6.5 34.5h9M19.5 20.5h9M19.5 27h9M19.5 33.5h9M32.5 27.5h9M32.5 34h9" fill="none" stroke="#C99700" stroke-width="2" stroke-linecap="round"/>
+    <ellipse cx="11" cy="28" rx="6" ry="3" fill="#F4C430" stroke="#1B2A3A" stroke-width="3"/>
+    <ellipse cx="24" cy="14" rx="6" ry="3" fill="#F4C430" stroke="#1B2A3A" stroke-width="3"/>
+    <ellipse cx="37" cy="21" rx="6" ry="3" fill="#F4C430" stroke="#1B2A3A" stroke-width="3"/>
+    <path d="M21 14h5" fill="none" stroke="#FFFFFF" stroke-width="2.5" stroke-linecap="round"/>
   </symbol>
   <!-- caja: caja fuerte con puerta, dial, manija y patas. -->
   <symbol id="caja" viewBox="0 0 48 48">
@@ -70,40 +72,36 @@
     <path d="M31 19v8" fill="none" stroke="#F4C430" stroke-width="3" stroke-linecap="round"/>
     <path d="M11 11h5" fill="none" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round"/>
   </symbol>
-  <!-- bocina: cono de latón con base y dos ondas. -->
+  <!-- bocina: cono de latón con base y dos ondas enteras (la exterior acaba en x 44, dentro del viewBox). Sonido. -->
   <symbol id="bocina" viewBox="0 0 48 48">
-    <rect x="7" y="18" width="8" height="12" rx="2" fill="#C99700" stroke="#1B2A3A" stroke-width="3"/>
-    <path d="M14 20l20-10v28L14 28z" fill="#F4C430" stroke="#1B2A3A" stroke-width="3" stroke-linejoin="round"/>
-    <path d="M30 13.5v21" fill="none" stroke="#C99700" stroke-width="2" stroke-linecap="round"/>
-    <path d="M39 17a9 9 0 0 1 0 14M43.5 12a15 15 0 0 1 0 24" fill="none" stroke="#1B2A3A" stroke-width="3" stroke-linecap="round"/>
-    <path d="M18 20l7-3.5" fill="none" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round"/>
+    <rect x="5" y="18" width="7" height="12" rx="2" fill="#C99700" stroke="#1B2A3A" stroke-width="3"/>
+    <path d="M11 20l16-9v26L11 28z" fill="#F4C430" stroke="#1B2A3A" stroke-width="3" stroke-linejoin="round"/>
+    <path d="M24 14v20" fill="none" stroke="#C99700" stroke-width="2" stroke-linecap="round"/>
+    <path d="M15 20l7-3.5" fill="none" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round"/>
+    <path d="M32 17a8 8 0 0 1 0 14M37 12a14 14 0 0 1 0 24" fill="none" stroke="#1B2A3A" stroke-width="3" stroke-linecap="round"/>
   </symbol>
   <symbol id="bocina-off" viewBox="0 0 48 48">
-    <rect x="7" y="18" width="8" height="12" rx="2" fill="#C99700" stroke="#1B2A3A" stroke-width="3"/>
-    <path d="M14 20l20-10v28L14 28z" fill="#F4C430" stroke="#1B2A3A" stroke-width="3" stroke-linejoin="round"/>
-    <path d="M30 13.5v21" fill="none" stroke="#C99700" stroke-width="2" stroke-linecap="round"/>
-    <path d="M18 20l7-3.5" fill="none" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round"/>
+    <rect x="5" y="18" width="7" height="12" rx="2" fill="#C99700" stroke="#1B2A3A" stroke-width="3"/>
+    <path d="M11 20l16-9v26L11 28z" fill="#F4C430" stroke="#1B2A3A" stroke-width="3" stroke-linejoin="round"/>
+    <path d="M24 14v20" fill="none" stroke="#C99700" stroke-width="2" stroke-linecap="round"/>
+    <path d="M15 20l7-3.5" fill="none" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round"/>
     <path d="M6 6l36 36" fill="none" stroke="#FFFFFF" stroke-width="7" stroke-linecap="round"/>
     <path d="M6 6l36 36" fill="none" stroke="#1B2A3A" stroke-width="3.5" stroke-linecap="round"/>
   </symbol>
-  <!-- guitarra: cuerpo de dos lóbulos en 3/4, mástil corto y clavijero. -->
-  <symbol id="guitarra" viewBox="0 0 48 48">
-    <path d="M27 21l12-12" fill="none" stroke="#1B2A3A" stroke-width="9" stroke-linecap="round"/>
-    <path d="M27 21l12-12" fill="none" stroke="#B07850" stroke-width="4" stroke-linecap="round"/>
-    <rect x="36" y="4" width="8" height="8" rx="2" fill="#2B1B17" stroke="#1B2A3A" stroke-width="2.5"/>
-    <path d="M22 17c5 0 8 3 8 7s-3 5-3 8-1 9-9 9-10-5-10-10 2-5 4-8 5-6 10-6z" fill="#D9A15B" stroke="#1B2A3A" stroke-width="3" stroke-linejoin="round"/>
-    <circle cx="19" cy="28" r="4" fill="#2B1B17"/>
-    <rect x="14" y="35" width="8" height="3" rx="1.5" fill="#B07850"/>
-    <path d="M12 24c1-2 3-3.5 5-4" fill="none" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round"/>
+  <!-- nota: corchea doble, barra y cabezas en rosa con plicas de tinta. Música. -->
+  <symbol id="nota" viewBox="0 0 48 48">
+    <path d="M17 12v23M33 8v23" fill="none" stroke="#1B2A3A" stroke-width="3.5" stroke-linecap="round"/>
+    <path d="M17 10L33 6v8L17 18z" fill="#E4007C" stroke="#1B2A3A" stroke-width="3" stroke-linejoin="round"/>
+    <ellipse cx="13" cy="35" rx="7" ry="5" transform="rotate(-20 13 35)" fill="#E4007C" stroke="#1B2A3A" stroke-width="3"/>
+    <ellipse cx="29" cy="31" rx="7" ry="5" transform="rotate(-20 29 31)" fill="#E4007C" stroke="#1B2A3A" stroke-width="3"/>
+    <path d="M20 12.5l6-1.5" fill="none" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round"/>
   </symbol>
-  <symbol id="guitarra-off" viewBox="0 0 48 48">
-    <path d="M27 21l12-12" fill="none" stroke="#1B2A3A" stroke-width="9" stroke-linecap="round"/>
-    <path d="M27 21l12-12" fill="none" stroke="#B07850" stroke-width="4" stroke-linecap="round"/>
-    <rect x="36" y="4" width="8" height="8" rx="2" fill="#2B1B17" stroke="#1B2A3A" stroke-width="2.5"/>
-    <path d="M22 17c5 0 8 3 8 7s-3 5-3 8-1 9-9 9-10-5-10-10 2-5 4-8 5-6 10-6z" fill="#D9A15B" stroke="#1B2A3A" stroke-width="3" stroke-linejoin="round"/>
-    <circle cx="19" cy="28" r="4" fill="#2B1B17"/>
-    <rect x="14" y="35" width="8" height="3" rx="1.5" fill="#B07850"/>
-    <path d="M12 24c1-2 3-3.5 5-4" fill="none" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round"/>
+  <symbol id="nota-off" viewBox="0 0 48 48">
+    <path d="M17 12v23M33 8v23" fill="none" stroke="#1B2A3A" stroke-width="3.5" stroke-linecap="round"/>
+    <path d="M17 10L33 6v8L17 18z" fill="#E4007C" stroke="#1B2A3A" stroke-width="3" stroke-linejoin="round"/>
+    <ellipse cx="13" cy="35" rx="7" ry="5" transform="rotate(-20 13 35)" fill="#E4007C" stroke="#1B2A3A" stroke-width="3"/>
+    <ellipse cx="29" cy="31" rx="7" ry="5" transform="rotate(-20 29 31)" fill="#E4007C" stroke="#1B2A3A" stroke-width="3"/>
+    <path d="M20 12.5l6-1.5" fill="none" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round"/>
     <path d="M6 6l36 36" fill="none" stroke="#FFFFFF" stroke-width="7" stroke-linecap="round"/>
     <path d="M6 6l36 36" fill="none" stroke="#1B2A3A" stroke-width="3.5" stroke-linecap="round"/>
   </symbol>

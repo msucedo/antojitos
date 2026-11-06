@@ -134,7 +134,7 @@ export const LOGROS: readonly LogroDef[] = [
     nombre: 'Mano generosa',
     pista: 'Da 10 propinas',
     logrado: 'Diste 10 propinas',
-    icono: { sprite: 'costal' },
+    icono: { sprite: 'pilas' },
     cumple: (s) => s.stats.propinas >= 10,
   },
   {
@@ -182,7 +182,7 @@ export const LOGROS: readonly LogroDef[] = [
     nombre: 'Primer millón',
     pista: 'Gana $1 millón en total',
     logrado: 'Ganaste $1 millón en total',
-    icono: { sprite: 'costal' },
+    icono: { sprite: 'pilas' },
     cumple: (s) => s.lifetimeEarned >= 1e6,
   },
   {

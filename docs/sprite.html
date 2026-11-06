@@ -97,7 +97,7 @@
     <div class="refs" id="refs"></div>
     <script type="module">
       import { PORTRAITS } from '/src/characters.ts';
-      import { PLATOS } from '/src/platos.ts';
+      import { RASTER } from '/src/platos.ts';
       import { BUSINESSES, CHELO } from '/src/data.ts';
 
       const SPRITE = '/src/assets/icons.svg';
@@ -125,16 +125,16 @@
           </li>`,
         )
         .join('');
-      // Platos raster: cada uno sobre el papel de su negocio, a 160, como botón de vender (muestra de 56) y a 30.
-      const platos = Object.entries(PLATOS);
+      // Platos raster: cada uno sobre el papel de su negocio (puestos, el cupón global, sobre crema), a 160, como botón de vender (muestra de 56) y a 30.
+      const platos = Object.entries(RASTER);
       document.getElementById('count-platos').textContent = platos.length;
       document.getElementById('platos').innerHTML = platos
         .map(
-          ([id, src]) => `<li class="card owned" data-papel="${papel.get(id) ?? ''}">
+          ([id, src]) => `<li class="card owned" data-papel="${papel.get(id) ?? 'crema'}">
             <div class="cell paper">
               <img class="icon big" src="${src}" alt="" />
               <div>
-                <p class="name">${id} · ${papel.get(id) ?? ''}</p>
+                <p class="name">${id} · ${papel.get(id) ?? 'crema'}</p>
                 <div class="small">
                   <span class="sell"><img class="icon sell-icon" src="${src}" alt="" /></span>
                   <img class="icon i30" src="${src}" alt="" />
