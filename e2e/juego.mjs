@@ -178,10 +178,10 @@ test('contratar, dar propina con precio y ver el /s subir (web)', async () => {
   assert.equal(await page.locator('.card.propina').count(), 0, 'el doble toque no debe pagar propina');
   assert.match(await propina.textContent(), /^Dar /);
   await page.waitForTimeout(600); // pasa el bloqueo (500 ms), como una persona
-  const antes = await page.locator('.rate').textContent();
+  const antes = await page.locator('.rate [aria-hidden]').textContent();
   await propina.click();
   await page.waitForFunction(() => document.querySelector('.card.propina') !== null);
-  const despues = await page.locator('.rate').textContent();
+  const despues = await page.locator('.rate [aria-hidden]').textContent();
   const num = (t) => Number(t.replace(/[^\d.]/g, ''));
   assert.ok(num(despues) > num(antes), `${antes} → ${despues}`);
   assert.match(await page.locator('#personajes .btn[aria-disabled="true"]').first().textContent(), /×1\.5 · 0:\d\d/);

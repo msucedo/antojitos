@@ -289,7 +289,6 @@ p {
 }
 
 .title-row,
-.sub-row,
 .row,
 .actions {
   display: flex;
@@ -325,26 +324,43 @@ p {
   text-overflow: ellipsis;
 }
 
-.money {
-  font-size: clamp(1.9rem, 9vw, 2.75rem); /* el dinero es el héroe del header: 35 px a 390, 44 en web */
-  letter-spacing: 0.01em;
-  font-variant-numeric: tabular-nums; /* Rye no lo trae; evita el baile en la fuente de reserva */
-  color: var(--primary);
+/* Total, "$X/s" luego luego a su derecha y recetas al extremo; si no caben, las recetas bajan. */
+.money-row {
+  container-type: inline-size; /* 100cqi = ancho de la fila, para que .money quepa en una línea */
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  column-gap: 8px;
   margin-top: 4px;
 }
 
-.sub-row {
-  justify-content: space-between;
-  flex-wrap: wrap;
+.money {
+  /*
+   * El dinero es el héroe del header: 43 px a 390, 52 en web. Con cifras largas ("$1.23 mil
+   * billones") encoge para caber en una línea: --largo (caracteres, desde render) × ~0.56 em de
+   * Rye. Si el "/s" ya no cabe al lado, baja solo (flex-wrap).
+   */
+  font-size: min(clamp(2.3rem, 11vw, 3.25rem), 100cqi / (var(--largo, 8) * 0.56));
+  letter-spacing: 0.01em;
+  font-variant-numeric: tabular-nums; /* Rye no lo trae; evita el baile en la fuente de reserva */
+  color: var(--primary);
+}
+
+.rate {
   color: var(--muted);
-  font-size: 0.9rem;
-  min-height: 1.4em;
+  font-size: 1rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .recipes {
   display: inline-flex;
   align-items: center;
   gap: 4px;
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 0.9rem;
 }
 
 .icon-btn {
@@ -1546,7 +1562,7 @@ p {
 @media (min-width: 900px) {
   :root {
     --picado-h: 28px;
-    --side-top: 154px; /* header sticky sin icon-btn (138 px) más padding de #app y margen */
+    --side-top: 151px; /* header sticky sin icon-btn (135 px) más padding de #app y margen */
     --bar-h: 0px; /* sin barra inferior en web: el multiplicador vive en el lateral */
     --side-gap: 8px; /* aire bajo la última fila de tarjetas */
     --lateral-w: 80px;

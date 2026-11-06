@@ -387,7 +387,11 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
   }
 
   const money = h('p', { class: 'money' });
-  const rate = h('p', { class: 'rate' });
+  // "$X/s" a la vista; el lector oye "$X por segundo" (el "/s" se leería "barra s").
+  const rateVisible = h('span');
+  rateVisible.setAttribute('aria-hidden', 'true');
+  const rateSr = h('span', { class: 'sr-only' });
+  const rate = h('p', { class: 'rate', hidden: true }, [rateVisible, rateSr]);
   const recipesText = h('span');
   const recipes = h('p', { class: 'recipes', hidden: true }, [icon('recipe', 'icon icon-sm'), recipesText]);
 
@@ -719,8 +723,7 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
     lateral,
     h('header', { class: 'top' }, [
       h('div', { class: 'title-row' }, [appTitle, h('div', {}, [musicBtn, sound, charsBtn, menu])]),
-      money,
-      h('div', { class: 'sub-row' }, [rate, recipes]),
+      h('div', { class: 'money-row' }, [money, rate, recipes]),
       picado,
     ]),
     h('div', { class: 'layout' }, [
@@ -1101,9 +1104,16 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
   return {
     render(s, mode, audio) {
       last = s;
-      setText(money, formatMoney(s.money));
+      const moneyText = formatMoney(s.money);
+      setText(money, moneyText);
+      money.style.setProperty('--largo', String(moneyText.length)); // .money encoge si no cabe
       const ips = incomePerSecond(s);
-      setText(rate, ips > 0 ? `${formatMoney(ips)}/s con empleados` : 'Sin empleados todavía');
+      setHidden(rate, ips === 0);
+      if (ips > 0) {
+        const ipsText = formatMoney(ips);
+        setText(rateVisible, `${ipsText}/s`);
+        setText(rateSr, `${ipsText} por segundo`);
+      }
       setHidden(recipes, s.recipes === 0);
       setText(recipesText, `${formatNumber(s.recipes)} recetas (+${formatNumber(s.recipes * 2)}%)`);
 
