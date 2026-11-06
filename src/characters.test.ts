@@ -21,7 +21,7 @@ describe('personajes', () => {
 
   it('las frases son cortas, sin pictogramas y sin tratamiento de género', () => {
     const lines = [...managers.flatMap((m) => Object.values(m.says)), ...Object.values(CHELO.says)];
-    expect(lines.length).toBe(BUSINESSES.length * 3 + 5);
+    expect(lines.length).toBe(BUSINESSES.length * 4 + 5);
     for (const line of lines) {
       expect(line.trim().length).toBeGreaterThan(0);
       expect(line.length).toBeLessThanOrEqual(MAX_LEN);

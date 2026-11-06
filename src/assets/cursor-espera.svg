@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+  <!-- Reloj de arena (plato cargando), mismo estilo que cursor-flecha y cursor-mano: tinta, papel crema, arena elote y halo blanco. Hotspot 16 16. -->
+  <path d="M8 4H24M8 28H24M10 4V8Q10 12 16 16Q10 20 10 24V28M22 4V8Q22 12 16 16Q22 20 22 24V28" fill="none" stroke="#FFFFFF" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M10 4V8Q10 12 16 16Q10 20 10 24V28H22V24Q22 20 16 16Q22 12 22 8V4Z" fill="#FFF6E5"/>
+  <path d="M12 9.5H20Q19.5 11.5 16 14Q12.5 11.5 12 9.5Z" fill="#F4C430"/>
+  <path d="M16 19Q12 22 11.8 26H20.2Q20 22 16 19Z" fill="#F4C430"/>
+  <path d="M10 4V8Q10 12 16 16Q10 20 10 24V28M22 4V8Q22 12 16 16Q22 20 22 24V28" fill="none" stroke="#1B2A3A" stroke-width="2" stroke-linejoin="round"/>
+  <path d="M8 4H24M8 28H24" fill="none" stroke="#1B2A3A" stroke-width="3" stroke-linecap="round"/>
+</svg>

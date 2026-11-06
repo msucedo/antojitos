@@ -1,5 +1,13 @@
 import { BUSINESSES, RECIPE_DIVISOR, UPGRADES } from './data';
-import { newState, SAVE_VERSION, type BizState, type State } from './game';
+import {
+  emptyBiz,
+  newState,
+  PROPINA_TOTAL_MS,
+  SAVE_VERSION,
+  TRABAJADO_TOPE_MS,
+  type BizState,
+  type State,
+} from './game';
 
 export const SAVE_KEY = 'antojitos.save';
 export const BACKUP_KEY = 'antojitos.bak';
@@ -31,6 +39,17 @@ const MIGRATIONS: Record<number, (o: Raw) => Raw> = {
       ? Math.min(o.lifetimeEarned * (RECIPE_DIVISOR / V1_RECIPE_DIVISOR), Number.MAX_VALUE)
       : o.lifetimeEarned,
   }),
+  // v3: propina y antigüedad de los empleados. Empiezan en 0; nada más cambia. Un negocio que no es
+  // objeto se deja igual para que parseBiz lo rechace como antes.
+  2: (o) => ({
+    ...o,
+    version: 3,
+    businesses: isObj(o.businesses)
+      ? Object.fromEntries(
+          Object.entries(o.businesses).map(([id, b]) => [id, isObj(b) ? { propinaMs: 0, trabajadoMs: 0, ...b } : b]),
+        )
+      : o.businesses,
+  }),
 };
 
 /** Ids conocidos, sin duplicados; cualquier otra cosa invalida el guardado. */
@@ -59,12 +78,24 @@ function migrate(o: Raw): Raw | null {
 }
 
 function parseBiz(raw: unknown, cycleMs: number): BizState | null {
-  if (raw === undefined) return { count: 0, progressMs: 0, running: false, manager: false };
+  if (raw === undefined) return emptyBiz();
   if (!isObj(raw)) return null;
-  const { count, progressMs, running, manager } = raw;
+  const { count, progressMs, running, manager, propinaMs, trabajadoMs } = raw;
   if (!isInt(count) || count > MAX_COUNT || !isNum(progressMs)) return null;
   if (typeof running !== 'boolean' || typeof manager !== 'boolean') return null;
-  return { count, progressMs: Math.min(progressMs, cycleMs), running: running && count > 0, manager };
+  // Faltantes valen 0 (un v3 escrito a mano o una semilla); de tipo incorrecto, se rechaza.
+  const propina = propinaMs === undefined ? 0 : propinaMs;
+  const trabajado = trabajadoMs === undefined ? 0 : trabajadoMs;
+  if (!isNum(propina) || !isNum(trabajado)) return null;
+  // Fuera de rango se recorta en vez de rechazar: un campo raro no debe costar la partida.
+  return {
+    count,
+    progressMs: Math.min(progressMs, cycleMs),
+    running: running && count > 0,
+    manager,
+    propinaMs: manager ? Math.min(propina, PROPINA_TOTAL_MS) : 0,
+    trabajadoMs: manager ? Math.min(trabajado, TRABAJADO_TOPE_MS) : 0,
+  };
 }
 
 /** Valida y migra un objeto no confiable. Construye el estado desde cero: claves desconocidas se descartan. */

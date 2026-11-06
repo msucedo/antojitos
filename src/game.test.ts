@@ -1,5 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { BUSINESSES, OFFLINE_CAP_MS, RECIPE_DIVISOR, UPGRADES } from './data';
+import {
+  ANTIGUEDAD_MS,
+  BUSINESSES,
+  ESTRELLA_BONO,
+  OFFLINE_CAP_MS,
+  PROPINA_COSTO_MS,
+  PROPINA_ESPERA_MS,
+  PROPINA_MS,
+  PROPINA_MULT,
+  RECIPE_DIVISOR,
+  UPGRADES,
+} from './data';
 import {
   applyOffline,
   buy,
@@ -10,6 +21,9 @@ import {
   nextUpgrades,
   upgradeMultiplier,
   costOf,
+  darPropina,
+  emptyBiz,
+  estrellas,
   getDef,
   hireManager,
   firstHireReady,
@@ -19,15 +33,33 @@ import {
   newState,
   nextMode,
   pendingRecipes,
+  incomePerSecond,
+  propinaActiva,
+  propinaCosto,
+  propinaLista,
+  PROPINA_TOTAL_MS,
   quantityFor,
   prestige,
   revenuePerCycle,
   startCycle,
   tick,
+  TRABAJADO_TOPE_MS,
+  ventasPorSegundo,
   type State,
 } from './game';
 
 const elotes = getDef('elotes');
+
+/** Ventas de un carrito de elotes con empleado recién contratado durante `ms`: cada tramo con sus estrellas. */
+function ventasConAntiguedad(ms: number): number {
+  const cortes = [0, ...ANTIGUEDAD_MS, Infinity];
+  let total = 0;
+  for (let i = 0; i < cortes.length - 1; i++) {
+    const tramo = Math.max(Math.min(ms, cortes[i + 1]!) - cortes[i]!, 0);
+    total += (tramo / elotes.cycleMs) * elotes.baseRevenue * (1 + ESTRELLA_BONO * i);
+  }
+  return total;
+}
 const T0 = 1_700_000_000_000;
 
 function withMoney(money: number, s: State = newState(T0)): State {
@@ -121,7 +153,7 @@ describe('buySound', () => {
     expect(buySound(rico, buy(rico, 'elotes', 1), 'elotes')).toBe('buy');
     const conCarritos = (s: State, count: number): State => ({
       ...s,
-      businesses: { ...s.businesses, elotes: { count, progressMs: 0, running: false, manager: false } },
+      businesses: { ...s.businesses, elotes: emptyBiz(count) },
     });
     const casi = conCarritos(rico, 24);
     expect(buySound(casi, buy(casi, 'elotes', 1), 'elotes')).toBe('milestone');
@@ -191,7 +223,7 @@ describe('ciclos', () => {
     let s = hireManager(withMoney(elotes.manager.cost), 'elotes');
     expect(s.businesses.elotes?.manager).toBe(true);
     s = tick(s, elotes.cycleMs * 1e9 + 1);
-    expect(s.money).toBeCloseTo(elotes.baseRevenue * 1e9);
+    expect(s.money / ventasConAntiguedad(elotes.cycleMs * 1e9)).toBeCloseTo(1, 12);
     expect(s.businesses.elotes?.progressMs).toBeCloseTo(1);
   });
 
@@ -225,7 +257,9 @@ describe('offline', () => {
   it('tope de 8 h', () => {
     const { earned, elapsedMs } = applyOffline(managed(), T0 + OFFLINE_CAP_MS * 10);
     expect(elapsedMs).toBe(OFFLINE_CAP_MS);
-    expect(earned).toBeCloseTo((OFFLINE_CAP_MS / elotes.cycleMs) * elotes.baseRevenue);
+    // Cada tramo cobra con sus estrellas, como con la pestaña abierta: 600 + 3000·1.1 + 18000·1.2 + 7200·1.3.
+    expect(earned).toBeCloseTo(ventasConAntiguedad(OFFLINE_CAP_MS));
+    expect(ventasConAntiguedad(OFFLINE_CAP_MS)).toBeCloseTo(34_860);
   });
 
   it('reloj atrasado → 0', () => {
@@ -345,5 +379,96 @@ describe('nextMode', () => {
     expect(nextMode(1)).toBe(10);
     expect(nextMode(10)).toBe('max');
     expect(nextMode('max')).toBe(1);
+  });
+});
+
+describe('propina y antigüedad', () => {
+  /** Elotes con empleado y $1,000 de sobra para propinas; la barra empieza en 0. */
+  const conBeto = (): State => hireManager(withMoney(elotes.manager.cost + 1_000), 'elotes');
+  const b = (s: State) => s.businesses.elotes!;
+
+  it('cuesta 10 s de ventas; solo con empleado, con dinero y cuando la espera terminó', () => {
+    expect(darPropina(withMoney(1e6), 'elotes')).toEqual(withMoney(1e6));
+    const s0 = conBeto();
+    const costo = propinaCosto(s0, 'elotes');
+    expect(costo).toBe(Math.ceil((ventasPorSegundo(s0, 'elotes') * PROPINA_COSTO_MS) / 1000));
+    expect(darPropina({ ...s0, money: costo - 1 }, 'elotes').money).toBe(costo - 1);
+    const s = darPropina(s0, 'elotes');
+    expect(s.money).toBe(s0.money - costo);
+    expect(b(s).propinaMs).toBe(PROPINA_TOTAL_MS);
+    expect(propinaActiva(b(s))).toBe(true);
+    expect(darPropina(s, 'elotes')).toBe(s);
+    const casi = tick(s, PROPINA_TOTAL_MS - 1);
+    expect(propinaActiva(b(casi))).toBe(false);
+    expect(propinaLista(b(casi))).toBe(false);
+    expect(propinaLista(b(tick(casi, 1)))).toBe(true);
+  });
+
+  it('×1.5 de ventas solo en su ventana; la barra va al ritmo de siempre', () => {
+    const s = darPropina(conBeto(), 'elotes');
+    const base = revenuePerCycle(s, 'elotes');
+    // 40 s: 40 vueltas normales + extra de 0.5 × 30 s de ventas.
+    const r = applyOffline(s, s.lastSeen + 40_000);
+    expect(r.earned).toBeCloseTo(40 * base + (PROPINA_MULT - 1) * 30 * base);
+    expect(b(r.state).progressMs).toBe(b(tick(conBeto(), 40_000)).progressMs);
+    expect(b(r.state).propinaMs).toBe(PROPINA_TOTAL_MS - 40_000);
+    expect(b(r.state).trabajadoMs).toBe(40_000);
+  });
+
+  it('un negocio lento cobra el mismo extra aunque no cierre vuelta en los 30 s', () => {
+    const cadena = getDef('cadena');
+    const base0 = withMoney(1e15);
+    const s0: State = {
+      ...base0,
+      businesses: { ...base0.businesses, cadena: { ...emptyBiz(1), manager: true } },
+    };
+    const s = darPropina(s0, 'cadena');
+    const extra = applyOffline(s, s.lastSeen + 30_000).earned;
+    expect(extra).toBeCloseTo((PROPINA_MULT - 1) * ventasPorSegundo(s, 'cadena') * 30);
+    expect(cadena.cycleMs).toBeGreaterThan(30_000);
+  });
+
+  it('el /s cuenta la propina mientras dura', () => {
+    const s0 = conBeto();
+    const s = darPropina(s0, 'elotes');
+    expect(incomePerSecond(s)).toBeCloseTo(incomePerSecond(s0) * PROPINA_MULT);
+    expect(incomePerSecond(tick(s, PROPINA_MS))).toBeCloseTo(incomePerSecond(s0));
+  });
+
+  it('una ausencia que cruza estrellas cobra lo mismo que la pestaña abierta', () => {
+    const s = conBeto();
+    const fuera = applyOffline(s, s.lastSeen + 4 * 3_600_000).state;
+    let abierta = s;
+    for (let i = 0; i < 4 * 3600; i++) abierta = tick(abierta, 1_000);
+    expect(fuera.money).toBeCloseTo(abierta.money, 6);
+    expect(fuera.businesses.elotes).toEqual(abierta.businesses.elotes);
+  });
+
+  it('el reloj atrasado no avanza la propina', () => {
+    const s = darPropina(conBeto(), 'elotes');
+    const r = applyOffline(s, s.lastSeen - 60_000);
+    expect(b(r.state).propinaMs).toBe(PROPINA_TOTAL_MS);
+  });
+
+  it('estrellas a 10 min, 1 h y 6 h; +10 % de ventas cada una; tope en la última', () => {
+    expect(ANTIGUEDAD_MS).toEqual([600_000, 3_600_000, 21_600_000]);
+    const s = conBeto();
+    const base = revenuePerCycle(s, 'elotes');
+    expect(estrellas(b(tick(s, 599_999)))).toBe(0);
+    const una = tick(s, 600_000);
+    expect(estrellas(b(una))).toBe(1);
+    expect(revenuePerCycle(una, 'elotes')).toBeCloseTo(base * (1 + ESTRELLA_BONO));
+    const todas = tick(s, OFFLINE_CAP_MS);
+    expect(estrellas(b(todas))).toBe(3);
+    expect(b(todas).trabajadoMs).toBe(TRABAJADO_TOPE_MS);
+  });
+
+  it('sin empleado no hay antigüedad; contratar y heredar reinician todo', () => {
+    const sin = startCycle(buy(withMoney(100), 'elotes', 1), 'elotes');
+    expect(b(tick(sin, 10_000)).trabajadoMs).toBe(0);
+    const viejo = darPropina(tick(conBeto(), 700_000), 'elotes');
+    const heredado = prestige({ ...viejo, lifetimeEarned: RECIPE_DIVISOR * 10 }, T0);
+    expect(b(heredado)).toEqual(emptyBiz(1));
+    expect(PROPINA_TOTAL_MS).toBe(PROPINA_MS + PROPINA_ESPERA_MS);
   });
 });

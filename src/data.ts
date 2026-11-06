@@ -1,7 +1,7 @@
 import type { CharacterId } from './characters';
 import type { IconName } from './icons';
 
-export type ManagerEvent = 'hire' | 'milestone' | 'upgrade';
+export type ManagerEvent = 'hire' | 'milestone' | 'upgrade' | 'estrella';
 export type CheloEvent = 'milestone' | 'upgrade' | 'upgradeOne' | 'prestige' | 'empleado';
 
 /**
@@ -55,6 +55,7 @@ export const BUSINESSES: readonly BusinessDef[] = [
         hire: 'Órale. Usted descanse, que el elote se vende solo.',
         milestone: '¿Ya vio? Hasta la fila da vuelta a la esquina.',
         upgrade: 'Con eso ni el chile pica igual. Mejor, pues.',
+        estrella: 'Con los años el elote sabe mejor. Usted nomás vea.',
       },
     },
   },
@@ -76,6 +77,7 @@ export const BUSINESSES: readonly BusinessDef[] = [
         hire: '¡Aguas, aguas! Jamaica, horchata y limón, bien frías.',
         milestone: '¡Se nos acaba el hielo de tanta gente!',
         upgrade: 'Pruébela. Esta sí sabe a fruta de verdad.',
+        estrella: '¡Ya me sé el pregón de memoria! ¡Aguas, aguas frescas!',
       },
     },
   },
@@ -97,6 +99,7 @@ export const BUSINESSES: readonly BusinessDef[] = [
         hire: '¿Con todo? Con todo. Aquí nadie se va con hambre.',
         milestone: '¡Trompo nuevo cada hora! Esto ya es otra liga.',
         upgrade: 'Esa salsa ya hizo llorar a tres. Buena señal.',
+        estrella: 'Ya corto el trompo con los ojos cerrados. Bueno, casi.',
       },
     },
   },
@@ -118,6 +121,7 @@ export const BUSINESSES: readonly BusinessDef[] = [
         hire: 'Aquí las tortas van bien servidas. Ya lo verá.',
         milestone: 'No me mire así. Le dije que iban a venir.',
         upgrade: 'Ahora sí hay con qué trabajar. Siga así.',
+        estrella: 'La experiencia no se improvisa. Las tortas tampoco.',
       },
     },
   },
@@ -139,6 +143,7 @@ export const BUSINESSES: readonly BusinessDef[] = [
         hire: 'Siéntese, que ya casi sale el guisado.',
         milestone: 'Tuvimos que poner mesas en la banqueta.',
         upgrade: 'Con sazón nuevo hasta el arroz sabe a domingo.',
+        estrella: 'Ya sé el gusto de cada cliente. Aquí nadie se va con hambre.',
       },
     },
   },
@@ -160,6 +165,7 @@ export const BUSINESSES: readonly BusinessDef[] = [
         hire: 'Hoy salieron esponjaditas. Huela nomás.',
         milestone: 'Ya no caben las charolas en el mostrador.',
         upgrade: 'Con el horno nuevo hasta la masa está de buenas.',
+        estrella: 'Ya sé cuándo sale el pan nomás por el olor.',
       },
     },
   },
@@ -181,6 +187,7 @@ export const BUSINESSES: readonly BusinessDef[] = [
         hire: 'Según mis proyecciones, esto escala. Confíe en el proceso.',
         milestone: 'Los indicadores superan lo previsto. Lo llevo a la junta.',
         upgrade: 'Inversión alineada con la estrategia. Excelente.',
+        estrella: 'Antigüedad acreditada: rendimiento al alza, sin excepción.',
       },
     },
   },
@@ -202,6 +209,7 @@ export const BUSINESSES: readonly BusinessDef[] = [
         hire: 'Yo me encargo. Usted no se distraiga.',
         milestone: 'Bien. Ahora el doble.',
         upgrade: 'Era lo que faltaba. Siguiente.',
+        estrella: 'Experiencia. Se nota.',
       },
     },
   },
@@ -258,6 +266,17 @@ export const CHELO = {
 export const MILESTONES: readonly number[] = [25, 50, 100, 200];
 
 export const OFFLINE_CAP_MS = 8 * 60 * 60 * 1000;
+
+/** Propina: el negocio vende más durante PROPINA_MS y luego hay que esperar PROPINA_ESPERA_MS. */
+export const PROPINA_MS = 30_000;
+export const PROPINA_ESPERA_MS = 300_000;
+/** Durante la propina el negocio vende ×PROPINA_MULT; cuesta lo que vende en PROPINA_COSTO_MS. */
+export const PROPINA_MULT = 1.5;
+export const PROPINA_COSTO_MS = 10_000;
+/** Tiempo trabajado con empleado para cada estrella de antigüedad (10 min, 1 h, 6 h). */
+export const ANTIGUEDAD_MS: readonly number[] = [600_000, 3_600_000, 21_600_000];
+/** Ventas extra por estrella de antigüedad. */
+export const ESTRELLA_BONO = 0.1;
 export const RECIPE_BONUS = 0.02;
 export const RECIPE_DIVISOR = 1e12;
 

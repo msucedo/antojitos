@@ -1,7 +1,13 @@
 import {
+  ANTIGUEDAD_MS,
   BUSINESSES,
+  ESTRELLA_BONO,
   MILESTONES,
   OFFLINE_CAP_MS,
+  PROPINA_COSTO_MS,
+  PROPINA_ESPERA_MS,
+  PROPINA_MS,
+  PROPINA_MULT,
   RECIPE_BONUS,
   RECIPE_DIVISOR,
   UPGRADES,
@@ -9,7 +15,7 @@ import {
   type UpgradeDef,
 } from './data';
 
-export const SAVE_VERSION = 2;
+export const SAVE_VERSION = 3;
 
 export interface BizState {
   count: number;
@@ -18,6 +24,22 @@ export interface BizState {
   /** Ciclo manual en curso (sin gerente). */
   running: boolean;
   manager: boolean;
+  /**
+   * Cuenta regresiva de la propina en tiempo de juego: por encima de PROPINA_ESPERA_MS el empleado
+   * vende ×PROPINA_MULT; de ahí a 0 es la espera; en 0 se puede dar otra.
+   */
+  propinaMs: number;
+  /** Tiempo trabajado con empleado (define las estrellas de antigüedad), con tope en la última. */
+  trabajadoMs: number;
+}
+
+/** Cuenta regresiva completa de una propina: el doble más la espera. */
+export const PROPINA_TOTAL_MS = PROPINA_MS + PROPINA_ESPERA_MS;
+/** trabajadoMs no pasa de aquí: con la última estrella ya no cambia nada. */
+export const TRABAJADO_TOPE_MS = ANTIGUEDAD_MS[ANTIGUEDAD_MS.length - 1] ?? 0;
+
+export function emptyBiz(count = 0): BizState {
+  return { count, progressMs: 0, running: false, manager: false, propinaMs: 0, trabajadoMs: 0 };
 }
 
 export interface State {
@@ -47,7 +69,7 @@ export function nextMode(m: BuyMode): BuyMode {
 function freshBusinesses(): Record<string, BizState> {
   const out: Record<string, BizState> = {};
   BUSINESSES.forEach((def, i) => {
-    out[def.id] = { count: i === 0 ? 1 : 0, progressMs: 0, running: false, manager: false };
+    out[def.id] = emptyBiz(i === 0 ? 1 : 0);
   });
   return out;
 }
@@ -102,6 +124,11 @@ export function nextMilestone(count: number): number | null {
 }
 
 export function revenuePerCycle(state: State, id: string): number {
+  return revenueWithStars(state, id, estrellas(biz(state, id)));
+}
+
+/** Ingreso por vuelta con `stars` estrellas (advance cambia de estrellas a mitad de un dt). */
+function revenueWithStars(state: State, id: string, stars: number): number {
   const def = getDef(id);
   const { count } = biz(state, id);
   return Math.min(
@@ -109,6 +136,7 @@ export function revenuePerCycle(state: State, id: string): number {
       count *
       2 ** milestonesReached(count) *
       (1 + RECIPE_BONUS * state.recipes) *
+      (1 + ESTRELLA_BONO * stars) *
       upgradeMultiplier(state, id),
     Number.MAX_VALUE,
   );
@@ -190,7 +218,43 @@ export function hireManager(state: State, id: string): State {
     manager: true,
     running: false,
     progressMs: b.running ? b.progressMs : 0,
+    propinaMs: 0,
+    trabajadoMs: 0,
   });
+}
+
+/** Estrellas de antigüedad (0 a 3) según el tiempo trabajado con empleado. */
+export function estrellas(b: BizState): number {
+  return ANTIGUEDAD_MS.filter((ms) => b.trabajadoMs >= ms).length;
+}
+
+/** El negocio vende ×PROPINA_MULT ahora mismo. */
+export function propinaActiva(b: BizState): boolean {
+  return b.propinaMs > PROPINA_ESPERA_MS;
+}
+
+export function propinaLista(b: BizState): boolean {
+  return b.manager && b.count > 0 && b.propinaMs === 0;
+}
+
+/** Lo que vende el negocio por segundo (con empleado; base del /s y de la propina). */
+export function ventasPorSegundo(state: State, id: string): number {
+  return (revenuePerCycle(state, id) * 1000) / getDef(id).cycleMs;
+}
+
+/** Precio de la propina: lo que el negocio vende en PROPINA_COSTO_MS. Entero, como costOf. */
+export function propinaCosto(state: State, id: string): number {
+  return Math.ceil((ventasPorSegundo(state, id) * PROPINA_COSTO_MS) / 1000);
+}
+
+export function puedeDarPropina(state: State, id: string): boolean {
+  return propinaLista(biz(state, id)) && state.money >= propinaCosto(state, id);
+}
+
+/** Paga la propina: ×PROPINA_MULT de ventas durante PROPINA_MS y luego la espera. Sin efecto si no se puede. */
+export function darPropina(state: State, id: string): State {
+  if (!puedeDarPropina(state, id)) return state;
+  return withBiz({ ...state, money: state.money - propinaCosto(state, id) }, id, { propinaMs: PROPINA_TOTAL_MS });
 }
 
 /**
@@ -212,13 +276,16 @@ function advance(state: State, dtMs: number): { state: State; earned: number } {
       businesses[def.id] = b;
       continue;
     }
+    if (b.manager) {
+      const r = advanceManaged(state, def, b, dtMs);
+      earned = capAdd(earned, r.earned);
+      businesses[def.id] = r.biz;
+      continue;
+    }
     const total = b.progressMs + dtMs;
     const cycles = Math.floor(total / def.cycleMs);
     const perCycle = revenuePerCycle(state, def.id);
-    if (b.manager) {
-      earned = capAdd(earned, cycles * perCycle);
-      businesses[def.id] = { ...b, progressMs: total - cycles * def.cycleMs };
-    } else if (cycles >= 1) {
+    if (cycles >= 1) {
       earned = capAdd(earned, perCycle);
       businesses[def.id] = { ...b, progressMs: 0, running: false };
     } else {
@@ -237,6 +304,35 @@ function advance(state: State, dtMs: number): { state: State; earned: number } {
   };
 }
 
+/**
+ * Negocio con empleado: corta `dt` en los umbrales de antigüedad (a lo más 4 tramos) para que cada
+ * tramo cobre con sus estrellas, igual que si la pestaña hubiera seguido abierta. También corta al
+ * terminar la propina: dentro de su ventana el tramo suma el extra de ventas; la barra no cambia.
+ */
+function advanceManaged(state: State, def: BusinessDef, b: BizState, dtMs: number): { biz: BizState; earned: number } {
+  let { progressMs, propinaMs, trabajadoMs } = b;
+  let earned = 0;
+  let left = dtMs;
+  while (left > 0) {
+    // Tramo hasta el siguiente corte: umbral de antigüedad o fin de la ventana de la propina.
+    const ventana = Math.max(propinaMs - PROPINA_ESPERA_MS, 0);
+    const next = ANTIGUEDAD_MS.find((ms) => ms > trabajadoMs);
+    let seg = next === undefined ? left : Math.min(left, next - trabajadoMs);
+    if (ventana > 0) seg = Math.min(seg, ventana);
+    const total = progressMs + seg;
+    const cycles = Math.floor(total / def.cycleMs);
+    const perCycle = revenueWithStars(state, def.id, estrellas({ ...b, trabajadoMs }));
+    earned = capAdd(earned, cycles * perCycle);
+    // Propina: extra continuo al dinero (no por vueltas), así un negocio lento cobra igual que uno rápido.
+    if (ventana > 0) earned = capAdd(earned, ((PROPINA_MULT - 1) * perCycle * seg) / def.cycleMs);
+    progressMs = total - cycles * def.cycleMs;
+    propinaMs = Math.max(propinaMs - seg, 0);
+    trabajadoMs = Math.min(trabajadoMs + seg, TRABAJADO_TOPE_MS);
+    left -= seg;
+  }
+  return { biz: { ...b, progressMs, propinaMs, trabajadoMs }, earned };
+}
+
 /** Aplica el tiempo fuera desde `lastSeen` (tope 8 h, reloj atrasado → 0). */
 export function applyOffline(state: State, now: number): { state: State; earned: number; elapsedMs: number } {
   const elapsedMs = Math.min(Math.max(now - state.lastSeen, 0), OFFLINE_CAP_MS);
@@ -248,7 +344,7 @@ export function incomePerSecond(state: State): number {
   let total = 0;
   for (const def of BUSINESSES) {
     const b = biz(state, def.id);
-    if (b.manager && b.count > 0) total += (revenuePerCycle(state, def.id) * 1000) / def.cycleMs;
+    if (b.manager && b.count > 0) total += ventasPorSegundo(state, def.id) * (propinaActiva(b) ? PROPINA_MULT : 1);
   }
   return total;
 }

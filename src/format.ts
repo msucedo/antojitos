@@ -74,3 +74,9 @@ export function formatDuration(ms: number): string {
     .map(([v, unit]) => `${v} ${unit}`)
     .join(' ');
 }
+
+/** Cuenta regresiva corta para botones: "4:05", "0:24". Redondea hacia arriba: nunca muestra 0:00 antes de tiempo. */
+export function formatReloj(ms: number): string {
+  const total = Math.max(Math.ceil(ms / 1000), 0);
+  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
+}

@@ -15,8 +15,11 @@ import {
   startCycle,
   type BuyMode,
   type State,
+  darPropina,
+  estrellas,
+  propinaCosto,
 } from './game';
-import { BUSINESSES, CHELO } from './data';
+import { BUSINESSES, CHELO, ESTRELLA_BONO, PROPINA_MS, PROPINA_MULT } from './data';
 import { createAudio, loadPrefs, savePrefs, type Sound } from './audio';
 import { backup, exportSave, importSave, load, save, type KV } from './save';
 import { createUI, showLocked, type UI } from './ui';
@@ -96,6 +99,17 @@ function start(root: HTMLElement): void {
       const { manager } = getDef(id);
       ui.say(id, 'hire');
       ui.announce(`Contrataste a ${manager.name}. ${manager.says.hire}`);
+    },
+    onPropina: (id) => {
+      const costo = propinaCosto(state, id);
+      const next = darPropina(state, id);
+      if (next === state) return;
+      set(next);
+      audio.play('upgrade');
+      ui.tipped(id);
+      ui.announce(
+        `Propina de ${formatMoney(costo)} a ${getDef(id).manager.name}: vende ×${PROPINA_MULT} durante ${PROPINA_MS / 1000} s.`,
+      );
     },
     onUpgrade: (id) => {
       if (!act(buyUpgrade(state, id), 'upgrade', id)) return;
@@ -183,20 +197,48 @@ function start(root: HTMLElement): void {
     state = r.state;
     dirty ||= r.earned > 0;
     // Ciclos manuales que terminaron (en un frame o al volver a la pestaña):
-    // moneda + sonido. Los gerentes no suenan.
+    // moneda + sonido. Los gerentes no suenan; solo tildan el icono.
     for (const def of BUSINESSES) {
       const b0 = before.businesses[def.id];
       const b1 = state.businesses[def.id];
       if (b0?.running && b1 && !b1.running && !b1.manager) {
         ui.sold(def.id, revenuePerCycle(before, def.id));
         audio.play('sell');
+      } else if (b0?.manager && b1?.manager && (b1.progressMs < b0.progressMs || r.elapsedMs >= def.cycleMs)) {
+        // Vuelta de empleado: la barra volvió a empezar (o pasó un ciclo entero entre frames).
+        // Tras una ausencia larga, un solo tilt.
+        ui.turned(def.id);
       }
     }
-    if (r.earned > 0 && r.elapsedMs >= MIN_OFFLINE_NOTICE_MS) {
+    // Estrellas de antigüedad ganadas en este tramo.
+    const ganadas = BUSINESSES.filter((def) => {
+      const b0 = before.businesses[def.id];
+      const b1 = state.businesses[def.id];
+      return b0?.manager && b1?.manager && estrellas(b1) > estrellas(b0);
+    });
+    const aviso = r.earned > 0 && r.elapsedMs >= MIN_OFFLINE_NOTICE_MS;
+    if (aviso) {
       if (notify) {
-        ui.showOffline(r.earned, r.elapsedMs);
+        // Al volver: una línea en el aviso, sin avalancha de bocadillos ni sonidos.
+        ui.showOffline(
+          r.earned,
+          r.elapsedMs,
+          ganadas.map((d) => d.manager.name),
+        );
         audio.play('welcome');
-      } else ui.announce(`Ganaste ${formatMoney(r.earned)} mientras no estabas.`);
+      } else if (ganadas.length === 0) ui.announce(`Ganaste ${formatMoney(r.earned)} mientras no estabas.`);
+    }
+    if (ganadas.length > 0 && !(aviso && notify)) {
+      // Un solo anuncio y un solo sonido aunque ganen varios (el aria-live se pisaría).
+      const textos = ganadas.map((def) => {
+        const n = estrellas(state.businesses[def.id]!);
+        ui.say(def.id, 'estrella');
+        const pct = Math.round(n * ESTRELLA_BONO * 100);
+        return `${def.manager.name}: ${n} ${n === 1 ? 'estrella' : 'estrellas'}, +${pct} % de ventas. ${def.manager.says.estrella}`;
+      });
+      if (aviso) textos.unshift(`Ganaste ${formatMoney(r.earned)} mientras no estabas.`);
+      ui.announce(textos.join(' '));
+      audio.play('milestone');
     }
     // Primera receta disponible en esta partida: un guardado que ya la traía no suena al cargar.
     if (pendingRecipes(before) === 0 && pendingRecipes(state) > 0) audio.play('heir');

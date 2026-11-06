@@ -121,3 +121,18 @@ export function flip(el: Element): void {
     easing: 'cubic-bezier(0.2, 0.8, 0.2, 1.2)',
   });
 }
+
+/**
+ * Recompensa del icono de vender: se tilda a la derecha y vuelve. `suave` (ciclos muy cortos, que
+ * tildan cada segundo) baja el ángulo y la duración. Un tilt nuevo reemplaza al que corre.
+ */
+export function tilt(el: Element, suave = false): void {
+  if (reducedMotion()) return;
+  for (const a of el.getAnimations()) if (a.id === 'tilt') a.cancel();
+  const deg = suave ? 4 : 8;
+  const anim = el.animate(
+    [{ transform: 'rotate(0)' }, { transform: `rotate(${deg}deg)`, offset: 0.35 }, { transform: 'rotate(0)' }],
+    { duration: suave ? 200 : 320, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1.2)' },
+  );
+  anim.id = 'tilt';
+}

@@ -1,10 +1,22 @@
 import type { Sound } from './audio';
 import { plato } from './platos';
-import { BUSINESSES, CHELO, type BusinessDef, type CheloEvent, type ManagerEvent } from './data';
+import {
+  ANTIGUEDAD_MS,
+  BUSINESSES,
+  CHELO,
+  ESTRELLA_BONO,
+  PROPINA_ESPERA_MS,
+  PROPINA_MS,
+  PROPINA_MULT,
+  type BusinessDef,
+  type CheloEvent,
+  type ManagerEvent,
+} from './data';
 import {
   canBuyUpgrade,
   canHireManager,
   costOf,
+  estrellas,
   getDef,
   getUpgrade,
   firstHireReady,
@@ -14,20 +26,26 @@ import {
   nextMode,
   nextUpgrades,
   pendingRecipes,
+  propinaActiva,
+  propinaCosto,
+  propinaLista,
+  puedeDarPropina,
   quantityFor,
   revenuePerCycle,
+  type BizState,
   type BuyMode,
   type State,
 } from './game';
-import { formatDuration, formatMoney, formatNumber } from './format';
+import { formatDuration, formatMoney, formatNumber, formatReloj } from './format';
 import { icon, setIcon, tabla, use, type IconName } from './icons';
 import { portrait } from './characters';
-import { coin, confetti, flip, pop, pulse, stamp } from './fx';
+import { coin, confetti, flip, pop, pulse, stamp, tilt } from './fx';
 
 export interface Handlers {
   onStart(id: string): void;
   onBuy(id: string): void;
   onHire(id: string): void;
+  onPropina(id: string): void;
   onUpgrade(id: string): void;
   onMode(mode: BuyMode): void;
   onPrestige(): void;
@@ -104,6 +122,8 @@ interface Card {
   def: BusinessDef;
   root: HTMLElement;
   sell: HTMLButtonElement;
+  /** Imagen del plato: se tilda al vender (clic, ciclo manual o vuelta del empleado). */
+  art: Element;
   count: HTMLElement;
   fill: HTMLElement;
   /** Línea bajo la barra: cuánto deja cada vuelta. */
@@ -120,7 +140,9 @@ interface Card {
 
 interface UpgradeSlot {
   root: HTMLElement;
-  art: SVGSVGElement;
+  /** Plato raster del negocio (o el sprite `upgrade` para "todos"); se reemplaza al cambiar. */
+  art: Element;
+  artName: IconName;
   name: HTMLElement;
   effect: HTMLElement;
   buy: HTMLButtonElement;
@@ -131,8 +153,19 @@ interface UpgradeSlot {
 interface CharSlot {
   def: BusinessDef;
   root: HTMLElement;
+  /** Precio del empleado, sobre el botón (el botón solo dice "Contratar"). */
+  price: HTMLElement;
+  /** Contratado: estrellas de antigüedad (role=img) en el lugar del precio. */
+  estrellas: HTMLElement;
+  stars: SVGSVGElement[];
+  /** Barrita hacia la siguiente estrella (escala en X, como la .fill de las tarjetas). */
+  antig: HTMLElement;
+  /** Último transform escrito en `antig` (el navegador lo normaliza al leerlo: no se compara con style). */
+  antigT: string;
+  /** Contratar antes; Dar propina después (con aria-disabled en curso y en espera). */
   buy: HTMLButtonElement;
   state: HTMLElement;
+  shownStars: number;
 }
 
 /** Tiempo que un bocadillo queda a la vista. Sin temporizadores: lo decide render(). */
@@ -142,6 +175,13 @@ const FLAGS = 48;
 const FLAG_W = 24;
 const FLAG_H = 28;
 const FLAG_COLORS = 4;
+
+/** Ciclos de hasta este largo (hoy solo elote) tildan suave: lo hacen cada segundo. */
+const TILT_SUAVE_MS = 1_000;
+
+function tiltCard(def: BusinessDef, art: Element): void {
+  tilt(art, def.cycleMs <= TILT_SUAVE_MS);
+}
 
 export function bubbleVisible(now: number, until: number): boolean {
   return now < until;
@@ -186,9 +226,14 @@ export interface UI {
   cheloSays(kind: CheloEvent): void;
   /** Efectos de confirmación (sin efecto con reduced-motion). */
   sold(id: string, amount: number): void;
+  /** Un empleado completó una vuelta: el icono se tilda, sin moneda ni sonido. */
+  turned(id: string): void;
+  /** Se dio propina: el plato se tilda (el anuncio lo hace main.ts). */
+  tipped(id: string): void;
   confirm(kind: 'buy' | 'hire' | 'upgrade', id: string): void;
   celebrate(): void;
-  showOffline(earned: number, elapsedMs: number): void;
+  /** `estrellas`: nombres de los empleados que ganaron estrella mientras no estabas. */
+  showOffline(earned: number, elapsedMs: number, estrellas: string[]): void;
   showProblem(): void;
   showNoSave(): void;
   showUpdate(onReload: () => void): void;
@@ -421,10 +466,19 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
   toast.setAttribute('role', 'status');
 
   const cards: Card[] = BUSINESSES.map((def) => {
+    const art = plato(def.icon, 'icon sell-icon');
     const sell = h(
       'button',
-      { class: 'sell', type: 'button', label: `Vender: ${def.name}`, onclick: () => handlers.onStart(def.id) },
-      [plato(def.icon, 'icon sell-icon')],
+      {
+        class: 'sell',
+        type: 'button',
+        label: `Vender: ${def.name}`,
+        onclick: () => {
+          handlers.onStart(def.id);
+          tiltCard(def, art);
+        },
+      },
+      [art],
     );
     const count = h('span', { class: 'count' });
     const fill = h('div', { class: 'fill' });
@@ -457,7 +511,7 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
       ]),
     ]);
     cardRoot.dataset.papel = def.papel;
-    return { def, root: cardRoot, sell, count, fill, meta, gana, por, buy, mark, bubble, bubbleUntil: 0 };
+    return { def, root: cardRoot, sell, art, count, fill, meta, gana, por, buy, mark, bubble, bubbleUntil: 0 };
   });
 
   const appTitle = h('h1', { text: 'Imperio de Antojitos' });
@@ -466,10 +520,10 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
   let refocusAfterUpgrade = false;
 
   const slots: UpgradeSlot[] = Array.from({ length: UPGRADE_SLOTS }, () => {
-    const art = icon('upgrade', 'icon up-icon sticker');
+    const art = plato('upgrade', 'icon up-icon');
     const name = h('h3', { class: 'up-name' });
     const effect = h('p', { class: 'up-effect' });
-    const slot: UpgradeSlot = { root: h('li'), art, name, effect, buy: h('button'), id: null };
+    const slot: UpgradeSlot = { root: h('li'), art, artName: 'upgrade', name, effect, buy: h('button'), id: null };
     slot.buy = h('button', {
       class: 'btn primary',
       type: 'button',
@@ -501,24 +555,51 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
   upgrades.id = 'upgrades';
 
   // Empleados: los 8 gerentes siempre, en cupones como las mejoras. render() pone el estado.
-  let refocusAfterHire = false;
   const charSlots: CharSlot[] = BUSINESSES.map((def) => {
-    const buy = h('button', { class: 'btn primary', type: 'button', onclick: () => handlers.onHire(def.id) });
-    const state = h('p', {
-      class: 'char-state',
-      text: def.manager.genero === 'f' ? 'Contratada' : 'Contratado',
-      hidden: true,
+    const buy = h('button', { class: 'btn primary', type: 'button' });
+    // Un solo botón: contrata y, ya contratado, da propina. En curso o en espera va con
+    // aria-disabled (no disabled) para que el foco no caiga a body; el clic se ignora.
+    buy.addEventListener('click', () => {
+      if (buy.getAttribute('aria-disabled') === 'true') return;
+      if (buy.dataset.accion === 'propina') handlers.onPropina(def.id);
+      else handlers.onHire(def.id);
     });
+    const price = h('p', { class: 'char-price', text: formatMoney(def.manager.cost) });
+    price.setAttribute('aria-hidden', 'true'); // el precio ya va en el aria-label del botón
+    const stars = [0, 1, 2].map(() => icon('estrella-off', 'icon estrella'));
+    const antigFill = h('span', { class: 'antig-fill' });
+    const antig = h('span', { class: 'antig' }, [antigFill]);
+    antig.setAttribute('aria-hidden', 'true');
+    const estrellasEl = h('span', { class: 'estrellas', hidden: true }, [
+      h('span', { class: 'estrellas-fila' }, stars),
+      antig,
+    ]);
+    estrellasEl.setAttribute('role', 'img');
+    const state = h('p', { class: 'char-state', hidden: true }, [
+      h('span', { class: 'sello-goma', text: def.manager.genero === 'f' ? 'Contratada' : 'Contratado' }),
+    ]);
     const root = h('li', { class: 'up-slot' }, [
       h('div', { class: 'up-card char-card' }, [
-        portrait(def.manager.id, 'icon char-portrait', true),
+        // El sello de "Contratado" cae sobre el retrato.
+        h('div', { class: 'char-foto' }, [portrait(def.manager.id, 'icon char-portrait', true), state]),
         h('h3', { class: 'up-name', text: def.manager.name }),
         h('p', { class: 'up-effect', text: def.name }),
+        h('div', { class: 'char-linea' }, [price, estrellasEl]),
         buy,
-        state,
       ]),
     ]);
-    return { def, root, buy, state };
+    return {
+      def,
+      root,
+      price,
+      estrellas: estrellasEl,
+      stars,
+      antig: antigFill,
+      antigT: '',
+      buy,
+      state,
+      shownStars: -1,
+    };
   });
   const charList = h(
     'ul',
@@ -709,8 +790,11 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
       type: 'button',
       text: 'Cargar partida',
       onclick: () => {
-        if (handlers.onImport(input.value)) d.close();
-        else setText(msg, 'Ese código no es válido.');
+        if (handlers.onImport(input.value)) {
+          // Partida nueva: las estrellas que trae no son "recién ganadas" (sin pop).
+          for (const slot of charSlots) slot.shownStars = -1;
+          d.close();
+        } else setText(msg, 'Ese código no es válido.');
       },
     });
     const d = dialog('Respaldo', [
@@ -743,7 +827,12 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
       }
       slot.id = u.id;
       const t = upgradeTarget(u.target);
-      setIcon(slot.art, t.art);
+      if (t.art !== slot.artName) {
+        const next = plato(t.art, 'icon up-icon');
+        slot.art.replaceWith(next);
+        slot.art = next;
+        slot.artName = t.art;
+      }
       setText(slot.name, u.name);
       setText(slot.effect, `${t.label} ×${u.multiplier}`);
       setText(slot.buy, formatMoney(u.cost));
@@ -759,16 +848,26 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
       const managed = b?.manager === true;
       const m = slot.def.manager;
       slot.root.classList.toggle('cerrado', !owned);
-      setHidden(slot.buy, managed);
+      // Contratado: el precio cede su línea a las estrellas y el botón pasa a dar propina.
+      setHidden(slot.price, managed);
+      setHidden(slot.estrellas, !managed);
       setHidden(slot.state, !managed);
-      if (managed) continue;
+      if (b && managed) {
+        renderAntiguedad(slot, b.trabajadoMs, estrellas(b));
+        renderPropina(slot, s, b);
+        continue;
+      }
+      slot.buy.dataset.accion = 'contratar';
+      slot.buy.removeAttribute('aria-disabled');
+      slot.buy.classList.remove('cuenta'); // tras heredar con una propina en curso
+      slot.shownStars = -1;
       if (owned) {
-        setText(slot.buy, `Contratar · ${formatMoney(m.cost)}`);
+        setText(slot.buy, 'Contratar');
         setAttr(slot.buy, 'aria-label', `Contratar a ${m.name} por ${formatMoney(m.cost)}`);
         setDisabled(slot.buy, !canHireManager(s, slot.def.id));
       } else {
         setText(slot.buy, 'Sin abrir');
-        setAttr(slot.buy, 'aria-label', `Abre ${slot.def.name} para contratar a ${m.name}`);
+        setAttr(slot.buy, 'aria-label', `Abre ${slot.def.name} para contratar a ${m.name} por ${formatMoney(m.cost)}`);
         setDisabled(slot.buy, true);
       }
     }
@@ -783,10 +882,58 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
       setHidden(badge, n === 0);
       setText(badge, String(n));
     }
-    if (refocusAfterHire) {
-      // El botón recién pulsado se ocultó: el foco va al título del diálogo (móvil) o del panel.
-      refocusAfterHire = false;
-      (charsDialogTitle ?? charsTitle).focus({ preventScroll: true });
+  }
+
+  function renderAntiguedad(slot: CharSlot, trabajadoMs: number, n: number): void {
+    if (n !== slot.shownStars) {
+      slot.stars.forEach((st, i) => setIcon(st, i < n ? 'estrella' : 'estrella-off'));
+      const label =
+        n === ANTIGUEDAD_MS.length
+          ? `${n} de ${n} estrellas, antigüedad máxima`
+          : `${n} de ${ANTIGUEDAD_MS.length} estrellas, +${Math.round(n * ESTRELLA_BONO * 100)} % de ventas`;
+      setAttr(slot.estrellas, 'aria-label', label);
+      if (slot.shownStars >= 0 && n > slot.shownStars) {
+        const nueva = slot.stars[n - 1];
+        if (nueva) pop(nueva);
+      }
+      slot.shownStars = n;
+    }
+    // Progreso hacia la siguiente estrella (lleno al tope).
+    const desde = ANTIGUEDAD_MS[n - 1] ?? 0;
+    const hasta = ANTIGUEDAD_MS[n];
+    const p = hasta === undefined ? 1 : (trabajadoMs - desde) / (hasta - desde);
+    const t = `scaleX(${Math.min(Math.max(p, 0), 1).toFixed(3)})`;
+    if (slot.antigT !== t) {
+      slot.antigT = t;
+      slot.antig.style.transform = t;
+    }
+  }
+
+  function renderPropina(slot: CharSlot, s: State, b: BizState): void {
+    const name = slot.def.manager.name;
+    const efecto = `vende ×${PROPINA_MULT} durante ${PROPINA_MS / 1000} s`;
+    slot.buy.dataset.accion = 'propina';
+    setDisabled(slot.buy, false);
+    const lista = propinaLista(b);
+    slot.buy.classList.toggle('cuenta', !lista); // la cuenta regresiva va en una línea
+    if (lista) {
+      const costo = formatMoney(propinaCosto(s, slot.def.id));
+      setText(slot.buy, `Dar ${costo} de propina`);
+      // Sin dinero suficiente: aria-disabled como el resto de la cuenta (el foco se queda) y el porqué en la etiqueta.
+      const alcanza = puedeDarPropina(s, slot.def.id);
+      setAttr(slot.buy, 'aria-label', `Dar ${costo} de propina a ${name}: ${efecto}${alcanza ? '' : '. No alcanza'}`);
+      if (alcanza) slot.buy.removeAttribute('aria-disabled');
+      else setAttr(slot.buy, 'aria-disabled', 'true');
+      return;
+    }
+    // aria-label estable: el número que cambia cada segundo solo se ve, no se lee.
+    setAttr(slot.buy, 'aria-disabled', 'true');
+    if (propinaActiva(b)) {
+      setText(slot.buy, `×${PROPINA_MULT} · ${formatReloj(b.propinaMs - PROPINA_ESPERA_MS)}`);
+      setAttr(slot.buy, 'aria-label', `${name}: propina en curso, ${efecto}`);
+    } else {
+      setText(slot.buy, `Espera · ${formatReloj(b.propinaMs)}`);
+      setAttr(slot.buy, 'aria-label', `${name}: propina disponible en unos minutos`);
     }
   }
 
@@ -908,7 +1055,9 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
 
         // "$10 por vuelta": la barra ya enseña el ritmo, el tiempo no se escribe; el siguiente hito
         // lo cuenta Chelo, no la tarjeta.
-        setText(c.gana, owned ? formatMoney(revenuePerCycle(s, c.def.id)) : '');
+        // Con propina, lo que de verdad entra por vuelta (vuelta + extra ×PROPINA_MULT).
+        const mult = b.manager && propinaActiva(b) ? PROPINA_MULT : 1;
+        setText(c.gana, owned ? formatMoney(revenuePerCycle(s, c.def.id) * mult) : '');
         setText(c.por, owned ? ' por vuelta' : 'Sin abrir');
 
         const q = quantityFor(s, c.def.id, mode);
@@ -920,6 +1069,7 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
         setDisabled(c.buy, q === 0);
 
         c.root.classList.toggle('managed', b.manager);
+        c.root.classList.toggle('propina', b.manager && propinaActiva(b));
 
         setHidden(c.bubble, !bubbleVisible(now, c.bubbleUntil));
       }
@@ -982,7 +1132,19 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
 
     sold(id, amount) {
       const c = cards.find((x) => x.def.id === id);
-      if (c) coin(c.sell, `+${formatMoney(amount)}`);
+      if (!c) return;
+      coin(c.sell, `+${formatMoney(amount)}`);
+      tiltCard(c.def, c.art);
+    },
+
+    turned(id) {
+      const c = cards.find((x) => x.def.id === id);
+      if (c) tiltCard(c.def, c.art);
+    },
+
+    tipped(id) {
+      const c = cards.find((x) => x.def.id === id);
+      if (c) tiltCard(c.def, c.art);
     },
 
     confirm(kind, id) {
@@ -1003,10 +1165,8 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
       // cupón del gerente cambia a "Contratado"/"Contratada".
       stamp(c.mark);
       const slot = charSlots.find((x) => x.def.id === id);
-      if (slot) {
-        if (slot.buy === document.activeElement) refocusAfterHire = true;
-        pop(slot.state);
-      }
+      // El botón sigue en su lugar (pasa a "Dar propina"), así que el foco se queda en él.
+      if (slot?.state.firstElementChild) stamp(slot.state.firstElementChild);
     },
 
     celebrate() {
@@ -1022,10 +1182,13 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
       confetti();
     },
 
-    showOffline(earned, elapsedMs) {
+    showOffline(earned, elapsedMs, estrellasGanadas) {
       dialog('¡Bienvenido de vuelta!', [
         h('p', { text: `Mientras no estabas (${formatDuration(elapsedMs)}), tus negocios vendieron:` }),
         h('p', { class: 'big', text: formatMoney(earned) }),
+        ...(estrellasGanadas.length > 0
+          ? [h('p', { text: `Ganaron estrella de antigüedad: ${estrellasGanadas.join(', ')}.` })]
+          : []),
       ]);
     },
 

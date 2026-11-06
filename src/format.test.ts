@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatDuration, formatMoney, formatNumber } from './format';
+import { formatDuration, formatMoney, formatNumber, formatReloj } from './format';
 
 describe('formatMoney', () => {
   it('trunca a entero bajo 1e6: nunca muestra más de lo que hay', () => {
@@ -76,5 +76,16 @@ describe('formatDuration', () => {
     expect(formatDuration(96_000)).toBe('1 min 36 s');
     expect(formatDuration(192_000)).toBe('3 min 12 s');
     expect(formatDuration(0)).toBe('0 s');
+  });
+});
+
+describe('formatReloj', () => {
+  it('m:ss redondeando hacia arriba', () => {
+    expect(formatReloj(0)).toBe('0:00');
+    expect(formatReloj(1)).toBe('0:01');
+    expect(formatReloj(24_000)).toBe('0:24');
+    expect(formatReloj(252_000)).toBe('4:12');
+    expect(formatReloj(300_000)).toBe('5:00');
+    expect(formatReloj(-5)).toBe('0:00');
   });
 });

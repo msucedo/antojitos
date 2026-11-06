@@ -59,6 +59,10 @@
   --letrero-h: 32px; /* alto del letrero; la mitad sobresale por encima del perforado */
   /* Grano de imprenta: capa de background-image (nunca filter), ver assets/grano.svg. */
   --grano: url('./assets/grano.svg') 0 0 / 160px 160px repeat;
+  /* Cursores propios (docs/refs/cursor-v1/v2): flecha de tinta con halo y mano de papel; el hotspot va en la punta. */
+  --cursor: url('./assets/cursor-flecha.svg') 4 3, default;
+  --cursor-mano: url('./assets/cursor-mano.svg') 13 3, pointer;
+  --cursor-espera: url('./assets/cursor-espera.svg') 16 16, progress; /* plato cargando a mano */
   --fuente-rotulo: 'Rye', Georgia, 'Times New Roman', serif;
   --sombra-estampa: block; /* display del pseudo-elemento de sombra de las estampillas */
   /* Máscara de estampilla: rectángulo interior y medios círculos centrados en cada lado. black solo da alfa. */
@@ -150,6 +154,20 @@
 
 html {
   background: var(--bg);
+  cursor: var(--cursor);
+}
+
+/* Controles nativos: mano si se pueden usar; los campos de texto conservan su cursor. */
+button:not(:disabled),
+a[href],
+summary,
+label[for] {
+  cursor: var(--cursor-mano);
+}
+
+textarea,
+input {
+  cursor: text;
 }
 
 html,
@@ -292,7 +310,8 @@ p {
 .title-row h1,
 .money,
 .section-title,
-.modal h2 {
+.modal h2,
+.big {
   font-family: var(--fuente-rotulo);
   font-weight: 400;
   font-synthesis: none;
@@ -339,7 +358,7 @@ p {
   border: 0;
   background: transparent;
   color: var(--text);
-  cursor: pointer;
+  cursor: var(--cursor-mano);
   border-radius: 12px;
 }
 
@@ -387,7 +406,7 @@ p {
   background: transparent;
   color: var(--text);
   font: inherit;
-  cursor: pointer;
+  cursor: var(--cursor-mano);
 }
 
 /* Disco matasellos: misma pastilla que los botones, con el icono dentro. */
@@ -426,7 +445,7 @@ p {
 
 .lat-btn:disabled {
   opacity: 0.5;
-  cursor: default;
+  cursor: var(--cursor);
 }
 
 .lat-btn:disabled .lat-disc {
@@ -542,7 +561,7 @@ p {
   border-radius: 999px;
   background: var(--card);
   box-shadow: var(--sombra-btn);
-  cursor: pointer;
+  cursor: var(--cursor-mano);
 }
 
 /* ---------- Bocadillos de gerentes ---------- */
@@ -713,16 +732,108 @@ p {
   border-color: var(--primary);
 }
 
-/* "Vende solito": ocupa el lugar del botón para que el cupón no cambie de alto. */
-.char-state {
-  width: 100%;
-  min-height: 44px;
+/*
+ * Línea sobre el botón: el precio antes de contratar y las estrellas de antigüedad después. Alto
+ * fijo: el cupón mide lo mismo en los dos estados.
+ */
+.char-linea {
+  height: 24px;
   margin-top: 6px;
   display: grid;
   place-items: center;
-  font-size: 0.85rem;
-  font-weight: 700;
-  color: var(--nopal);
+}
+
+.char-price {
+  font-size: 0.95rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+.estrellas {
+  display: grid;
+  justify-items: center;
+  gap: 3px;
+}
+
+.estrellas-fila {
+  display: flex;
+  gap: 2px;
+}
+
+.estrella {
+  width: 16px;
+  height: 16px;
+}
+
+/* Barrita hacia la siguiente estrella: pista de papel hundida y relleno nopal que escala en X. */
+.antig {
+  width: 54px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--velo-tinta);
+  overflow: hidden;
+}
+
+.antig-fill {
+  display: block;
+  height: 100%;
+  background: var(--nopal);
+  transform: scaleX(0);
+  transform-origin: left;
+}
+
+/* Propina que no alcanza, en curso o en espera: aria-disabled (el foco se queda) con el aspecto de deshabilitado. */
+.up-card .btn[aria-disabled='true'] {
+  opacity: 0.5;
+  border-style: dashed;
+  border-color: var(--primary);
+  box-shadow: none;
+  background: transparent;
+  color: var(--text);
+  cursor: var(--cursor);
+  font-variant-numeric: tabular-nums;
+}
+
+.up-card .btn.cuenta {
+  white-space: nowrap; /* la cuenta regresiva en una línea: el botón no cambia de alto cada segundo */
+}
+
+.up-slot.cerrado .char-price {
+  color: var(--muted);
+}
+
+/*
+ * "Contratado": sello de goma en tinta rosa sobre la parte baja del retrato. Doble borde, girado −6°
+ * con transform (stamp() de fx.ts termina en esos mismos valores) y papel translúcido detrás para
+ * leerse sobre la ilustración.
+ */
+.char-foto {
+  position: relative;
+  display: grid;
+  justify-items: center;
+}
+
+.char-state {
+  position: absolute;
+  inset: auto 0 10px;
+  margin: 0;
+  display: grid;
+  place-items: center;
+  container-type: inline-size; /* el texto se ajusta al ancho del cupón (fijo en px) */
+}
+
+.sello-goma {
+  padding: 0.25em 0.6em 0.2em;
+  border: 4px double var(--primary);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--papel) 85%, transparent);
+  transform: rotate(-6deg);
+  font: 400 min(1.05rem, 10cqi) / 1.15 var(--fuente-rotulo); /* con letra grande, "CONTRATADA" sigue dentro */
+  font-synthesis: none;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--primary);
 }
 
 /* Negocio sin abrir: se atenúa por color y el avatar en gris; nunca opacity en el li (arrastra la sombra ::before). */
@@ -915,7 +1026,7 @@ p {
   border-radius: 12px;
   background: none;
   color: var(--text);
-  cursor: pointer;
+  cursor: var(--cursor-mano);
   transition: transform 0.1s;
 }
 
@@ -934,16 +1045,17 @@ p {
 }
 
 .sell:disabled {
-  cursor: default;
+  cursor: var(--cursor);
 }
 
 /*
- * Estados del icono abierto, sin animación en bucle (rendimiento). Listo: chip "Vender" sobre el
+ * Estados del icono abierto; el único en bucle es el rebote de listo (abajo), medido en DESIGN.md. Listo: chip "Vender" sobre el
  * borde inferior, misma pastilla que .count con el relleno de .btn.primary (el aria-label del
- * botón ya dice "Vender: X"). Cargando a mano: sin chip, icono atenuado y cursor de progreso.
+ * botón ya dice "Vender: X"). Cargando a mano: sin chip, icono atenuado y cursor de espera (reloj de arena).
  * Con empleado (.managed) nada: la barra siempre se mueve y el icono no se toca.
  */
-.card.owned .sell:not(:disabled)::after {
+.card.owned .sell:not(:disabled)::after,
+.card.propina .sell::after {
   content: 'Vender';
   position: absolute;
   bottom: calc(
@@ -964,8 +1076,41 @@ p {
   pointer-events: none;
 }
 
+/* Propina en curso: el mismo chip dice "×1.5" en nopal. Debe coincidir con PROPINA_MULT (data.ts); la vuelta dura lo mismo. */
+.card.propina .sell::after {
+  content: '×1.5';
+  background: var(--nopal);
+  color: var(--on-nopal);
+}
+
 .card.owned:not(.managed) .sell:disabled {
-  cursor: progress;
+  cursor: var(--cursor-espera);
+}
+
+/*
+ * Listo para vender a mano: el plato y su chip rebotan (ráfaga corta y descanso). Sobre `translate`,
+ * no `transform`: no choca con :active/:hover (escala) ni con el tilt del img. El .sell es hermano
+ * de la barra, no ancestro. Se pausa bajo el puntero (solo con hover real, abajo); reduced motion lo apaga.
+ */
+.card.owned .sell:not(:disabled) {
+  animation: rebote 1.6s ease-in-out infinite;
+}
+
+@keyframes rebote {
+  0%,
+  32%,
+  100% {
+    translate: 0 0;
+  }
+  10% {
+    translate: 0 -5px;
+  }
+  20% {
+    translate: 0 0;
+  }
+  26% {
+    translate: 0 -2px;
+  }
 }
 
 .card.owned:not(.managed) .sell:disabled .sell-icon {
@@ -1004,9 +1149,9 @@ p {
   align-content: space-between; /* ocupa el alto del icono repartiendo el hueco entre filas */
 }
 
-/* Comprar pegado al borde derecho de la tarjeta, lejos del icono de vender. */
+/* Comprar alineado a la izquierda del cuerpo, bajo la barra y la línea de ganancia. */
 .body > .row {
-  justify-content: flex-end;
+  justify-content: flex-start;
 }
 
 /* Cantidad como ficha al inicio de la línea de ganancia; vacía (sin abrir) no se pinta. */
@@ -1112,7 +1257,7 @@ p {
   font: inherit;
   font-size: 0.9rem;
   font-weight: 700;
-  cursor: pointer;
+  cursor: var(--cursor-mano);
   box-shadow: var(--sombra-btn); /* matasellos: pastilla con sombra dura */
 }
 
@@ -1131,7 +1276,7 @@ p {
   opacity: 0.5;
   border-style: dashed;
   box-shadow: none;
-  cursor: default;
+  cursor: var(--cursor);
 }
 
 /* Con relleno sólido el punteado no se ve: deshabilitado pasa a contorno. */
@@ -1187,7 +1332,7 @@ p {
   color: var(--text);
   font: inherit;
   font-weight: 700;
-  cursor: pointer;
+  cursor: var(--cursor-mano);
 }
 
 .seg[aria-pressed='true'] {
@@ -1254,7 +1399,7 @@ p {
 
 .big {
   font-size: 2rem;
-  font-weight: 800;
+  font-variant-numeric: tabular-nums;
   color: var(--nopal);
 }
 
@@ -1381,6 +1526,7 @@ p {
 
   .card.owned .sell:not(:disabled):hover {
     transform: scale(1.05);
+    animation-play-state: paused; /* el rebote no se escapa del puntero; solo con hover real (en táctil se queda pegado) */
   }
 }
 
@@ -1526,10 +1672,6 @@ p {
   .btn {
     min-height: 40px;
     padding: 6px 12px;
-  }
-
-  .char-state {
-    min-height: 40px;
   }
 }
 
