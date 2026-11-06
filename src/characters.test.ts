@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { PORTRAITS } from './characters';
-import { BUSINESSES, CHELO } from './data';
+import { BUSINESSES, CHELO, fraseDe, MILESTONES, type ManagerDef } from './data';
 import { bubbleVisible } from './ui';
 
 const MAX_LEN = 70;
@@ -10,6 +10,7 @@ const GENDERED = /\b(patrón|patrona|jefe|jefa|mijo|mija|señor|señora)\b/i;
 
 describe('personajes', () => {
   const managers = BUSINESSES.map((b) => b.manager);
+  const frases = (m: ManagerDef): string[] => [m.says.hire, m.says.upgrade, m.says.estrella, ...m.says.milestone];
 
   it('cada gerente tiene nombre único, y los retratos son exactamente los gerentes más Chelo', () => {
     const names = managers.map((m) => m.name);
@@ -20,14 +21,26 @@ describe('personajes', () => {
   });
 
   it('las frases son cortas, sin pictogramas y sin tratamiento de género', () => {
-    const lines = [...managers.flatMap((m) => Object.values(m.says)), ...Object.values(CHELO.says)];
-    expect(lines.length).toBe(BUSINESSES.length * 4 + 5);
+    const lines = [...managers.flatMap(frases), ...Object.values(CHELO.says)];
+    expect(lines.length).toBe(BUSINESSES.length * (3 + MILESTONES.length) + 6);
     for (const line of lines) {
       expect(line.trim().length).toBeGreaterThan(0);
       expect(line.length).toBeLessThanOrEqual(MAX_LEN);
       expect(line).not.toMatch(PICTOGRAM);
     }
-    for (const m of managers) for (const line of Object.values(m.says)) expect(line).not.toMatch(GENDERED);
+    for (const m of managers) for (const line of frases(m)) expect(line).not.toMatch(GENDERED);
+  });
+
+  it('cada gerente tiene una frase distinta por hito, y fraseDe la elige por el hito alcanzado', () => {
+    for (const m of managers) {
+      expect(m.says.milestone.length).toBe(MILESTONES.length);
+      expect(new Set(m.says.milestone).size).toBe(MILESTONES.length);
+      expect(fraseDe(m, 'milestone', 1)).toBe(m.says.milestone[0]);
+      expect(fraseDe(m, 'milestone', MILESTONES.length)).toBe(m.says.milestone[MILESTONES.length - 1]);
+      expect(fraseDe(m, 'milestone', 99)).toBe(m.says.milestone[MILESTONES.length - 1]);
+      expect(fraseDe(m, 'milestone', 0)).toBe(m.says.milestone[0]);
+      expect(fraseDe(m, 'hire')).toBe(m.says.hire);
+    }
   });
 
   it('Chelo: reposo corto y preguntas fijas con respuestas de hasta 140 caracteres', () => {

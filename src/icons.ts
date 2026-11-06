@@ -24,6 +24,7 @@ export const ICON_NAMES = [
   'clavo',
   'estrella',
   'estrella-off',
+  'album',
 ] as const;
 
 export type IconName = (typeof ICON_NAMES)[number];

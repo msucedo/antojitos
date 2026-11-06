@@ -10,10 +10,18 @@ import {
   PROPINA_MULT,
   RECIPE_DIVISOR,
   UPGRADES,
+  AUSENCIA_MS,
+  LOGRO_BONO,
+  MILESTONES,
 } from './data';
 import {
   applyOffline,
   buy,
+  hitoEfecto,
+  hitosCruzados,
+  hitosVelocidad,
+  hitosVentas,
+  nextMilestone,
   buySound,
   buyUpgrade,
   canHireManager,
@@ -205,6 +213,142 @@ describe('hitos', () => {
     const after = buy({ ...before, money: costOf(elotes, 20, 40) }, 'elotes', 'max');
     expect(after.businesses.elotes!.count).toBe(60);
     expect(milestonesCrossed(before, after, 'elotes')).toBe(2);
+  });
+});
+
+describe('hitos 300 y 400 (mixtos)', () => {
+  const def = (id: string) => getDef(id);
+  const conCount = (id: string, count: number): State => {
+    const s = withMoney(0);
+    return { ...s, businesses: { ...s.businesses, [id]: { ...s.businesses[id]!, count } } };
+  };
+  /** Copia con `progressMs` y dinero, sin compartir `businesses` con el original. */
+  const conProgresoDe = (s: State, progressMs: number, money: number, id = 'elotes'): State => ({
+    ...s,
+    money,
+    businesses: { ...s.businesses, [id]: { ...s.businesses[id]!, progressMs } },
+  });
+
+  it('los cuatro primeros parten la vuelta en todos; después, solo mientras el negocio barre', () => {
+    expect(MILESTONES).toEqual([25, 50, 100, 200, 300, 400]);
+    for (const d of BUSINESSES) for (let i = 0; i < 4; i++) expect(hitoEfecto(d, i)).toBe('velocidad');
+    // Rápidos (ya en barra fija): ventas ×2.
+    for (const id of ['elotes', 'aguas', 'tacos', 'tortas']) {
+      expect(hitoEfecto(def(id), 4)).toBe('ventas');
+      expect(hitoEfecto(def(id), 5)).toBe('ventas');
+      expect(cicloMs(def(id), 400)).toBe(cicloMs(def(id), 200));
+    }
+    // Fonda (24 s): 300 la baja a 750 ms (fija), 400 ya es ventas.
+    expect(hitoEfecto(def('fonda'), 4)).toBe('velocidad');
+    expect(hitoEfecto(def('fonda'), 5)).toBe('ventas');
+    expect(cicloMs(def('fonda'), 300)).toBe(750);
+    expect(cicloMs(def('fonda'), 400)).toBe(750);
+    // Panadería (48 s): las dos de velocidad → 750 ms.
+    expect(hitoEfecto(def('panaderia'), 5)).toBe('velocidad');
+    expect(cicloMs(def('panaderia'), 400)).toBe(750);
+    expect(cicloMs(def('franquicia'), 400)).toBe(1500);
+    expect(cicloMs(def('cadena'), 400)).toBe(3000);
+  });
+
+  it('un hito de ventas dobla el ingreso por vuelta y no parte la vuelta ni la barra', () => {
+    const antes = conCount('elotes', 299);
+    const despues = {
+      ...antes,
+      businesses: { ...antes.businesses, elotes: { ...antes.businesses.elotes!, count: 300 } },
+    };
+    expect(hitosVentas(elotes, 299)).toBe(0);
+    expect(hitosVentas(elotes, 300)).toBe(1);
+    expect(hitosVelocidad(elotes, 300)).toBe(4);
+    expect(revenuePerCycle(despues, 'elotes')).toBeCloseTo(revenuePerCycle(antes, 'elotes') * 2 * (300 / 299));
+    expect(hitosCruzados(antes, despues, 'elotes')).toEqual({ velocidad: 0, ventas: 1 });
+    // Comprar la 300.ª conserva progressMs tal cual (no se parte).
+    const conProgreso = conProgresoDe(antes, 40, costOf(elotes, 299, 1));
+    expect(buy(conProgreso, 'elotes', 1).businesses.elotes?.progressMs).toBe(40);
+    // Y la 25.ª (velocidad) sí la parte.
+    const a24 = conProgresoDe(conCount('elotes', 24), 400, costOf(elotes, 24, 1));
+    expect(buy(a24, 'elotes', 1).businesses.elotes?.progressMs).toBe(200);
+  });
+
+  it('Máx cruzando 300 y 400 a la vez: dos de ventas en elotes (barra intacta), una y una en fonda (barra a la mitad)', () => {
+    const elotes250 = conProgresoDe(conCount('elotes', 250), 40, costOf(elotes, 250, 150));
+    const elotes400 = buy(elotes250, 'elotes', 'max');
+    expect(elotes400.businesses.elotes?.count).toBe(400);
+    expect(hitosCruzados(elotes250, elotes400, 'elotes')).toEqual({ velocidad: 0, ventas: 2 });
+    expect(elotes400.businesses.elotes?.progressMs).toBe(40);
+    const fonda250 = conProgresoDe(conCount('fonda', 250), 40, costOf(def('fonda'), 250, 150), 'fonda');
+    const fonda400 = buy(fonda250, 'fonda', 'max');
+    expect(fonda400.businesses.fonda?.count).toBe(400);
+    expect(hitosCruzados(fonda250, fonda400, 'fonda')).toEqual({ velocidad: 1, ventas: 1 });
+    expect(fonda400.businesses.fonda?.progressMs).toBe(20);
+  });
+
+  it('nextMilestone trae el conteo y el efecto del siguiente hito', () => {
+    expect(nextMilestone(elotes, 10)).toEqual({ count: 25, efecto: 'velocidad' });
+    expect(nextMilestone(elotes, 250)).toEqual({ count: 300, efecto: 'ventas' });
+    expect(nextMilestone(def('fonda'), 250)).toEqual({ count: 300, efecto: 'velocidad' });
+    expect(nextMilestone(elotes, 400)).toBeNull();
+  });
+});
+
+describe('contadores (stats)', () => {
+  it('cada acción suma su contador y nada más', () => {
+    const base = withMoney(1e9);
+    expect(startCycle(base, 'elotes').stats).toEqual({ ...base.stats, clics: 1 });
+    expect(hireManager(base, 'elotes').stats).toEqual({ ...base.stats, contratados: 1 });
+    expect(buyUpgrade(base, 'chile').stats).toEqual({ ...base.stats, mejoras: 1 });
+    const conBeto = hireManager(base, 'elotes');
+    expect(darPropina(conBeto, 'elotes').stats).toEqual({ ...conBeto.stats, propinas: 1 });
+    // Acciones sin efecto no cuentan.
+    expect(startCycle(hireManager(base, 'elotes'), 'elotes').stats.clics).toBe(0);
+    expect(hireManager(withMoney(0), 'elotes').stats.contratados).toBe(0);
+  });
+
+  it('una vuelta manual cobrada cuenta como venta; el toque solo cuenta como clic', () => {
+    const s = startCycle(withMoney(0), 'elotes');
+    expect(s.stats).toMatchObject({ clics: 1, ventasManuales: 0 });
+    expect(tick(s, elotes.cycleMs / 2).stats.ventasManuales).toBe(0);
+    expect(tick(s, elotes.cycleMs).stats.ventasManuales).toBe(1);
+  });
+
+  it('maxPorSegundo guarda el mejor /s visto (con propina) y no baja', () => {
+    const s = darPropina(hireManager(withMoney(1e6), 'elotes'), 'elotes');
+    const conPropina = tick(s, 100);
+    expect(conPropina.stats.maxPorSegundo).toBeCloseTo(incomePerSecond(s));
+    expect(incomePerSecond(s)).toBeCloseTo(elotes.baseRevenue * PROPINA_MULT);
+    const despues = tick(conPropina, PROPINA_MS + 1000);
+    expect(incomePerSecond(despues)).toBeCloseTo(elotes.baseRevenue);
+    expect(despues.stats.maxPorSegundo).toBe(conPropina.stats.maxPorSegundo);
+  });
+
+  it('jugadoMs solo suma con `jugando` y en tramos cortos', () => {
+    const s = { ...newState(T0), lastSeen: T0 };
+    expect(applyOffline(s, T0 + 16, true).state.stats.jugadoMs).toBe(16);
+    expect(applyOffline(s, T0 + 16).state.stats.jugadoMs).toBe(0);
+    expect(applyOffline(s, T0 + AUSENCIA_MS - 1, true).state.stats.jugadoMs).toBe(AUSENCIA_MS - 1);
+    expect(applyOffline(s, T0 + AUSENCIA_MS, true).state.stats.jugadoMs).toBe(0);
+    expect(applyOffline(s, T0 + 3_600_000, true).state.stats.jugadoMs).toBe(0);
+    const dos = applyOffline(applyOffline(s, T0 + 16, true).state, T0 + 32, true);
+    expect(dos.state.stats.jugadoMs).toBe(32);
+  });
+
+  it('la herencia conserva contadores y logros, y cuenta la herencia', () => {
+    const earned = RECIPE_DIVISOR * 4;
+    const s: State = {
+      ...withMoney(earned),
+      lifetimeEarned: earned,
+      stats: { ...newState(T0).stats, clics: 9 },
+      logros: ['venta'],
+      logrosVistos: 1,
+    };
+    const p = prestige(s, T0 + 1);
+    expect(p.stats).toEqual({ ...s.stats, herencias: 1 });
+    expect(p.logros).toEqual(['venta']);
+    expect(p.logrosVistos).toBe(1);
+  });
+
+  it('cada logro suma LOGRO_BONO a las ventas', () => {
+    const s = { ...newState(T0), logros: ['venta', 'empleado', 'propina'] };
+    expect(revenuePerCycle(s, 'elotes')).toBeCloseTo(elotes.baseRevenue * (1 + 3 * LOGRO_BONO));
   });
 });
 

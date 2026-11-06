@@ -2,13 +2,16 @@ import { BUSINESSES, RECIPE_DIVISOR, UPGRADES, type BusinessDef } from './data';
 import {
   cicloMs,
   emptyBiz,
+  emptyStats,
   newState,
   PROPINA_TOTAL_MS,
   SAVE_VERSION,
   TRABAJADO_TOPE_MS,
   type BizState,
   type State,
+  type Stats,
 } from './game';
+import { LOGRO_IDS } from './logros';
 
 export const SAVE_KEY = 'antojitos.save';
 export const BACKUP_KEY = 'antojitos.bak';
@@ -51,6 +54,8 @@ const MIGRATIONS: Record<number, (o: Raw) => Raw> = {
         )
       : o.businesses,
   }),
+  // v4: contadores de la Libreta y logros. Todo empieza en cero; nada más cambia.
+  3: (o) => ({ ...o, version: 4, stats: {}, logros: [], logrosVistos: 0 }),
 };
 
 /** Ids conocidos, sin duplicados; cualquier otra cosa invalida el guardado. */
@@ -61,6 +66,37 @@ function parseUpgrades(raw: unknown): string[] | null {
   for (const id of raw) {
     if (typeof id !== 'string' || !known.has(id) || out.includes(id)) return null;
     out.push(id);
+  }
+  return out;
+}
+
+/** Faltantes valen 0 (una semilla a mano); de tipo incorrecto, se rechaza. Los conteos son enteros. */
+function parseStats(raw: unknown): Stats | null {
+  if (raw === undefined) return emptyStats();
+  if (!isObj(raw)) return null;
+  const out = emptyStats();
+  for (const key of Object.keys(out) as (keyof Stats)[]) {
+    const v = raw[key];
+    // Faltante o null (Infinity tras JSON) vale 0: es un contador, no debe costar la partida.
+    if (v === undefined || v === null) continue;
+    const entero = key !== 'jugadoMs' && key !== 'maxPorSegundo';
+    if (!isNum(v) || (entero && !Number.isInteger(v))) return null;
+    out[key] = v;
+  }
+  return out;
+}
+
+/**
+ * Ids de logro conocidos, en su orden, sin duplicados. Un id desconocido se descarta (a diferencia
+ * de las mejoras): un logro retirado del catálogo no debe costar la partida.
+ */
+function parseLogros(raw: unknown): string[] | null {
+  if (raw === undefined) return [];
+  if (!Array.isArray(raw)) return null;
+  const out: string[] = [];
+  for (const id of raw) {
+    if (typeof id !== 'string') return null;
+    if (LOGRO_IDS.has(id) && !out.includes(id)) out.push(id);
   }
   return out;
 }
@@ -106,8 +142,12 @@ export function validate(input: unknown): State | null {
   if (!o) return null;
   const { money, runEarned, lifetimeEarned, recipes, lastSeen, businesses } = o;
   const upgrades = parseUpgrades(o.upgrades);
-  if (!upgrades) return null;
+  const stats = parseStats(o.stats);
+  const logros = parseLogros(o.logros);
+  if (!upgrades || !stats || !logros) return null;
   if (!isNum(money) || !isNum(runEarned) || !isNum(lifetimeEarned) || !isInt(recipes) || !isNum(lastSeen)) return null;
+  const vistos = o.logrosVistos === undefined ? 0 : o.logrosVistos;
+  if (!isInt(vistos)) return null;
   if (!isObj(businesses)) return null;
   const out: Record<string, BizState> = {};
   for (const def of BUSINESSES) {
@@ -115,7 +155,19 @@ export function validate(input: unknown): State | null {
     if (!b) return null;
     out[def.id] = b;
   }
-  return { version: SAVE_VERSION, money, runEarned, lifetimeEarned, recipes, lastSeen, businesses: out, upgrades };
+  return {
+    version: SAVE_VERSION,
+    money,
+    runEarned,
+    lifetimeEarned,
+    recipes,
+    lastSeen,
+    businesses: out,
+    upgrades,
+    stats,
+    logros,
+    logrosVistos: Math.min(vistos, logros.length), // fuera de rango se recorta, como el resto
+  };
 }
 
 function parseJson(text: string | null): State | null {

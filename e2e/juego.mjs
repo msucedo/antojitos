@@ -217,6 +217,89 @@ test('vuelta tras ausencia: aviso con lo ganado', async () => {
   await context.close();
 });
 
+test('logro: la primera venta a mano lo desbloquea y el badge del Álbum se apaga al abrirlo (web)', async () => {
+  const { context, page, errores } = await abrir();
+  await sinPaneles(page);
+  await page.locator('.sell[aria-label="Vender: Carrito de elotes"]').click();
+  const albumBtn = page.locator('.lateral button[aria-label^="Álbum"]');
+  await page.waitForFunction(
+    () => document.querySelector('.lateral button[aria-label="Álbum: 1 logro nuevo"]') !== null,
+    null,
+    { timeout: 3000 },
+  );
+  assert.match(await page.locator('p[aria-live]').textContent(), /^Logro: Primer elote\. \+2 % de ventas\./);
+  assert.equal(await albumBtn.locator('.lat-badge').textContent(), '1');
+  await albumBtn.click();
+  await page.waitForTimeout(400);
+  assert.equal(await page.locator('#album .estampilla:not(.bloqueada)').count(), 1);
+  assert.equal(await page.locator('#album .estampilla').count(), 24);
+  assert.equal(await albumBtn.getAttribute('aria-label'), 'Álbum');
+  assert.match(await page.locator('#album .libreta').textContent(), /Logros1 de 24/);
+  assert.deepEqual(errores, []);
+  await context.close();
+});
+
+test('logro por tiempo con el Álbum abierto: se sella a la vista y el badge no se enciende', async () => {
+  // Un clic fuera del panel lo cierra, así que con el Álbum abierto solo caen logros por tiempo: "Una hora".
+  const semilla = partida({ version: 4, stats: { jugadoMs: 3_600_000 - 400 } }, { elotes: { count: 1 } });
+  const { context, page, errores } = await abrir({ semilla });
+  await sinPaneles(page);
+  const albumBtn = page.locator('.lateral button[aria-label^="Álbum"]');
+  await albumBtn.click();
+  await page.waitForFunction(() => document.querySelectorAll('#album .estampilla:not(.bloqueada)').length === 1, null, {
+    timeout: 4000,
+  });
+  await page.waitForTimeout(200);
+  assert.equal(await page.locator('#album .estampilla:not(.bloqueada) .up-name').textContent(), 'Una hora');
+  assert.equal(await albumBtn.getAttribute('aria-label'), 'Álbum');
+  assert.equal(await albumBtn.locator('.lat-badge').isHidden(), true);
+  assert.deepEqual(errores, []);
+  await context.close();
+});
+
+test('móvil: el Álbum abre en diálogo desde la barra inferior y el cuerpo vuelve al cerrarlo', async () => {
+  const { context, page, errores } = await abrir({ movil: true });
+  await sinPaneles(page);
+  await page.locator('.album-btn').tap();
+  const dlg = page.locator('dialog[open]');
+  await dlg.waitFor();
+  assert.equal(await dlg.locator('.estampilla').count(), 24);
+  assert.equal(await dlg.locator('.libreta dt').count(), 13);
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(300);
+  assert.equal(await page.locator('#album .estampilla').count(), 24);
+  assert.deepEqual(errores, []);
+  await context.close();
+});
+
+test('carga v3 avanzada: migra a v4 y apunta los logros de golpe con un solo anuncio, sin sonido ni Chelo', async () => {
+  const negocios = Object.fromEntries(
+    ['elotes', 'aguas', 'tacos', 'tortas', 'fonda', 'panaderia', 'franquicia', 'cadena'].map((id) => [
+      id,
+      { count: 100, manager: true },
+    ]),
+  );
+  const semilla = partida({ money: 5, lifetimeEarned: 2e12, runEarned: 2e12, recipes: 1 }, negocios);
+  const { context, page, errores } = await abrir({ semilla });
+  await page.waitForFunction(() => /^Logros: /.test(document.querySelector('p[aria-live]')?.textContent ?? ''), null, {
+    timeout: 3000,
+  });
+  const anuncio = await page.locator('p[aria-live]').textContent();
+  // negocios-8, unidades-25, todos-100, empleado, empleados-8, herencia, 1e6, 1e12: ocho de golpe, +16 %.
+  assert.match(anuncio, /\+16 % de ventas\.$/);
+  assert.equal(await page.locator('.lateral button[aria-label="Álbum: 8 logros nuevos"]').count(), 1);
+  assert.equal(await page.locator('dialog[open]').count(), 0);
+  assert.doesNotMatch((await page.locator('.guia-texto').textContent()) ?? '', /logro/i);
+  // El autoguardado corre cada 5 s: se espera a que escriba la v4 migrada.
+  await page.waitForFunction((k) => JSON.parse(localStorage.getItem(k) ?? '{}').version === 4, SAVE_KEY, {
+    timeout: 8000,
+  });
+  const guardado = await page.evaluate((k) => JSON.parse(localStorage.getItem(k) ?? '{}'), SAVE_KEY);
+  assert.equal(guardado.logros.length, 8);
+  assert.deepEqual(errores, []);
+  await context.close();
+});
+
 test('respaldo: un código exportado se carga desde el diálogo', async () => {
   const codigo = Buffer.from(JSON.stringify({ ...partida({ money: 2000 }), lastSeen: Date.now() })).toString('base64');
   const { context, page } = await abrir();

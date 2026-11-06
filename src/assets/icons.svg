@@ -170,4 +170,12 @@
   <symbol id="estrella-off" viewBox="0 0 48 48">
     <path d="M24.0 5.5L29.3 18.2L43.0 19.3L32.6 28.3L35.8 41.7L24.0 34.5L12.2 41.7L15.4 28.3L5.0 19.3L18.7 18.2Z" fill="#DADADA" stroke="#1B2A3A" stroke-width="3" stroke-linejoin="round"/>
   </symbol>
+  <!-- album: álbum de estampillas (Álbum de logros). Tapa tostada con lomo, una estampilla crema pegada con motivo rosa, brillo. 5 elementos. -->
+  <symbol id="album" viewBox="0 0 48 48">
+    <rect x="6" y="6" width="36" height="36" rx="4" fill="#B5562B" stroke="#1B2A3A" stroke-width="3" stroke-linejoin="round"/>
+    <path d="M6 10a4 4 0 0 1 4-4h5v36h-5a4 4 0 0 1-4-4z" fill="#A0522D" stroke="#1B2A3A" stroke-width="3" stroke-linejoin="round"/>
+    <rect x="20" y="13" width="17" height="20" fill="#F6E3C3" stroke="#1B2A3A" stroke-width="2.5" stroke-dasharray="3 2.5" stroke-linejoin="round"/>
+    <circle cx="28.5" cy="23" r="5" fill="#E4007C" stroke="#1B2A3A" stroke-width="2.5"/>
+    <path d="M20 9.5h6" fill="none" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round"/>
+  </symbol>
 </svg>

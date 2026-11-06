@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { BUSINESSES, UPGRADES } from './data';
+import { desbloquear, nuevos } from './logros';
 import {
   buy,
   buyUpgrade,
@@ -92,6 +93,7 @@ function simulate(): Result {
     }
     if (t % DECIDE_EVERY_MS === 0) {
       for (let next = bestAction(s); next; next = bestAction(s)) s = next;
+      s = desbloquear(s, nuevos(s)); // el bono de logros entra en la simulación, como en el juego
       for (const def of BUSINESSES) {
         const b = s.businesses[def.id]!;
         if (b.count > 0) res.unlockMs[def.id] ??= t;

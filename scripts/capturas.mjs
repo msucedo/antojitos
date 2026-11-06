@@ -23,6 +23,7 @@ const ASIENTO_MS = 300;
 const VISTAS = {
   movil: { width: 390, height: 844 },
   web: { width: 1280, height: 800 },
+  webcorta: { width: 1366, height: 620 }, // ventana baja de PLAN.md: lateral compacto
 };
 const TEMAS = { claro: 'light', oscuro: 'dark' };
 

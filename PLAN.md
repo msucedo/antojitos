@@ -32,9 +32,9 @@ Fórmulas estándar del género (Kongregate, "The Math of Idle Games"); constant
 - Costo de la unidad n: `baseCost·r^n`, con `r` entre 1.07 y 1.15.
 - Compra de k unidades: `baseCost·r^n·(r^k−1)/(r−1)`.
 - Máximo comprable: `floor(log_r(dinero·(r−1)/(baseCost·r^n) + 1))`, corregido ±1 comprobando el costo real.
-- Ingreso por ciclo: `baseRevenue·n·(1 + 0.02·recetas)` (más mejoras y estrellas).
-- Hitos a las 25/50/100/200 unidades: cada uno parte la vuelta a la mitad (`cicloMs(def, count) = cycleMs / 2^hitos`, como AdVenture Capitalist; antes duplicaban el ingreso, cambio del 2026-11-05). Con empleado el /s es el mismo que al duplicar; a mano cada toque deja lo mismo y la vuelta dura menos. El mínimo es 62.5 ms (elote con 200), más que un frame, y la fórmula es cerrada. Comprar y cruzar un hito parte `progressMs` igual (la barra conserva su fracción). Con 200 unidades solo 4 de 8 negocios bajan de 1 s; meter a los demás pediría más hitos (300, 400).
-- **Pendiente (decisión del 2026-11-05): si se agregan hitos (300, 400…), mezclar.** Velocidad (partir la vuelta) mientras el negocio todavía barre, para que los lentos (fonda, panadería, franquicia, cadena) bajen de 1 s; ×2–×3 de ventas para los que ya tienen barra fija, sin bajarles más el ciclo (evita vueltas de menos de un frame y el hito se sigue sintiendo). Es el patrón de AdVenture Capitalist: tiempo en los hitos tempranos (25–400) y ganancias después. Los 4 hitos de hoy se quedan como velocidad.
+- Ingreso por ciclo: `baseRevenue·n·2^hitosVentas·(1 + 0.02·recetas)·(1 + 0.02·logros)` (más mejoras y estrellas).
+- Hitos a las 25/50/100/200/300/400 unidades (`MILESTONES`). Los cuatro primeros parten la vuelta a la mitad (`cicloMs(def, count) = cycleMs / 2^hitosVelocidad`, como AdVenture Capitalist; antes duplicaban el ingreso, cambio del 2026-11-05). Con empleado el /s es el mismo que al duplicar; a mano cada toque deja lo mismo y la vuelta dura menos. El mínimo es 62.5 ms (elote con 200), más que un frame, y la fórmula es cerrada. Comprar y cruzar un hito parte `progressMs` igual (la barra conserva su fracción). Con 200 unidades solo 4 de 8 negocios bajan de 1 s; los hitos 300 y 400 (abajo) meten a fonda y panadería.
+- **Hitos 300 y 400, mixtos (2026-11-06):** `hitoEfecto(def, i)` en `game.ts`: del quinto hito en adelante parte la vuelta solo si el negocio todavía barre (más de 1 s por vuelta); si no, dobla las ventas (`revenueWithStars` multiplica `2^hitosVentas`). Los de ventas no tocan `progressMs` al comprar. Patrón de AdVenture Capitalist: tiempo en los hitos tempranos y ganancias después. Resultado por negocio: elotes, aguas, tacos y tortas → ×2 ventas en 300 y 400 (ciclo sin cambio); fonda → 300 velocidad (750 ms, barra fija) y 400 ventas; panadería → 750 ms; franquicia → 1500 ms; cadena → 3000 ms. El tip de Chelo y el texto que sube del plato ("×2 rápido", "×2 ventas") distinguen el efecto.
 - Gerente: corre los ciclos solo.
 - Ganancias offline: ciclos continuos solo con gerente; un ciclo manual ya iniciado termina (una vuelta). Tope de 8 h, diferencia negativa → 0.
 - Prestigio "Herencia": `recetas = floor(sqrt(totalGanado/3e10))` (divisor ajustado por la simulación: herencia a ~93 min); reinicia todo salvo las recetas.
@@ -55,7 +55,7 @@ Fórmulas estándar del género (Kongregate, "The Math of Idle Games"); constant
 - Exportar/importar (base64, tope 10 KB, misma validación).
 - `navigator.storage.persist()`: Safari borra los datos tras 7 días sin uso si no está instalada.
 - Una sola pestaña: `navigator.locks.request('antojitos', { ifAvailable: true })`. Sin candado → pantalla "Ya está abierto en otra pestaña", sin guardar.
-- **Regla de deploy: nunca hacer rollback a un build con `SAVE_VERSION` menor que el publicado.** Un cliente viejo ve el guardado nuevo como ilegible, lo copia a `antojitos.unreadable` (solo recuperable a mano) y empieza partida nueva; el autosave pisa los dos guardados. Si hay que revertir, revertir el código pero conservar la versión de guardado y su migración. Para una v4: considerar no autoguardar encima de un guardado de versión más nueva.
+- **Regla de deploy: nunca hacer rollback a un build con `SAVE_VERSION` menor que el publicado.** Un cliente viejo ve el guardado nuevo como ilegible, lo copia a `antojitos.unreadable` (solo recuperable a mano) y empieza partida nueva; el autosave pisa los dos guardados. Si hay que revertir, revertir el código pero conservar la versión de guardado y su migración. Para la v4 (2026-11-06) se pospuso "no autoguardar encima de un guardado de versión más nueva": el deploy sigue pospuesto y aún no hay clientes con la v3; retomarlo antes de la v5.
 
 ## Seguridad
 
@@ -90,7 +90,7 @@ Fórmulas estándar del género (Kongregate, "The Math of Idle Games"); constant
 
 ## Verificación
 
-1. `npm run check` en verde y `npm run e2e` (build + 10 escenarios en Chrome headless con la CSP de `vercel.json`).
+1. `npm run check` en verde, `prettier --check .` y `npm run e2e` (build + 15 escenarios en Chrome headless con la CSP de `vercel.json`).
 2. `npm run dev` en vista móvil:
    - comprar, gerente, hito, prestigio;
    - recargar → progreso intacto;
@@ -247,3 +247,18 @@ Rediseño de lo de dentro de las tarjetas de negocio (`li.card`) a partir de las
 - [x] Iconos raster (8): el user entregó una sola lámina `docs/refs/platos-todos.jpeg` con los 8 sobre losetas del color de su papel; `retrato.py` ganó `--fuente` (origen explícito) y `--motas` (borra islas < 1 % de la pieza mayor: confeti y motas del papel) y se extrajeron por `--recorte` (comandos en `docs/platos-prompt.md`). 12-17 KB cada uno; hoja de contacto `.playwright-mcp/sprite-platos.png`; en el juego `platos-web-claro.png`, `-oscuro.png`, `platos-movil-claro.png`. Raster a 56 px móvil y 50 web.
 - [x] Medición de rendimiento con 8 barras (2026-11-05, ver `DESIGN.md` Rendimiento) y revisión independiente de la rama.
 - [x] Retirar los símbolos de plato del sprite (2026-11-05): `PlatoId` en `platos.ts`, `PLATOS` como `Record` completo, `BusinessDef.icon: PlatoId`; también fuera `sello`, `check`, `.estampa` y `--shadow`, que nadie usaba.
+
+## MVP3a — Logros, Libreta e hitos 300/400 (2026-11-06)
+
+**Objetivo:** retención a largo plazo tras la primera herencia: metas largas (logros), progreso visible (Libreta) y más camino por negocio (hitos 300 y 400). Eventos temporales quedan para 3b (spec aparte). Decisiones del user: logros con +2 % de ventas permanente cada uno (sobreviven la herencia, como las recetas); un solo panel "Álbum" (estampillas arriba, Libreta abajo); hitos 300/400 mixtos; una frase distinta por hito; en móvil el botón va en la barra inferior junto a Chelo; en web el lateral se compacta bajo 700 px de alto. Plan revisado por un revisor independiente antes de ejecutar (27 hallazgos incorporados).
+
+- [x] Guardado v4: `stats` (`clics`, `ventasManuales`, `jugadoMs`, `herencias`, `propinas`, `contratados`, `mejoras`, `maxPorSegundo`), `logros` (ids en orden de desbloqueo, solo se añade al final) y `logrosVistos`. Migración 3→4 con ceros; campos faltantes valen 0; ids de logro desconocidos se descartan (un logro retirado no cuesta la partida); `logrosVistos` se recorta. Los contadores suben solo en `game.ts`; `jugadoMs` suma en `applyOffline(state, now, jugando)` solo en tramos < 60 s (`AUSENCIA_MS`), que `catchUp(false)` pasa como jugando.
+- [x] `src/logros.ts`: 24 logros (`LOGROS`, predicados puros sobre el estado), `nuevos(s)`, `desbloquear`, `verLogros`. Un solo sitio de evaluación: `revisarLogros()` en `frame()` tras `catchUp`; lote con un anuncio y un sonido; silencio al cargar o importar. "Primer empleado" y "Primera herencia" también valen por el estado (empleado contratado, recetas) para partidas de antes de los contadores. Lista: primera venta a mano, 100 y 1,000 toques, los 8 negocios, un negocio a 25 y a 200, todos a 100, primer empleado, los 8 empleados, primera estrella, uno con 3, los 8 con 1, primera propina y 10, las 20 mejoras en una partida, primera herencia y 5, 10 y 50 recetas, $1e6, $1e12 y $1e15 ganados en total, 1 y 10 h jugadas. Máximo +48 %. `balance.test.ts` desbloquea logros en su simulación: primera herencia a 73.7 min.
+- [x] Hitos 300/400 (ver Mecánicas): `hitoEfecto`, `hitosVelocidad`, `hitosVentas`, `hitosCruzados`, `nextMilestone(def, count)` con efecto; `ui.hito(id, velocidad, ventas)`.
+- [x] Frase por hito: `ManagerSays.milestone: readonly string[]` (6 por gerente, 48 textos nuevos) y `fraseDe()`; `CHELO.says.milestone` neutro ("rinden el doble") y `logro` nuevo.
+- [x] UI: panel Álbum (web, noveno disco del lateral con badge; móvil, botón en la barra inferior y diálogo), estampillas y Libreta (ver `DESIGN.md` Álbum); icono `album` en el sprite; sonido `logro`; lateral compacto bajo 700 px; `.money` con factor 0.6 (a 390 px "$999.99 cuatrillones" ya cabe en una línea; medido).
+- [x] Verificación: 195 tests unitarios; e2e 15/15 (nuevos: logro por tiempo con el Álbum abierto queda visto y sin badge; primera venta desbloquea logro y el badge se apaga al abrir el Álbum; diálogo móvil del Álbum; carga de una partida v3 avanzada migra y apunta 8 logros con un solo anuncio); capturas 390/1280/1366×620 claro y oscuro con el Álbum abierto y la Libreta; GPU igual que `2114f5c` (29–30 %), renderer +2 puntos con el Álbum abierto.
+- [x] Revisión independiente de la tanda (10 hallazgos aplicados, sin bloqueantes).
+- [x] Chelo explica recetas y herencia: pregunta nueva "¿Qué son las recetas?" (se ganan solas por lo ganado en total, se cobran al heredar), respuesta de herencia reescrita (qué se reinicia y qué se queda) y una línea más en el diálogo de confirmar (recetas y logros se quedan).
+- [ ] El user aprueba las 48 frases de hito y commitea.
+- [ ] 3b: eventos temporales (spec aparte).

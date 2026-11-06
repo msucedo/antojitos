@@ -9,7 +9,8 @@ import {
   getDef,
   getUpgrade,
   hireManager,
-  milestonesCrossed,
+  hitosCruzados,
+  milestonesReached,
   pendingRecipes,
   prestige,
   revenuePerCycle,
@@ -20,8 +21,9 @@ import {
   estrellas,
   propinaCosto,
 } from './game';
-import { BUSINESSES, CHELO, ESTRELLA_BONO, PROPINA_MS, PROPINA_MULT } from './data';
+import { AUSENCIA_MS, BUSINESSES, CHELO, ESTRELLA_BONO, fraseDe, LOGRO_BONO, PROPINA_MS, PROPINA_MULT } from './data';
 import { createAudio, loadPrefs, savePrefs, type Sound } from './audio';
+import { desbloquear, nuevos, verLogros } from './logros';
 import { backup, exportSave, importSave, load, save, type KV } from './save';
 import { createUI, showLocked, type UI } from './ui';
 import { formatMoney } from './format';
@@ -29,7 +31,6 @@ import { formatMoney } from './format';
 const AUTOSAVE_MS = 5_000;
 const BACKUP_MS = 60_000;
 const TEXT_MS = 100;
-const MIN_OFFLINE_NOTICE_MS = 60_000;
 const LOCK_RETRIES = 10;
 const LOCK_RETRY_MS = 200;
 
@@ -56,6 +57,8 @@ function start(root: HTMLElement): void {
   let mode: BuyMode = 1;
   let dirty = true;
   let warnedNoSave = false;
+  // Tras cargar o importar, lo que ya se cumplía se apunta sin fiesta (una partida vieja trae varios).
+  let logrosSilencio = true;
   const audio = createAudio(loadPrefs());
   // El audio solo arranca dentro de un gesto. Se escuchan varios porque cada navegador
   // cuenta como "activación" uno distinto (iOS: touchend/click; teclado: keydown).
@@ -85,13 +88,15 @@ function start(root: HTMLElement): void {
       const next = buy(state, id, mode);
       if (!act(next, 'buy', id, buySound(before, next, id))) return;
       // Al cruzar un hito habla el gerente; si aún no hay, Doña Chelo.
-      const hitos = milestonesCrossed(before, state, id);
-      if (hitos === 0) return;
-      ui.hito(id, hitos);
-      const { manager } = getDef(id);
-      if (state.businesses[id]?.manager) {
-        ui.say(id, 'milestone');
-        ui.announce(`${manager.name}: ${manager.says.milestone}`);
+      const hitos = hitosCruzados(before, state, id);
+      if (hitos.velocidad + hitos.ventas === 0) return;
+      ui.hito(id, hitos.velocidad, hitos.ventas);
+      const def = getDef(id);
+      const b = state.businesses[id];
+      if (b?.manager) {
+        const alcanzados = milestonesReached(b.count);
+        ui.say(id, 'milestone', alcanzados);
+        ui.announce(`${def.manager.name}: ${fraseDe(def.manager, 'milestone', alcanzados)}`);
       } else {
         ui.cheloSays('milestone');
         ui.announce(`${CHELO.name}: ${CHELO.says.milestone}`);
@@ -168,11 +173,13 @@ function start(root: HTMLElement): void {
       if (!next) return false;
       backup(kv, state);
       set({ ...next, lastSeen: Date.now() });
+      logrosSilencio = true;
       persist();
       ui.announce('Partida cargada.');
       return true;
     },
     onSound: (kind) => audio.play(kind),
+    onAlbumVisto: () => set(verLogros(state)),
     getExport: () => exportSave(state),
   });
 
@@ -196,7 +203,8 @@ function start(root: HTMLElement): void {
   // del hilo o horas fuera pasan por el mismo camino (tope 8 h, reloj atrasado → 0).
   const catchUp = (notify: boolean) => {
     const before = state;
-    const r = applyOffline(state, Date.now());
+    // Un frame o la pestaña que se oculta cuentan como tiempo jugado; cargar o volver, no.
+    const r = applyOffline(state, Date.now(), !notify);
     state = r.state;
     dirty ||= r.earned > 0;
     // Ciclos manuales que terminaron (en un frame o al volver a la pestaña):
@@ -223,7 +231,7 @@ function start(root: HTMLElement): void {
       const b1 = state.businesses[def.id];
       return b0?.manager && b1?.manager && estrellas(b1) > estrellas(b0);
     });
-    const aviso = r.earned > 0 && r.elapsedMs >= MIN_OFFLINE_NOTICE_MS;
+    const aviso = r.earned > 0 && r.elapsedMs >= AUSENCIA_MS;
     if (aviso) {
       if (notify) {
         // Al volver: una línea en el aviso, sin avalancha de bocadillos ni sonidos.
@@ -252,10 +260,37 @@ function start(root: HTMLElement): void {
   };
   catchUp(true);
 
+  /**
+   * Único sitio donde se desbloquean logros: cualquier cambio de estado (compra, contrato, tiempo,
+   * herencia, importar) se ve aquí al frame siguiente. Un solo anuncio y un solo sonido aunque
+   * caigan varios (el aria-live se pisaría); al cargar, ni sonido ni Chelo.
+   */
+  const revisarLogros = () => {
+    const n = nuevos(state);
+    if (n.length === 0) {
+      logrosSilencio = false;
+      return;
+    }
+    const primero = state.logros.length === 0;
+    set(desbloquear(state, n));
+    ui.logros(n, logrosSilencio);
+    if (!logrosSilencio) {
+      audio.play('logro');
+      if (primero) ui.cheloSays('logro');
+    }
+    const pct = Math.round(n.length * LOGRO_BONO * 100);
+    const nombres = n.map((l) => l.nombre);
+    const lista = nombres.length === 1 ? nombres[0] : `${nombres.slice(0, -1).join(', ')} y ${nombres.at(-1)}`;
+    ui.announce(`${n.length === 1 ? 'Logro' : 'Logros'}: ${lista}. +${pct} % de ventas.`);
+    logrosSilencio = false;
+  };
+
   let lastText = 0;
   const frame = (t: number) => {
     catchUp(false);
     if (dirty || t - lastText >= TEXT_MS) {
+      // Antes de pintar: un logro por acción sale en el mismo frame (dirty ya es true); uno por tiempo, en ≤ 100 ms.
+      revisarLogros();
       ui.render(state, mode, audio.prefs());
       lastText = t;
       dirty = false;

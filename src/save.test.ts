@@ -9,6 +9,8 @@ import {
   tick,
   TRABAJADO_TOPE_MS,
   type State,
+  SAVE_VERSION,
+  emptyStats,
 } from './game';
 import {
   BACKUP_KEY,
@@ -166,10 +168,10 @@ describe('v2: mejoras', () => {
     },
   };
 
-  it('migra v1 → v3 (en cadena) sin perder nada', () => {
+  it('migra v1 → actual (en cadena) sin perder nada', () => {
     const s = validate(JSON.parse(JSON.stringify(v1)));
     expect(s).not.toBeNull();
-    expect(s!.version).toBe(3);
+    expect(s!.version).toBe(SAVE_VERSION);
     expect(s!.upgrades).toEqual([]);
     expect(s!.money).toBe(1234.5);
     expect(s!.recipes).toBe(1);
@@ -228,7 +230,7 @@ describe('v3: propina y antigüedad', () => {
 
   it('migra v2 → v3 con propina y antigüedad en 0', () => {
     const s = validate(JSON.parse(JSON.stringify(v2)));
-    expect(s?.version).toBe(3);
+    expect(s?.version).toBe(SAVE_VERSION);
     expect(s?.businesses.elotes).toEqual({ ...v2.businesses.elotes, propinaMs: 0, trabajadoMs: 0 });
     expect(s?.businesses.aguas).toEqual({
       count: 0,
@@ -276,9 +278,87 @@ describe('v3: propina y antigüedad', () => {
   });
 
   it('un guardado de una versión futura no se pierde: queda copiado en UNREADABLE_KEY', () => {
-    const futuro = JSON.stringify({ ...conBeto(), version: 4 });
+    const futuro = JSON.stringify({ ...conBeto(), version: SAVE_VERSION + 1 });
     const kv = memory({ [SAVE_KEY]: futuro });
     expect(load(kv, T0).problem).toBe(true);
     expect(kv.data[UNREADABLE_KEY]).toBe(futuro);
+  });
+});
+
+describe('v4: contadores y logros', () => {
+  const v3 = {
+    version: 3,
+    money: 10,
+    runEarned: 10,
+    lifetimeEarned: 10,
+    recipes: 0,
+    lastSeen: T0,
+    upgrades: [],
+    businesses: { elotes: { count: 3, progressMs: 100, running: false, manager: true, propinaMs: 0, trabajadoMs: 0 } },
+  };
+
+  it('migra v3 → v4 con contadores en cero y sin logros', () => {
+    const s = validate(JSON.parse(JSON.stringify(v3)));
+    expect(s?.version).toBe(4);
+    expect(s?.stats).toEqual(emptyStats());
+    expect(s?.logros).toEqual([]);
+    expect(s?.logrosVistos).toBe(0);
+    expect(s?.businesses.elotes).toEqual(v3.businesses.elotes);
+  });
+
+  it('una semilla v4 sin stats ni logros vale: faltantes a cero', () => {
+    const sinCampos: Record<string, unknown> = { ...newState(T0) };
+    delete sinCampos.stats;
+    delete sinCampos.logros;
+    delete sinCampos.logrosVistos;
+    const s = validate(sinCampos);
+    expect(s?.stats).toEqual(emptyStats());
+    expect(s?.logros).toEqual([]);
+    expect(s?.logrosVistos).toBe(0);
+  });
+
+  it('un campo de stats que falta vale 0; de tipo incorrecto o fraccionario en un conteo, se rechaza', () => {
+    const base = newState(T0);
+    expect(validate({ ...base, stats: { clics: 5 } })?.stats).toEqual({ ...emptyStats(), clics: 5 });
+    expect(validate({ ...base, stats: { clics: 1.5 } })).toBeNull();
+    expect(validate({ ...base, stats: { clics: '5' } })).toBeNull();
+    expect(validate({ ...base, stats: { jugadoMs: 1.5, maxPorSegundo: 0.25 } })?.stats).toEqual({
+      ...emptyStats(),
+      jugadoMs: 1.5,
+      maxPorSegundo: 0.25,
+    });
+    expect(validate({ ...base, stats: [] })).toBeNull();
+    expect(validate({ ...base, stats: null })).toBeNull();
+    // Infinity se escribe como null en JSON: vale 0 en vez de costar la partida.
+    expect(validate({ ...base, stats: { maxPorSegundo: null, clics: 2 } })?.stats).toEqual({
+      ...emptyStats(),
+      clics: 2,
+    });
+  });
+
+  it('logros: ids desconocidos y duplicados se descartan, no strings se rechazan, y logrosVistos se recorta', () => {
+    const base = newState(T0);
+    expect(validate({ ...base, logros: ['venta', 'retirado', 'venta', 'empleado'], logrosVistos: 9 })).toMatchObject({
+      logros: ['venta', 'empleado'],
+      logrosVistos: 2,
+    });
+    expect(validate({ ...base, logros: [1] })).toBeNull();
+    expect(validate({ ...base, logros: 'venta' })).toBeNull();
+    expect(validate({ ...base, logros: null })).toBeNull();
+    expect(validate({ ...base, logrosVistos: 1.5 })).toBeNull();
+    expect(validate({ ...base, logrosVistos: -1 })).toBeNull();
+  });
+
+  it('export / import conserva contadores y logros en su orden', () => {
+    const s = {
+      ...newState(T0),
+      stats: { ...emptyStats(), clics: 7, jugadoMs: 1234.5 },
+      logros: ['empleado', 'venta'],
+      logrosVistos: 1,
+    };
+    const back = importSave(exportSave(s));
+    expect(back?.stats).toEqual(s.stats);
+    expect(back?.logros).toEqual(['empleado', 'venta']);
+    expect(back?.logrosVistos).toBe(1);
   });
 });

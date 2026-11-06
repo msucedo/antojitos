@@ -225,8 +225,9 @@ p {
  * Son filtros CSS (sin recursos ni url), así que valen para todo el sprite.
  */
 .sticker {
-  filter: drop-shadow(1.5px 0 0 var(--halo)) drop-shadow(-1.5px 0 0 var(--halo)) drop-shadow(0 1.5px 0 var(--halo))
-    drop-shadow(0 -1.5px 0 var(--halo)) drop-shadow(2px 2.5px 0 var(--ink));
+  --filtro-estampa: drop-shadow(1.5px 0 0 var(--halo)) drop-shadow(-1.5px 0 0 var(--halo))
+    drop-shadow(0 1.5px 0 var(--halo)) drop-shadow(0 -1.5px 0 var(--halo)) drop-shadow(2px 2.5px 0 var(--ink));
+  filter: var(--filtro-estampa);
 }
 
 /* ---------- Header ---------- */
@@ -337,10 +338,11 @@ p {
 .money {
   /*
    * El dinero es el héroe del header: 43 px a 390, 52 en web. Con cifras largas ("$1.23 mil
-   * billones") encoge para caber en una línea: --largo (caracteres, desde render) × ~0.56 em de
-   * Rye. Si el "/s" ya no cabe al lado, baja solo (flex-wrap).
+   * billones") encoge para caber en una línea: --largo (caracteres, desde render) × 0.6 em de
+   * Rye (los dígitos miden 0.7 em y las minúsculas 0.5; medido con "$999.99 cuatrillones" a 390,
+   * que con 0.56 se partía). Si el "/s" ya no cabe al lado, baja solo (flex-wrap).
    */
-  font-size: min(clamp(2.3rem, 11vw, 3.25rem), 100cqi / (var(--largo, 8) * 0.56));
+  font-size: min(clamp(2.3rem, 11vw, 3.25rem), 100cqi / (var(--largo, 8) * 0.6));
   letter-spacing: 0.01em;
   font-variant-numeric: tabular-nums; /* Rye no lo trae; evita el baile en la fuente de reserva */
   color: var(--primary);
@@ -636,6 +638,86 @@ p {
 /* Personajes: en móvil la sección solo guarda la lista (se abre en un diálogo); en web es panel. */
 .personajes {
   display: none;
+}
+
+/* ---------- Álbum: estampillas de logros y Libreta ---------- */
+/* Como Personajes: en móvil la sección solo guarda el cuerpo (se abre en un diálogo); en web es panel. */
+.album {
+  display: none;
+}
+
+/* Cuadrícula fija de 3 columnas en móvil y web (el panel de 360 px no da para 4 con el perforado). */
+.estampillas {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 4px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.estampilla-card {
+  padding: 10px 6px 8px;
+  gap: 3px;
+}
+
+.estampilla-card .up-icon {
+  width: 44px;
+  height: 44px;
+  margin-bottom: 0;
+}
+
+.estampilla-card .up-name {
+  font-size: 0.78rem;
+  overflow-wrap: anywhere;
+}
+
+.estampilla-card .up-effect {
+  font-size: 0.68rem;
+}
+
+/* Bloqueada: gris por color y borde punteado (nunca opacity en el li: arrastra la sombra). */
+.estampilla.bloqueada .estampilla-card {
+  --text: var(--tinta-suave);
+  --muted: var(--tinta-suave);
+  border-style: dashed;
+  border-color: var(--tinta-suave);
+}
+
+.estampilla.bloqueada .up-icon {
+  filter: grayscale(1) var(--filtro-estampa, none); /* el sprite conserva halo y sombra: sin salto al desbloquear */
+  opacity: 0.45;
+}
+
+.libreta-title {
+  font-size: 0.95rem;
+  color: var(--muted);
+  margin: 14px 0 6px;
+}
+
+.libreta {
+  margin: 0;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 4px 12px;
+  font-size: 0.85rem;
+}
+
+.libreta dt {
+  color: var(--muted);
+}
+
+.libreta dd {
+  margin: 0;
+  font-weight: 700;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Botón del Álbum en la barra inferior móvil: mismo disco que Chelo, con icono y badge de logros nuevos. */
+.album-btn .icon {
+  width: 28px;
+  height: 28px;
 }
 
 .up-list {
@@ -1671,7 +1753,8 @@ p {
   }
 
   .personajes,
-  .guia {
+  .guia,
+  .album {
     display: block;
   }
 
@@ -1693,6 +1776,47 @@ p {
 
   .toast {
     left: calc(50% + var(--lateral-w) / 2);
+  }
+}
+
+/*
+ * Lateral compacto en ventanas bajas (1366×620 de PLAN.md): nueve discos de 56 con etiqueta no
+ * caben; bajan a 44 con icono de 28 y la etiqueta se oculta visualmente (sigue en aria-label o en
+ * el texto del botón para el lector). Nada cambia a 1280×800.
+ */
+@media (min-width: 900px) and (max-height: 700px) {
+  .lateral {
+    gap: 2px;
+  }
+
+  .lat-btn {
+    gap: 0;
+    padding: 2px 0;
+  }
+
+  .lat-disc {
+    width: 44px;
+    height: 44px;
+  }
+
+  .lat-disc .icon {
+    width: 28px;
+    height: 28px;
+  }
+
+  .lat-disc .lat-retrato {
+    width: 32px;
+    height: 32px;
+  }
+
+  .lat-label {
+    /* = .sr-only (una media query no puede compartir selector): cambiar los dos juntos. */
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
 }
 

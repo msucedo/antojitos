@@ -2,10 +2,18 @@ import type { CharacterId } from './characters';
 import type { PlatoId } from './platos';
 
 export type ManagerEvent = 'hire' | 'milestone' | 'upgrade' | 'estrella';
-export type CheloEvent = 'milestone' | 'upgrade' | 'upgradeOne' | 'prestige' | 'empleado';
+export type CheloEvent = 'milestone' | 'upgrade' | 'upgradeOne' | 'prestige' | 'empleado' | 'logro';
+
+/** Frases de un gerente: una por evento, y una por hito en el orden de MILESTONES. */
+export interface ManagerSays {
+  readonly hire: string;
+  readonly upgrade: string;
+  readonly estrella: string;
+  readonly milestone: readonly string[];
+}
 
 /**
- * Gerente de un negocio (en pantalla, "empleado"): nombre, costo, retrato, género y una frase por evento.
+ * Gerente de un negocio (en pantalla, "empleado"): nombre, costo, retrato, género y sus frases.
  * Voz: trata al jugador de "usted" y nunca usa sustantivos de género ni de rol
  * ("patrón", "jefe"); lo comprueba characters.test.ts.
  */
@@ -15,7 +23,14 @@ export interface ManagerDef {
   readonly id: CharacterId;
   /** Concordancia de la etiqueta "Contratado"/"Contratada". */
   readonly genero: 'm' | 'f';
-  readonly says: Readonly<Record<ManagerEvent, string>>;
+  readonly says: ManagerSays;
+}
+
+/** Frase del gerente para un evento; en un hito, la del n-ésimo alcanzado (1 = 25 unidades). */
+export function fraseDe(m: ManagerDef, kind: ManagerEvent, hito = 1): string {
+  if (kind !== 'milestone') return m.says[kind];
+  const { milestone } = m.says;
+  return milestone[Math.min(Math.max(hito, 1), milestone.length) - 1] ?? '';
 }
 
 /** Papel de la estampilla de un negocio (tokens --papel-* en style.css). */
@@ -53,7 +68,14 @@ export const BUSINESSES: readonly BusinessDef[] = [
       genero: 'm',
       says: {
         hire: 'Órale. Usted descanse, que el elote se vende solo.',
-        milestone: '¿Ya vio? Hasta la fila da vuelta a la esquina.',
+        milestone: [
+          '¿Ya vio? Hasta la fila da vuelta a la esquina.',
+          'Cincuenta carritos. Ya me saludan hasta los perros.',
+          'Cien carritos y el mismo chile. Así se hace.',
+          'Doscientos. Ya no sé ni dónde los estaciono.',
+          'Trescientos carritos. El maíz lo traen en tráiler.',
+          'Cuatrocientos. Ya hasta el mercado nos pide elote.',
+        ],
         upgrade: 'Con eso ni el chile pica igual. Mejor, pues.',
         estrella: 'Con los años el elote sabe mejor. Usted nomás vea.',
       },
@@ -75,7 +97,14 @@ export const BUSINESSES: readonly BusinessDef[] = [
       genero: 'f',
       says: {
         hire: '¡Aguas, aguas! Jamaica, horchata y limón, bien frías.',
-        milestone: '¡Se nos acaba el hielo de tanta gente!',
+        milestone: [
+          '¡Se nos acaba el hielo de tanta gente!',
+          '¡Cincuenta puestos! Ya pedí el hielo por tonelada.',
+          '¡Cien puestos y la jamaica no se da abasto!',
+          '¡Doscientos! Hasta la lluvia se me pone celosa.',
+          '¡Trescientos puestos! Ya tengo pregón con eco.',
+          '¡Cuatrocientos! Se me acaban los limones del país.',
+        ],
         upgrade: 'Pruébela. Esta sí sabe a fruta de verdad.',
         estrella: '¡Ya me sé el pregón de memoria! ¡Aguas, aguas frescas!',
       },
@@ -97,7 +126,14 @@ export const BUSINESSES: readonly BusinessDef[] = [
       genero: 'm',
       says: {
         hire: '¿Con todo? Con todo. Aquí nadie se va con hambre.',
-        milestone: '¡Trompo nuevo cada hora! Esto ya es otra liga.',
+        milestone: [
+          '¡Trompo nuevo cada hora! Esto ya es otra liga.',
+          'Cincuenta taquerías. La salsa ya la hago en tina.',
+          'Cien. Ya me conocen hasta los que no comen tacos.',
+          'Doscientas taquerías. Pastor para toda la ciudad.',
+          'Trescientas. La piña ya viene por camión.',
+          'Cuatrocientas taquerías. Con todo, siempre con todo.',
+        ],
         upgrade: 'Esa salsa ya hizo llorar a tres. Buena señal.',
         estrella: 'Ya corto el trompo con los ojos cerrados. Bueno, casi.',
       },
@@ -119,7 +155,14 @@ export const BUSINESSES: readonly BusinessDef[] = [
       genero: 'f',
       says: {
         hire: 'Aquí las tortas van bien servidas. Ya lo verá.',
-        milestone: 'No me mire así. Le dije que iban a venir.',
+        milestone: [
+          'No me mire así. Le dije que iban a venir.',
+          'Cincuenta torterías. Yo no presumo, pero ya ve.',
+          'Cien. El bolillo lo compro por costal, ni modo.',
+          'Doscientas. Hasta mis vecinas ya comen aquí.',
+          'Trescientas torterías. Siga así y no se me canse.',
+          'Cuatrocientas. Ya le dije: bien servidas, siempre.',
+        ],
         upgrade: 'Ahora sí hay con qué trabajar. Siga así.',
         estrella: 'La experiencia no se improvisa. Las tortas tampoco.',
       },
@@ -141,7 +184,14 @@ export const BUSINESSES: readonly BusinessDef[] = [
       genero: 'm',
       says: {
         hire: 'Siéntese, que ya casi sale el guisado.',
-        milestone: 'Tuvimos que poner mesas en la banqueta.',
+        milestone: [
+          'Tuvimos que poner mesas en la banqueta.',
+          'Cincuenta fondas. El guisado ya sale en olla grande.',
+          'Cien fondas y el mismo sazón. Eso cuesta, eh.',
+          'Doscientas. Hasta los domingos se llenan.',
+          'Trescientas fondas. Ya sale la comida más rápido.',
+          'Cuatrocientas. Nadie se va con hambre, nunca.',
+        ],
         upgrade: 'Con sazón nuevo hasta el arroz sabe a domingo.',
         estrella: 'Ya sé el gusto de cada cliente. Aquí nadie se va con hambre.',
       },
@@ -163,7 +213,14 @@ export const BUSINESSES: readonly BusinessDef[] = [
       genero: 'f',
       says: {
         hire: 'Hoy salieron esponjaditas. Huela nomás.',
-        milestone: 'Ya no caben las charolas en el mostrador.',
+        milestone: [
+          'Ya no caben las charolas en el mostrador.',
+          'Cincuenta panaderías. Hoy el horno no se apaga.',
+          'Cien. Ya huele a concha en toda la colonia.',
+          'Doscientas panaderías. Las charolas salen volando.',
+          'Trescientas. El pan sale más rápido que antes.',
+          'Cuatrocientas. Ya ni el horno descansa.',
+        ],
         upgrade: 'Con el horno nuevo hasta la masa está de buenas.',
         estrella: 'Ya sé cuándo sale el pan nomás por el olor.',
       },
@@ -185,7 +242,14 @@ export const BUSINESSES: readonly BusinessDef[] = [
       genero: 'm',
       says: {
         hire: 'Según mis proyecciones, esto escala. Confíe en el proceso.',
-        milestone: 'Los indicadores superan lo previsto. Lo llevo a la junta.',
+        milestone: [
+          'Los indicadores superan lo previsto. Lo llevo a la junta.',
+          'Cincuenta sucursales. El plan se cumple al pie de la letra.',
+          'Cien sucursales. Crecimiento sostenido, como proyecté.',
+          'Doscientas. Abrimos oficina regional. Era inevitable.',
+          'Trescientas. Los tiempos de servicio bajaron. Eficiencia.',
+          'Cuatrocientas sucursales. Lo presento en la asamblea.',
+        ],
         upgrade: 'Inversión alineada con la estrategia. Excelente.',
         estrella: 'Antigüedad acreditada: rendimiento al alza, sin excepción.',
       },
@@ -207,7 +271,14 @@ export const BUSINESSES: readonly BusinessDef[] = [
       genero: 'f',
       says: {
         hire: 'Yo me encargo. Usted no se distraiga.',
-        milestone: 'Bien. Ahora el doble.',
+        milestone: [
+          'Bien. Ahora el doble.',
+          'Cincuenta. Siga.',
+          'Cien. Ya me esperaba esto.',
+          'Doscientas. No se detenga.',
+          'Trescientas. Más rápido, como debe ser.',
+          'Cuatrocientas. Ahora sí es nacional.',
+        ],
         upgrade: 'Era lo que faltaba. Siguiente.',
         estrella: 'Experiencia. Se nota.',
       },
@@ -227,7 +298,8 @@ export const CHELO = {
   name: 'Doña Chelo',
   id: 'chelo',
   says: {
-    milestone: '¡Son muchos puestos, mijo! Ahora venden el doble de rápido.',
+    milestone: '¡Son muchos puestos, mijo! Ahora rinden el doble.',
+    logro: '¡Un logro, mijo! Ya lo pegué en el álbum: todo vende más.',
     upgrade: 'Esa mejora le sirve a todos los negocios, mijo.',
     upgradeOne: 'Esa mejora se nota en el puesto, mijo.',
     prestige: 'Qué orgullo. Con las recetas de la abuela todo vende más.',
@@ -247,7 +319,11 @@ export const CHELO = {
     },
     {
       q: '¿Qué es la herencia?',
-      a: 'Le pasas el negocio a la familia: empiezas de cero con recetas, y cada una suma 2 % a todo.',
+      a: 'Reinicias la partida (dinero, puestos, empleados y mejoras) y cobras las recetas pendientes. Recetas y logros que ya tienes se quedan.',
+    },
+    {
+      q: '¿Qué son las recetas?',
+      a: 'Se ganan solas al vender: la primera al juntar un billón en total, y cada una pide más. Se cobran al heredar: +2 % a todo, para siempre.',
     },
     {
       q: '¿Cómo guardo mi partida?',
@@ -262,10 +338,15 @@ export const CHELO = {
   faq: readonly CheloFaq[];
 };
 
-/** Unidades en las que cada hito parte la vuelta a la mitad (`cicloMs` en game.ts). */
-export const MILESTONES: readonly number[] = [25, 50, 100, 200];
+/**
+ * Unidades de cada hito. Los cuatro primeros parten la vuelta a la mitad; del quinto en adelante
+ * la parten solo si el negocio todavía barre, si no doblan las ventas (`hitoEfecto` en game.ts).
+ */
+export const MILESTONES: readonly number[] = [25, 50, 100, 200, 300, 400];
 
 export const OFFLINE_CAP_MS = 8 * 60 * 60 * 1000;
+/** Ausencia desde la que se avisa lo ganado; por debajo, el tiempo cuenta como jugado. */
+export const AUSENCIA_MS = 60_000;
 
 /** Propina: el negocio vende más durante PROPINA_MS y luego hay que esperar PROPINA_ESPERA_MS. */
 export const PROPINA_MS = 30_000;
@@ -279,6 +360,8 @@ export const ANTIGUEDAD_MS: readonly number[] = [600_000, 3_600_000, 21_600_000]
 export const ESTRELLA_BONO = 0.1;
 export const RECIPE_BONUS = 0.02;
 export const RECIPE_DIVISOR = 1e12;
+/** Ventas extra por cada logro desbloqueado (sobrevive la herencia, como las recetas). */
+export const LOGRO_BONO = 0.02;
 
 export interface UpgradeDef {
   readonly id: string;

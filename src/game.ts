@@ -1,7 +1,9 @@
 import {
   ANTIGUEDAD_MS,
+  AUSENCIA_MS,
   BUSINESSES,
   ESTRELLA_BONO,
+  LOGRO_BONO,
   MILESTONES,
   OFFLINE_CAP_MS,
   PROPINA_COSTO_MS,
@@ -15,7 +17,7 @@ import {
   type UpgradeDef,
 } from './data';
 
-export const SAVE_VERSION = 3;
+export const SAVE_VERSION = 4;
 
 export interface BizState {
   count: number;
@@ -42,6 +44,37 @@ export function emptyBiz(count = 0): BizState {
   return { count, progressMs: 0, running: false, manager: false, propinaMs: 0, trabajadoMs: 0 };
 }
 
+/** Contadores de toda la vida del jugador (sobreviven la herencia): Libreta y logros. */
+export interface Stats {
+  /** Vueltas manuales iniciadas (toques al plato). */
+  clics: number;
+  /** Vueltas manuales cobradas. */
+  ventasManuales: number;
+  /** Tiempo con la pestaña abierta (tramos menores que AUSENCIA_MS). */
+  jugadoMs: number;
+  herencias: number;
+  propinas: number;
+  /** Empleados contratados, contando los de partidas anteriores. */
+  contratados: number;
+  /** Mejoras compradas, contando las de partidas anteriores. */
+  mejoras: number;
+  /** Mejor ingreso por segundo visto (incluye propina, como el /s del header). */
+  maxPorSegundo: number;
+}
+
+export function emptyStats(): Stats {
+  return {
+    clics: 0,
+    ventasManuales: 0,
+    jugadoMs: 0,
+    herencias: 0,
+    propinas: 0,
+    contratados: 0,
+    mejoras: 0,
+    maxPorSegundo: 0,
+  };
+}
+
 export interface State {
   version: typeof SAVE_VERSION;
   money: number;
@@ -55,6 +88,11 @@ export interface State {
   upgrades: string[];
   /** Date.now() de la última vez que se guardó/actualizó. */
   lastSeen: number;
+  stats: Stats;
+  /** Ids de logros desbloqueados, en orden de desbloqueo (solo se añade al final; el badge cuenta desde logrosVistos). */
+  logros: string[];
+  /** Cuántos logros ya vio el jugador en el Álbum. */
+  logrosVistos: number;
 }
 
 export type BuyMode = 1 | 10 | 'max';
@@ -84,7 +122,14 @@ export function newState(now: number): State {
     businesses: freshBusinesses(),
     upgrades: [],
     lastSeen: now,
+    stats: emptyStats(),
+    logros: [],
+    logrosVistos: 0,
   };
+}
+
+function withStats(state: State, patch: Partial<Stats>): State {
+  return { ...state, stats: { ...state.stats, ...patch } };
 }
 
 export function getDef(id: string): BusinessDef {
@@ -118,17 +163,75 @@ export function buySound(before: State, after: State, id: string): 'buy' | 'open
   return biz(before, id).count === 0 ? 'open' : 'buy';
 }
 
+export type HitoEfecto = 'velocidad' | 'ventas';
+/** Los primeros hitos siempre parten la vuelta (los cuatro originales). */
+const HITOS_VELOCIDAD = 4;
+/** Del quinto hito en adelante la vuelta solo se parte si todavía dura más que esto. */
+const VUELTA_BARRE_MS = 1000;
+
 /**
- * Largo de la vuelta: cada hito la parte a la mitad (como AdVenture Capitalist). Única fuente del
- * ciclo; con 4 hitos el elote queda en 62.5 ms, más que un frame. Divide entre potencias de 2: exacto.
+ * Efecto del hito `i` (índice en MILESTONES) para un negocio. Los cuatro primeros parten la vuelta;
+ * después, la parten solo mientras el negocio todavía barre (más de un segundo por vuelta), para que
+ * los lentos lleguen a barra fija; los rápidos doblan ventas (patrón de AdVenture Capitalist).
  */
-export function cicloMs(def: BusinessDef, count: number): number {
-  return def.cycleMs / 2 ** milestonesReached(count);
+export function hitoEfecto(def: BusinessDef, i: number): HitoEfecto {
+  let velocidad = 0;
+  for (let j = 0; ; j++) {
+    const parte = j < HITOS_VELOCIDAD || def.cycleMs / 2 ** velocidad > VUELTA_BARRE_MS;
+    if (j === i) return parte ? 'velocidad' : 'ventas';
+    if (parte) velocidad++;
+  }
 }
 
-/** Siguiente hito no alcanzado, o null si ya están todos. */
-export function nextMilestone(count: number): number | null {
-  return MILESTONES.find((m) => count < m) ?? null;
+/** Por negocio, acumulado de hitos de velocidad tras alcanzar i hitos (índice 0 = ninguno). O(1) desde cicloMs. */
+const VELOCIDAD_ACUMULADA: ReadonlyMap<string, readonly number[]> = new Map(
+  BUSINESSES.map((def) => {
+    const acum = [0];
+    MILESTONES.forEach((_, i) => acum.push((acum[i] ?? 0) + (hitoEfecto(def, i) === 'velocidad' ? 1 : 0)));
+    return [def.id, acum];
+  }),
+);
+
+function hitosDe(def: BusinessDef, count: number, efecto: HitoEfecto): number {
+  const alcanzados = milestonesReached(count);
+  const velocidad = VELOCIDAD_ACUMULADA.get(def.id)?.[alcanzados] ?? 0;
+  return efecto === 'velocidad' ? velocidad : alcanzados - velocidad;
+}
+
+/** Hitos alcanzados que parten la vuelta. */
+export function hitosVelocidad(def: BusinessDef, count: number): number {
+  return hitosDe(def, count, 'velocidad');
+}
+
+/** Hitos alcanzados que doblan las ventas. */
+export function hitosVentas(def: BusinessDef, count: number): number {
+  return hitosDe(def, count, 'ventas');
+}
+
+/** Hitos cruzados por tipo entre dos estados (Máx puede cruzar varios de golpe). */
+export function hitosCruzados(before: State, after: State, id: string): Record<HitoEfecto, number> {
+  const def = getDef(id);
+  const b0 = biz(before, id).count;
+  const b1 = biz(after, id).count;
+  return {
+    velocidad: hitosVelocidad(def, b1) - hitosVelocidad(def, b0),
+    ventas: hitosVentas(def, b1) - hitosVentas(def, b0),
+  };
+}
+
+/**
+ * Largo de la vuelta: cada hito de velocidad la parte a la mitad. Única fuente del ciclo; con los
+ * cuatro primeros el elote queda en 62.5 ms, más que un frame. Divide entre potencias de 2: exacto.
+ */
+export function cicloMs(def: BusinessDef, count: number): number {
+  return def.cycleMs / 2 ** hitosVelocidad(def, count);
+}
+
+/** Siguiente hito no alcanzado con su efecto, o null si ya están todos. */
+export function nextMilestone(def: BusinessDef, count: number): { count: number; efecto: HitoEfecto } | null {
+  const i = MILESTONES.findIndex((m) => count < m);
+  const m = MILESTONES[i];
+  return m === undefined ? null : { count: m, efecto: hitoEfecto(def, i) };
 }
 
 export function revenuePerCycle(state: State, id: string): number {
@@ -142,7 +245,9 @@ function revenueWithStars(state: State, id: string, stars: number): number {
   return Math.min(
     def.baseRevenue *
       count *
+      2 ** hitosVentas(def, count) *
       (1 + RECIPE_BONUS * state.recipes) *
+      (1 + LOGRO_BONO * state.logros.length) *
       (1 + ESTRELLA_BONO * stars) *
       upgradeMultiplier(state, id),
     Number.MAX_VALUE,
@@ -188,10 +293,11 @@ export function buy(state: State, id: string, mode: BuyMode): State {
   const k = quantityFor(state, id, mode);
   if (k === 0) return state;
   const b = biz(state, id);
-  const cost = costOf(getDef(id), b.count, k);
-  // Cada hito cruzado parte la vuelta: el progreso se parte igual y la barra conserva su fracción
-  // (sin vuelta regalada ni salto). Potencia de 2: exacto.
-  const crossed = milestonesReached(b.count + k) - milestonesReached(b.count);
+  const def = getDef(id);
+  const cost = costOf(def, b.count, k);
+  // Cada hito de velocidad cruzado parte la vuelta: el progreso se parte igual y la barra conserva
+  // su fracción (sin vuelta regalada ni salto). Potencia de 2: exacto. Los de ventas no la tocan.
+  const crossed = hitosVelocidad(def, b.count + k) - hitosVelocidad(def, b.count);
   return withBiz({ ...state, money: state.money - cost }, id, {
     count: b.count + k,
     progressMs: b.progressMs / 2 ** crossed,
@@ -201,7 +307,7 @@ export function buy(state: State, id: string, mode: BuyMode): State {
 export function startCycle(state: State, id: string): State {
   const b = biz(state, id);
   if (b.count === 0 || b.running || b.manager) return state;
-  return withBiz(state, id, { running: true, progressMs: 0 });
+  return withBiz(withStats(state, { clics: state.stats.clics + 1 }), id, { running: true, progressMs: 0 });
 }
 
 export function canHireManager(state: State, id: string): boolean {
@@ -227,7 +333,13 @@ export function firstHireReady(state: State): boolean {
 export function hireManager(state: State, id: string): State {
   if (!canHireManager(state, id)) return state;
   const b = biz(state, id);
-  return withBiz({ ...state, money: state.money - getDef(id).manager.cost }, id, {
+  const pagado = withStats(
+    { ...state, money: state.money - getDef(id).manager.cost },
+    {
+      contratados: state.stats.contratados + 1,
+    },
+  );
+  return withBiz(pagado, id, {
     manager: true,
     running: false,
     progressMs: b.running ? b.progressMs : 0,
@@ -273,7 +385,13 @@ export function puedeDarPropina(state: State, id: string): boolean {
 /** Paga la propina: ×PROPINA_MULT de ventas durante PROPINA_MS y luego la espera. Sin efecto si no se puede. */
 export function darPropina(state: State, id: string): State {
   if (!puedeDarPropina(state, id)) return state;
-  return withBiz({ ...state, money: state.money - propinaCosto(state, id) }, id, { propinaMs: PROPINA_TOTAL_MS });
+  const pagado = withStats(
+    { ...state, money: state.money - propinaCosto(state, id) },
+    {
+      propinas: state.stats.propinas + 1,
+    },
+  );
+  return withBiz(pagado, id, { propinaMs: PROPINA_TOTAL_MS });
 }
 
 /**
@@ -288,6 +406,7 @@ export function tick(state: State, dtMs: number): State {
 function advance(state: State, dtMs: number): { state: State; earned: number } {
   if (!(dtMs > 0) || !Number.isFinite(dtMs)) return { state, earned: 0 };
   let earned = 0;
+  let ventasManuales = state.stats.ventasManuales;
   const businesses: Record<string, BizState> = {};
   for (const def of BUSINESSES) {
     const b = biz(state, def.id);
@@ -306,19 +425,24 @@ function advance(state: State, dtMs: number): { state: State; earned: number } {
     const perCycle = revenuePerCycle(state, def.id);
     if (cycles >= 1) {
       earned = capAdd(earned, perCycle);
+      ventasManuales++;
       businesses[def.id] = { ...b, progressMs: 0, running: false };
     } else {
       businesses[def.id] = { ...b, progressMs: total };
     }
   }
+  const next: State = {
+    ...state,
+    businesses,
+    money: capAdd(state.money, earned),
+    runEarned: capAdd(state.runEarned, earned),
+    lifetimeEarned: capAdd(state.lifetimeEarned, earned),
+  };
   return {
-    state: {
-      ...state,
-      businesses,
-      money: capAdd(state.money, earned),
-      runEarned: capAdd(state.runEarned, earned),
-      lifetimeEarned: capAdd(state.lifetimeEarned, earned),
-    },
+    state: withStats(next, {
+      ventasManuales,
+      maxPorSegundo: Math.min(Math.max(state.stats.maxPorSegundo, incomePerSecond(next)), Number.MAX_VALUE),
+    }),
     earned,
   };
 }
@@ -353,11 +477,20 @@ function advanceManaged(state: State, def: BusinessDef, b: BizState, dtMs: numbe
   return { biz: { ...b, progressMs, propinaMs, trabajadoMs }, earned };
 }
 
-/** Aplica el tiempo fuera desde `lastSeen` (tope 8 h, reloj atrasado → 0). */
-export function applyOffline(state: State, now: number): { state: State; earned: number; elapsedMs: number } {
+/**
+ * Aplica el tiempo desde `lastSeen` (tope 8 h, reloj atrasado → 0). Con `jugando` (un frame o la
+ * pestaña que se oculta) el tramo cuenta como tiempo jugado si es corto: una pausa del hilo sin
+ * visibilitychange (laptop dormida) no suma horas.
+ */
+export function applyOffline(
+  state: State,
+  now: number,
+  jugando = false,
+): { state: State; earned: number; elapsedMs: number } {
   const elapsedMs = Math.min(Math.max(now - state.lastSeen, 0), OFFLINE_CAP_MS);
   const { state: advanced, earned } = advance(state, elapsedMs);
-  return { state: { ...advanced, lastSeen: now }, earned, elapsedMs };
+  const jugadoMs = jugando && elapsedMs < AUSENCIA_MS ? advanced.stats.jugadoMs + elapsedMs : advanced.stats.jugadoMs;
+  return { state: withStats({ ...advanced, lastSeen: now }, { jugadoMs }), earned, elapsedMs };
 }
 
 export function incomePerSecond(state: State): number {
@@ -399,7 +532,10 @@ export function canBuyUpgrade(state: State, id: string): boolean {
 
 export function buyUpgrade(state: State, id: string): State {
   if (!canBuyUpgrade(state, id)) return state;
-  return { ...state, money: state.money - getUpgrade(id).cost, upgrades: [...state.upgrades, id] };
+  return withStats(
+    { ...state, money: state.money - getUpgrade(id).cost, upgrades: [...state.upgrades, id] },
+    { mejoras: state.stats.mejoras + 1 },
+  );
 }
 
 /** Las `n` mejoras más baratas sin comprar, de negocios ya abiertos o globales. */
@@ -411,7 +547,7 @@ export function nextUpgrades(state: State, n: number): UpgradeDef[] {
     .slice(0, n);
 }
 
-/** Herencia: reinicia la partida y suma las recetas pendientes. */
+/** Herencia: reinicia la partida y suma las recetas pendientes. Contadores y logros se quedan. */
 export function prestige(state: State, now: number): State {
   const gained = pendingRecipes(state);
   if (gained === 0) return state;
@@ -419,5 +555,8 @@ export function prestige(state: State, now: number): State {
     ...newState(now),
     lifetimeEarned: state.lifetimeEarned,
     recipes: state.recipes + gained,
+    stats: { ...state.stats, herencias: state.stats.herencias + 1 },
+    logros: state.logros,
+    logrosVistos: state.logrosVistos,
   };
 }

@@ -9,6 +9,8 @@ import {
   PROPINA_MS,
   PROPINA_MULT,
   type BusinessDef,
+  fraseDe,
+  LOGRO_BONO,
   type CheloEvent,
   type ManagerEvent,
 } from './data';
@@ -42,6 +44,7 @@ import {
 import { formatDuration, formatMoney, formatNumber, formatReloj } from './format';
 import { icon, setIcon, tabla, use, type IconName } from './icons';
 import { portrait } from './characters';
+import { LOGROS, type LogroDef, type LogroIcono } from './logros';
 import { aparecer, coin, completar, confetti, flip, pop, pulse, stamp, tilt } from './fx';
 
 export interface Handlers {
@@ -56,6 +59,8 @@ export interface Handlers {
   onToggleMusic(): void;
   /** Sonidos que nacen en la UI (paneles, diálogos, preguntas, punto de Chelo); main.ts los toca. */
   onSound(kind: Sound): void;
+  /** Se abrió el Álbum: todo lo desbloqueado queda visto (badge a cero). */
+  onAlbumVisto(): void;
   onImport(text: string): boolean;
   getExport(): string;
 }
@@ -120,6 +125,36 @@ function latBtn(
   const btn = h('button', { class: 'lat-btn', type: 'button', onclick }, [disc, text]);
   return { btn, ic, disc, label: text };
 }
+
+/** Arte de una estampilla del Álbum: plato, retrato o símbolo del sprite, al tamaño del cupón. */
+function logroArte(icono: LogroIcono): Element {
+  if ('plato' in icono) return plato(icono.plato, 'icon up-icon');
+  if ('retrato' in icono) return portrait(icono.retrato, 'icon up-icon', true);
+  return icon(icono.sprite, 'icon up-icon sticker');
+}
+
+/** Filas de la Libreta (Álbum): etiqueta y valor desde el estado. Solo lectura. */
+const LIBRETA: readonly { label: string; valor: (s: State) => string }[] = [
+  { label: 'Ganado en total', valor: (s) => formatMoney(s.lifetimeEarned) },
+  { label: 'Ganado esta partida', valor: (s) => formatMoney(s.runEarned) },
+  { label: 'Mejor ingreso por segundo', valor: (s) => formatMoney(s.stats.maxPorSegundo) },
+  { label: 'Ingreso por segundo ahora', valor: (s) => formatMoney(incomePerSecond(s)) },
+  { label: 'Toques al plato', valor: (s) => formatNumber(s.stats.clics) },
+  { label: 'Tiempo jugado', valor: (s) => formatDuration(s.stats.jugadoMs) },
+  { label: 'Herencias', valor: (s) => formatNumber(s.stats.herencias) },
+  { label: 'Recetas', valor: (s) => formatNumber(s.recipes) },
+  { label: 'Empleados contratados', valor: (s) => formatNumber(s.stats.contratados) },
+  {
+    label: 'Estrellas ahora',
+    valor: (s) =>
+      formatNumber(
+        BUSINESSES.reduce((n, d) => n + (s.businesses[d.id]?.manager ? estrellas(s.businesses[d.id]!) : 0), 0),
+      ),
+  },
+  { label: 'Propinas dadas', valor: (s) => formatNumber(s.stats.propinas) },
+  { label: 'Mejoras compradas', valor: (s) => formatNumber(s.stats.mejoras) },
+  { label: 'Logros', valor: (s) => `${s.logros.length} de ${LOGROS.length}` },
+];
 
 interface Card {
   def: BusinessDef;
@@ -259,9 +294,11 @@ function tipFor(s: State): string | null {
     // Siguiente hito cercano: la tarjeta ya no lo escribe, lo cuenta Chelo.
     for (const d of BUSINESSES) {
       const count = s.businesses[d.id]?.count ?? 0;
-      const m = count > 0 ? nextMilestone(count) : null;
-      if (m !== null && m - count <= MILESTONE_TIP_FALTAN)
-        return `Con ${m} de ${d.name} vende el doble de rápido: te faltan ${m - count}.`;
+      const m = count > 0 ? nextMilestone(d, count) : null;
+      if (m !== null && m.count - count <= MILESTONE_TIP_FALTAN) {
+        const efecto = m.efecto === 'velocidad' ? 'vende el doble de rápido' : 'vende el doble';
+        return `Con ${m.count} de ${d.name} ${efecto}: te faltan ${m.count - count}.`;
+      }
     }
     return null;
   }
@@ -285,8 +322,8 @@ export interface UI {
   render(s: State, mode: BuyMode, audio: { sound: boolean; music: boolean }): void;
   renderBars(s: State): void;
   announce(text: string): void;
-  /** El gerente del negocio dice su frase del evento (bocadillo, 6 s). */
-  say(id: string, kind: ManagerEvent): void;
+  /** El gerente del negocio dice su frase del evento (bocadillo, 6 s); en un hito, la del n-ésimo alcanzado. */
+  say(id: string, kind: ManagerEvent, hito?: number): void;
   /** Doña Chelo reemplaza su tip por la frase del evento (6 s). */
   cheloSays(kind: CheloEvent): void;
   /** Efectos de confirmación (sin efecto con reduced-motion). */
@@ -295,8 +332,10 @@ export interface UI {
   turned(id: string): void;
   /** Se dio propina: el plato se tilda (el anuncio lo hace main.ts). */
   tipped(id: string): void;
-  /** Se cruzaron `n` hitos: "×2 rápido" (×4 con Máx que cruza dos…) sube desde el plato, como la moneda de venta. */
-  hito(id: string, n: number): void;
+  /** Hitos cruzados por tipo: "×2 rápido", "×2 ventas" o ambos (×4 con Máx que cruza dos…) suben desde el plato. */
+  hito(id: string, velocidad: number, ventas: number): void;
+  /** Logros recién desbloqueados: badge del Álbum y estampillas; `silencioso` al cargar (sin efectos). */
+  logros(defs: readonly LogroDef[], silencioso: boolean): void;
   confirm(kind: 'buy' | 'hire' | 'upgrade', id: string): void;
   celebrate(): void;
   /** `estrellas`: nombres de los empleados que ganaron estrella mientras no estabas. */
@@ -423,6 +462,14 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
   const latCharsBadge = h('span', { class: 'lat-badge', hidden: true });
   latCharsBadge.setAttribute('aria-hidden', 'true');
   latChars.disc.append(latCharsBadge);
+  const latAlbum = latBtn('Álbum', 'album', () => {
+    const abre = activePanel !== albumPanel;
+    albumPanel.toggle();
+    if (abre) handlers.onAlbumVisto();
+  });
+  const latAlbumBadge = h('span', { class: 'lat-badge', hidden: true });
+  latAlbumBadge.setAttribute('aria-hidden', 'true');
+  latAlbum.disc.append(latAlbumBadge);
   const latHeir = latBtn('Herencia', 'recipe', confirmPrestige);
   const latHeirBadge = h('span', { class: 'lat-badge', hidden: true });
   latHeir.disc.append(latHeirBadge);
@@ -455,6 +502,7 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
     latChelo,
     latUp.btn,
     latChars.btn,
+    latAlbum.btn,
     latModo.btn,
     latHeir.btn,
     latMenu.btn,
@@ -713,6 +761,66 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
   chars.setAttribute('aria-labelledby', 'personajes-title');
   chars.id = 'personajes';
 
+  // Álbum: una estampilla por logro (siempre las 24, bloqueadas en gris con su pista) y la Libreta.
+  interface Estampilla {
+    def: LogroDef;
+    root: HTMLElement;
+    card: HTMLElement;
+    estado: HTMLElement;
+    lograda: boolean;
+  }
+  const logroBono = `+${Math.round(LOGRO_BONO * 100)} % ventas`; // corto: en 3 columnas "de ventas" partía
+  function setEstado(e: Estampilla, lograda: boolean): void {
+    e.lograda = lograda;
+    e.root.classList.toggle('bloqueada', !lograda);
+    if (lograda) e.estado.replaceChildren(document.createTextNode(logroBono));
+    else
+      e.estado.replaceChildren(
+        h('span', { class: 'sr-only', text: 'Bloqueado. ' }),
+        document.createTextNode(e.def.pista),
+      );
+  }
+  const estampillas: Estampilla[] = LOGROS.map((def) => {
+    const estado = h('p', { class: 'up-effect' });
+    const card = h('div', { class: 'up-card estampilla-card' }, [
+      logroArte(def.icono),
+      h('h3', { class: 'up-name', text: def.nombre }),
+      estado,
+    ]);
+    const root = h('li', { class: 'up-slot estampilla' }, [card]);
+    const e: Estampilla = { def, root, card, estado, lograda: true };
+    setEstado(e, false);
+    return e;
+  });
+  const libretaFilas = LIBRETA.map((fila) => ({ fila, dd: h('dd') }));
+  const libreta = h(
+    'dl',
+    { class: 'libreta' },
+    libretaFilas.flatMap(({ fila, dd }) => [h('dt', { text: fila.label }), dd]),
+  );
+  const albumBody = h('div', { class: 'album-body' }, [
+    h(
+      'ul',
+      { class: 'estampillas' },
+      estampillas.map((e) => e.root),
+    ),
+    h('h3', { class: 'libreta-title', text: 'Libreta' }),
+    libreta,
+  ]);
+  const albumTitle = h('h2', { class: 'section-title', text: 'Álbum' });
+  albumTitle.id = 'album-title';
+  albumTitle.tabIndex = -1;
+  const album = h('section', { class: 'album panel' }, [albumTitle, albumBody]);
+  album.setAttribute('aria-labelledby', 'album-title');
+  album.id = 'album';
+  // Móvil: botón en la barra inferior, junto a Chelo, que abre el Álbum en un diálogo.
+  const albumBadge = h('span', { class: 'lat-badge', hidden: true });
+  albumBadge.setAttribute('aria-hidden', 'true');
+  const albumBtn = h('button', { class: 'guia-btn album-btn', type: 'button', label: 'Álbum', onclick: openAlbum }, [
+    icon('album'),
+    albumBadge,
+  ]);
+
   const prestigeBtn = h('button', { class: 'btn heir', type: 'button', onclick: confirmPrestige });
   const picado = papelPicado();
   picado.addEventListener('animationend', () => picado.classList.remove('shake'));
@@ -730,6 +838,7 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
       guia,
       upgrades,
       chars,
+      album,
       h('div', { class: 'col-main' }, [
         h(
           'ul',
@@ -739,7 +848,10 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
       ]),
     ]),
     h('footer', { class: 'bottom' }, [
-      h('div', { class: 'bottom-inner' }, [h('div', { class: 'bottom-row' }, [guiaBtn, segmented]), prestigeBtn]),
+      h('div', { class: 'bottom-inner' }, [
+        h('div', { class: 'bottom-row' }, [guiaBtn, albumBtn, segmented]),
+        prestigeBtn,
+      ]),
     ]),
     live,
     toast,
@@ -818,11 +930,23 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
     });
   }
 
+  const albumPanel = sidePanel(album, latAlbum.btn, albumTitle);
+  let albumDialogTitle: HTMLElement | null = null;
+  function openAlbum(): void {
+    if (albumDialogTitle) return;
+    albumDialogTitle = openInDialog('Álbum', albumBody, albumTitle, () => {
+      albumDialogTitle = null;
+    });
+    handlers.onAlbumVisto();
+  }
+  const albumAbierto = () => activePanel === albumPanel || albumDialogTitle !== null;
+
   // Al cruzar los 900 px todo vuelve al estado en línea / cerrado: nada queda a medias.
   mq.addEventListener('change', () => {
     activePanel?.close(false);
     charsDialogTitle?.closest('dialog')?.close();
     guiaDialogTitle?.closest('dialog')?.close();
+    albumDialogTitle?.closest('dialog')?.close();
   });
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape' || !activePanel || document.querySelector('dialog[open]')) return;
@@ -856,7 +980,9 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
         h('p', {
           text: `Le pasas el negocio a la familia: pierdes dinero, negocios, empleados y mejoras, pero ganas ${formatNumber(n)} recetas de la abuela.`,
         }),
-        h('p', { text: 'Cada receta suma +2% a todas tus ventas, para siempre.' }),
+        h('p', {
+          text: 'Cada receta suma +2 % a todas tus ventas, para siempre. Las recetas y los logros que ya tienes se quedan.',
+        }),
       ],
       [go],
     );
@@ -1036,6 +1162,24 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
     }
   }
 
+  function renderAlbum(s: State): void {
+    // Badge: logros sin ver; el conteo va al nombre accesible, no al badge.
+    const n = s.logros.length - s.logrosVistos;
+    const label = n > 0 ? `Álbum: ${n} ${n === 1 ? 'logro nuevo' : 'logros nuevos'}` : 'Álbum';
+    for (const [btn, badge] of [
+      [latAlbum.btn, latAlbumBadge],
+      [albumBtn, albumBadge],
+    ] as const) {
+      setAttr(btn, 'aria-label', label);
+      setHidden(badge, n === 0);
+      setText(badge, String(n));
+    }
+    const tiene = new Set(s.logros);
+    for (const e of estampillas) if (tiene.has(e.def.id) !== e.lograda) setEstado(e, tiene.has(e.def.id));
+    if (!albumAbierto()) return;
+    for (const { fila, dd } of libretaFilas) setText(dd, fila.valor(s));
+  }
+
   function renderChelo(s: State, now: number): void {
     const abierto = activePanel === cheloPanel || guiaDialogTitle !== null;
     if (abierto) unread = false;
@@ -1135,6 +1279,7 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
       renderChelo(s, now);
 
       renderUpgrades(s);
+      renderAlbum(s);
       if (refocusAfterUpgrade) {
         // El botón comprado ahora muestra otra mejora (o desapareció): el foco va a un
         // lugar estable en vez de perderse o caer sobre una compra que no se pidió.
@@ -1234,10 +1379,10 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
       live.textContent = text;
     },
 
-    say(id, kind) {
+    say(id, kind, hito) {
       const c = cards.find((x) => x.def.id === id);
       if (!c) return;
-      setText(c.bubble, c.def.manager.says[kind]);
+      setText(c.bubble, fraseDe(c.def.manager, kind, hito));
       c.bubbleUntil = performance.now() + BUBBLE_MS;
       setHidden(c.bubble, false);
       pop(c.bubble);
@@ -1288,9 +1433,25 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
       if (c) tiltCard(c);
     },
 
-    hito(id, n) {
+    hito(id, velocidad, ventas) {
       const c = cards.find((x) => x.def.id === id);
-      if (c && !c.root.hidden) coin(c.sell, `×${2 ** n} rápido`);
+      if (!c || c.root.hidden) return;
+      const partes = [];
+      if (velocidad > 0) partes.push(`×${2 ** velocidad} rápido`);
+      if (ventas > 0) partes.push(`×${2 ** ventas} ventas`);
+      coin(c.sell, partes.join(' '));
+    },
+
+    logros(defs, silencioso) {
+      if (silencioso) return;
+      pop(latAlbumBadge);
+      pop(albumBadge);
+      if (!albumAbierto()) return;
+      for (const def of defs) {
+        const e = estampillas.find((x) => x.def.id === def.id);
+        if (e) stamp(e.card);
+      }
+      handlers.onAlbumVisto(); // lo está viendo: el badge no debe encenderse
     },
 
     confirm(kind, id) {
