@@ -378,7 +378,10 @@ test('racha: el día 7 regala una receta sin heredar y no gasta las pendientes',
   assert.equal(guardado.recipes, 1);
   assert.equal(guardado.recetasRegalo, 1);
   assert.equal(guardado.racha.dias, 7);
-  assert.equal(await page.locator('.lateral button[aria-label^="Here"]:visible').count(), 0); // ni pendientes ni "ya heredó"
+  // Ni pendientes ni "ya heredó": Herencia a la vista pero apagada (una receta de regalo no la enciende).
+  const herencia = page.locator('.lateral button[aria-label^="Here"]');
+  assert.equal(await herencia.count(), 1);
+  assert.equal(await herencia.isDisabled(), true);
   await page.waitForFunction(
     () => /Siete seguidos/.test(document.querySelector('p[aria-live]')?.textContent ?? ''),
     null,
@@ -453,14 +456,18 @@ test('guardado de una versión más nueva: aviso, se juega sin guardar y el guar
   await context.close();
 });
 
-test('respaldo: un código exportado se carga desde el diálogo', async () => {
+test('ajustes: Sonido conmuta y un código exportado se carga desde el diálogo', async () => {
   const codigo = Buffer.from(JSON.stringify({ ...partida({ money: 2000 }), lastSeen: Date.now() })).toString('base64');
-  const { context, page } = await abrir();
+  const { context, page, errores } = await abrir();
   await sinPaneles(page);
-  await page.locator('nav.lateral button', { hasText: 'Respaldo' }).click();
+  await page.locator('nav.lateral button', { hasText: 'Ajustes' }).click();
+  // aria-pressed cambia en el siguiente tramo de render (10 Hz), no en el clic.
+  await page.locator('dialog[open] button', { hasText: 'Sonido' }).click();
+  await page.waitForFunction(() => document.querySelector('dialog[open] button[aria-pressed="true"]') !== null);
   await page.locator('dialog[open] textarea[aria-label="Pega aquí un código de partida"]').fill(codigo);
   await page.locator('dialog[open] button', { hasText: 'Cargar partida' }).click();
   await page.waitForFunction(() => document.querySelector('.money')?.textContent === '$2,000');
+  assert.deepEqual(errores, []);
   await context.close();
 });
 

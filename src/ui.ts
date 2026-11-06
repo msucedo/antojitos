@@ -455,19 +455,27 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
   const recipesText = h('span');
   const recipes = h('p', { class: 'recipes', hidden: true }, [icon('recipe', 'icon icon-sm'), recipesText]);
 
-  const soundIcon = icon('sound-off');
-  const sound = h(
-    'button',
-    { class: 'icon-btn', type: 'button', label: 'Efectos de sonido', onclick: () => handlers.onToggleSound() },
-    [soundIcon],
-  );
-  const musicIcon = icon('music-off');
-  const musicBtn = h(
-    'button',
-    { class: 'icon-btn', type: 'button', label: 'Música', onclick: () => handlers.onToggleMusic() },
-    [musicIcon],
-  );
-  const menu = h('button', { class: 'icon-btn', type: 'button', label: 'Respaldo', onclick: openMenu }, [icon('menu')]);
+  // Ajustes: un icono en el header móvil y un disco en el lateral abren el mismo diálogo (Sonido, Música, Respaldo).
+  const ajustesBtn = h('button', { class: 'icon-btn', type: 'button', label: 'Ajustes', onclick: openAjustes }, [
+    icon('ajustes'),
+  ]);
+  // Sonido y Música viven en el diálogo de Ajustes: se crean una vez y se vuelven a insertar en cada apertura
+  // (dialog() borra el nodo al cerrar); render() los sincroniza aunque estén fuera del DOM.
+  const ajSoundIc = icon('bocina-off');
+  const ajSound = h('button', { class: 'btn ajuste', type: 'button', onclick: () => handlers.onToggleSound() }, [
+    ajSoundIc,
+    h('span', { text: 'Sonido' }),
+  ]);
+  const ajMusicIc = icon('guitarra-off');
+  const ajMusic = h('button', { class: 'btn ajuste', type: 'button', onclick: () => handlers.onToggleMusic() }, [
+    ajMusicIc,
+    h('span', { text: 'Música' }),
+  ]);
+  /** [botón, icono, canal, icono encendido, icono apagado]: sincronizados en render(). */
+  const audioBtns: [Element, SVGSVGElement, 'sound' | 'music', IconName, IconName][] = [
+    [ajSound, ajSoundIc, 'sound', 'bocina', 'bocina-off'],
+    [ajMusic, ajMusicIc, 'music', 'guitarra', 'guitarra-off'],
+  ];
   // Personajes en móvil: icono en el header que abre la lista en un diálogo.
   const charsBadge = h('span', { class: 'lat-badge', hidden: true });
   charsBadge.setAttribute('aria-hidden', 'true');
@@ -477,6 +485,7 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
   ]);
 
   // Menú lateral (web): copias de los controles del header y la barra; render() las sincroniza.
+  // Siete discos: Chelo, Mejoras, Empleados, Álbum, Cantidad, Herencia y Ajustes.
   const mq = window.matchMedia('(min-width: 900px)');
   const latUp = latBtn('Mejoras', 'upgrade', () => upPanel.toggle());
   const latChars = latBtn('Empleados', 'personajes', () => charsPanel.toggle());
@@ -508,16 +517,7 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
   let currentMode: BuyMode = 1; // mismo arranque que `mode` en main.ts: el primer render no hace flip
   const latModo = latBtn(modeLabel(currentMode), modeIcon(currentMode), () => handlers.onMode(nextMode(currentMode)));
   latModo.btn.setAttribute('aria-label', `Cantidad a comprar: ${modeLabel(currentMode)}`);
-  const latMenu = latBtn('Respaldo', 'caja', openMenu);
-  const latSound = latBtn('Sonido', 'bocina-off', () => handlers.onToggleSound());
-  const latMusic = latBtn('Música', 'guitarra-off', () => handlers.onToggleMusic());
-  /** [botón, icono, canal, icono encendido, icono apagado]: header y lateral, sincronizados en render(). */
-  const audioBtns: [Element, SVGSVGElement, 'sound' | 'music', IconName, IconName][] = [
-    [sound, soundIcon, 'sound', 'sound-on', 'sound-off'],
-    [latSound.btn, latSound.ic, 'sound', 'bocina', 'bocina-off'],
-    [musicBtn, musicIcon, 'music', 'music-on', 'music-off'],
-    [latMusic.btn, latMusic.ic, 'music', 'guitarra', 'guitarra-off'],
-  ];
+  const latAjustes = latBtn('Ajustes', 'engrane', openAjustes);
   // Doña Chelo: disco con su retrato y punto de "consejo nuevo"; renderChelo() los sincroniza.
   const latCheloDot = h('span', { class: 'lat-dot', hidden: true });
   latCheloDot.setAttribute('aria-hidden', 'true');
@@ -536,9 +536,7 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
     latAlbum.btn,
     latModo.btn,
     latHeir.btn,
-    latMenu.btn,
-    latSound.btn,
-    latMusic.btn,
+    latAjustes.btn,
   ]);
 
   const modeButtons = MODES.map((m) => {
@@ -1008,7 +1006,7 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
   root.replaceChildren(
     lateral,
     h('header', { class: 'top' }, [
-      h('div', { class: 'title-row' }, [appTitle, h('div', {}, [musicBtn, sound, charsBtn, menu])]),
+      h('div', { class: 'title-row' }, [appTitle, h('div', {}, [charsBtn, ajustesBtn])]),
       h('div', { class: 'money-row' }, [money, rate, recipes]),
       picado,
     ]),
@@ -1171,7 +1169,7 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
     );
   }
 
-  function openMenu(): void {
+  function openAjustes(): void {
     const code = h('textarea', { class: 'code' });
     code.readOnly = true;
     code.value = handlers.getExport();
@@ -1211,7 +1209,9 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
         else setText(msg, 'Ese código no es válido.');
       },
     });
-    const d = dialog('Respaldo', [
+    const d = dialog('Ajustes', [
+      h('div', { class: 'ajustes-fila' }, [ajSound, ajMusic]),
+      h('h3', { text: 'Respaldo' }),
       h('p', {
         text: 'Guarda este código en un lugar seguro. Si borras los datos del navegador, con él recuperas tu partida.',
       }),
@@ -1531,10 +1531,8 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
 
       const n = pendingRecipes(s);
       const heirLabel = n > 0 ? `Heredar · +${formatNumber(n)} recetas` : 'Herencia: sigue vendiendo';
-      for (const b of [prestigeBtn, latHeir.btn]) {
-        setHidden(b, n === 0 && heredadas(s) === 0); // una receta de regalo no estrena el botón
-        setDisabled(b, n === 0);
-      }
+      // Siempre a la vista, deshabilitado sin recetas: el jugador nuevo sabe que hay más por descubrir.
+      for (const b of [prestigeBtn, latHeir.btn]) setDisabled(b, n === 0);
       setText(prestigeBtn, heirLabel);
       if (latHeir.btn.getAttribute('aria-label') !== heirLabel) latHeir.btn.setAttribute('aria-label', heirLabel);
       setHidden(latHeirBadge, n === 0);
@@ -1643,7 +1641,7 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
     logros(defs, silencioso) {
       const aLaVista = albumAbierto() && tabActiva === 'logros';
       if (silencioso) {
-        // Importar con el Álbum abierto (bajo el diálogo de Respaldo): sin fiesta, pero lo ve → visto.
+        // Importar con el Álbum abierto (bajo el diálogo de Ajustes): sin fiesta, pero lo ve → visto.
         if (aLaVista) handlers.onAlbumVisto();
         return;
       }
@@ -1749,7 +1747,7 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
         'Partida de una versión más nueva',
         [
           h('p', {
-            text: 'Tu partida se guardó con una versión más nueva del juego. Recarga para actualizar; mientras tanto puedes jugar, pero no se guardará nada. En Respaldo puedes copiar tu partida tal cual por si acaso.',
+            text: 'Tu partida se guardó con una versión más nueva del juego. Recarga para actualizar; mientras tanto puedes jugar, pero no se guardará nada. En Ajustes puedes copiar tu partida tal cual por si acaso.',
           }),
         ],
         [h('button', { class: 'btn primary', type: 'button', text: 'Recargar', onclick: onReload })],

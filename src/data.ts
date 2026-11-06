@@ -334,7 +334,7 @@ export const CHELO = {
     },
     {
       q: '¿Cómo guardo mi partida?',
-      a: 'Se guarda sola en este navegador. En Respaldo copias un código por si cambias de aparato.',
+      a: 'Se guarda sola en este navegador. En Ajustes copias un código por si cambias de aparato.',
     },
   ],
 } as const satisfies {

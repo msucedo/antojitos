@@ -318,7 +318,7 @@ p {
 }
 
 .title-row h1 {
-  font-size: clamp(1rem, 4.5vw, 1.15rem); /* en 390 px cabe entero junto a los cuatro iconos */
+  font-size: clamp(1rem, 4.5vw, 1.15rem); /* en 390 px cabe entero junto a los dos iconos */
   color: var(--text);
   min-width: 0;
   white-space: nowrap;
@@ -379,15 +379,7 @@ p {
   border-radius: 12px;
 }
 
-.icon-btn[aria-pressed='true'] {
-  color: var(--primary);
-}
-
-/* Cuatro iconos en el header móvil: a 44 px el rótulo se recorta en 390 px; a 40 cabe (excepción en DESIGN.md). */
-.title-row .icon-btn {
-  min-width: 40px;
-}
-
+/* Dos iconos en el header móvil (Empleados y Ajustes): caben a 44 px con el rótulo entero en 390 px. */
 /* El grupo de iconos no se encoge ni se parte: el que cede es el rótulo, con elipsis. */
 .title-row > div {
   display: flex;
@@ -454,7 +446,6 @@ p {
   font-weight: 700;
 }
 
-.lat-btn[aria-pressed='true'] .lat-disc,
 .lat-btn[aria-expanded='true'] .lat-disc {
   background: var(--primary);
   color: var(--on-primary);
@@ -1559,6 +1550,23 @@ p {
   gap: 8px;
 }
 
+/* Diálogo Ajustes: Sonido y Música como botones conmutables con icono ilustrado de 28 (el alto útil del .btn). */
+.ajustes-fila {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.btn.ajuste .icon {
+  width: 28px;
+  height: 28px;
+}
+
+.btn.ajuste[aria-pressed='true'] {
+  background: var(--primary);
+  color: var(--on-primary);
+}
+
 /* Chelo a la izquierda del segmentado, misma fila: la barra no crece. */
 .bottom-row {
   display: flex;
@@ -1950,7 +1958,7 @@ p {
 }
 
 /*
- * Lateral compacto en ventanas bajas (1366×620 de PLAN.md): nueve discos de 56 con etiqueta no
+ * Lateral compacto en ventanas bajas (1366×620 de PLAN.md): siete discos de 56 con etiqueta no
  * caben; bajan a 44 con icono de 28 y la etiqueta se oculta visualmente (sigue en aria-label o en
  * el texto del botón para el lector). Nada cambia a 1280×800.
  */

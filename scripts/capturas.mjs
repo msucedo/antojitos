@@ -1,11 +1,13 @@
 // Capturas de verificación visual (ver DESIGN.md, "Verificación visual").
 //
-//   node scripts/capturas.mjs [--sprite] [--semilla ruta.json]
+//   node scripts/capturas.mjs [--sprite | --album | --ajustes] [--semilla ruta.json] [--nombre prefijo]
 //
 // Arranca Vite en localhost:5174, abre el Chrome del sistema en headless,
 // siembra la partida (si hay semilla) y deja los PNG en capturas/.
 // Sin --sprite: juego en móvil 390×844 y web 1280×800, tema claro y oscuro.
 // Con --sprite: docs/sprite.html a 1280 de ancho, página completa, claro y oscuro.
+// Con --album: abre el Álbum y guarda album-* y libreta-*. Con --ajustes: abre el diálogo de Ajustes (ajustes-*).
+// --nombre cambia el prefijo "juego" de los PNG.
 
 import { mkdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -31,6 +33,7 @@ const { values: flags } = parseArgs({
   options: {
     sprite: { type: 'boolean', default: false },
     album: { type: 'boolean', default: false }, // abre el Álbum y captura sus dos pestañas
+    ajustes: { type: 'boolean', default: false }, // abre el diálogo de Ajustes
     semilla: { type: 'string' },
     nombre: { type: 'string' }, // prefijo de los PNG en vez de "juego" (p. ej. --nombre racha7)
   },
@@ -94,6 +97,16 @@ const esperarAlbum = (vista) => async (page) => {
   await page.waitForTimeout(400);
 };
 
+/** Como esperarAlbum, pero abre el diálogo de Ajustes: icono del header en móvil, disco del lateral en web. */
+const esperarAjustes = (vista) => async (page) => {
+  await esperarJuego(page);
+  await page.waitForTimeout(ASIENTO_MS);
+  await page.keyboard.press('Escape');
+  if (vista === 'movil') await page.locator('.title-row button[aria-label="Ajustes"]').click();
+  else await page.locator('.lateral button', { hasText: 'Ajustes' }).click();
+  await page.waitForTimeout(400);
+};
+
 const capturarLibreta = (vista, tema) => async (page, guardar) => {
   await page.getByRole('tab', { name: 'Libreta' }).click();
   await page.waitForTimeout(ASIENTO_MS);
@@ -131,15 +144,25 @@ function tareas(semilla) {
               esperar: esperarAlbum(vista),
               despues: capturarLibreta(vista, tema),
             }
-          : {
-              viewport,
-              tema,
-              url: `${ORIGEN}/`,
-              archivo: `${flags.nombre ?? 'juego'}-${vista}-${tema}.png`,
-              fullPage: false,
-              semilla,
-              esperar: esperarJuego,
-            },
+          : flags.ajustes
+            ? {
+                viewport,
+                tema,
+                url: `${ORIGEN}/`,
+                archivo: `ajustes-${vista}-${tema}.png`,
+                fullPage: false,
+                semilla,
+                esperar: esperarAjustes(vista),
+              }
+            : {
+                viewport,
+                tema,
+                url: `${ORIGEN}/`,
+                archivo: `${flags.nombre ?? 'juego'}-${vista}-${tema}.png`,
+                fullPage: false,
+                semilla,
+                esperar: esperarJuego,
+              },
       );
     }
   }
