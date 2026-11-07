@@ -2,7 +2,9 @@
  * Efectos visuales efímeros con Web Animations API. Solo transform/opacity.
  * Con prefers-reduced-motion no se crea nada. Los nodos se quitan al terminar.
  */
-const MAX_COINS = 8;
+// 8 gerentes en barra fija sueltan una moneda cada 900 ms y cada una dura 900 ms: hasta 16 vivas
+// un frame; con margen para ventas manuales e hitos.
+const MAX_COINS = 20;
 const CONFETTI_PIECES = 40;
 const CONFETTI_COLORS = ['fx-pink', 'fx-corn', 'fx-nopal'] as const;
 

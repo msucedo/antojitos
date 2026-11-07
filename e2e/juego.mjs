@@ -211,6 +211,47 @@ test('móvil: Empleados abre en diálogo y la lista vuelve al cerrarlo', async (
   await context.close();
 });
 
+test('historial (web): el disco abre el panel y al contratar aparece la entrada con su hora', async () => {
+  const semilla = partida(
+    { money: 10_000, lifetimeEarned: 10_000, runEarned: 10_000 },
+    { elotes: { count: 10 }, aguas: { count: 1 } },
+  );
+  const { context, page, errores } = await abrir({ semilla });
+  await sinPaneles(page);
+  await page.locator('nav.lateral button', { hasText: 'Empleados' }).click();
+  await page.locator('#personajes button[aria-label^="Contratar a Don Beto"]').click();
+  await page.locator('nav.lateral button', { hasText: 'Historial' }).click();
+  await page.waitForSelector('#historial.open');
+  assert.equal(
+    await page.locator('nav.lateral button[aria-controls="historial"]').getAttribute('aria-expanded'),
+    'true',
+  );
+  // Más reciente primero: el logro "Primer empleado" se anuncia después de contratar.
+  const textos = await page.locator('#historial .hist-texto').allTextContents();
+  assert.match(textos[0], /^Logro: Primer empleado\./);
+  assert.match(textos[1], /^Contrataste a Don Beto\./);
+  assert.match(await page.locator('#historial .hist-hora').first().textContent(), /^\d\d:\d\d$/);
+  assert.equal(await page.locator('#historial .hist-vacio').isHidden(), true);
+  assert.deepEqual(errores, []);
+  await context.close();
+});
+
+test('móvil: Historial abre en diálogo desde el header y el cuerpo vuelve al cerrarlo', async () => {
+  const semilla = partida({ money: 100, lifetimeEarned: 100, runEarned: 100 }, { elotes: { count: 1 } });
+  const { context, page, errores } = await abrir({ semilla, movil: true });
+  await sinPaneles(page);
+  await page.locator('button[aria-label="Historial"]:visible').tap();
+  const dlg = page.locator('dialog[open]');
+  await dlg.waitFor();
+  assert.equal(await dlg.locator('h2').textContent(), 'Historial');
+  assert.equal(await dlg.locator('.hist-vacio').textContent(), 'Aún no pasa nada.');
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(300);
+  assert.equal(await page.locator('#historial .hist-body').count(), 1);
+  assert.deepEqual(errores, []);
+  await context.close();
+});
+
 test('vuelta tras ausencia: aviso con lo ganado', async () => {
   const semilla = partida(
     { money: 0, lifetimeEarned: 1, runEarned: 1, lastSeen: Date.now() - 3_600_000 },

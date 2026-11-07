@@ -161,4 +161,25 @@
     <circle cx="28.5" cy="23" r="5" fill="#E4007C" stroke="#1B2A3A" stroke-width="2.5"/>
     <path d="M20 9.5h6" fill="none" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round"/>
   </symbol>
+
+  <symbol id="logo" viewBox="0 0 48 48">
+    <rect x="4" y="3" width="4" height="42" rx="2" fill="#D9A15B" stroke="#1B2A3A" stroke-width="3" stroke-linejoin="round"/>
+    <path d="M9 6h33l-8 9 8 9H9z" fill="#F25C8F" stroke="#1B2A3A" stroke-width="3" stroke-linejoin="round"/>
+    <path d="M10 44h28l3.5-18-9 7-8.5-12-8.5 12-9-7z" fill="#F4C430" stroke="#1B2A3A" stroke-width="3" stroke-linejoin="round"/>
+    <path d="M12.5 39.5h23" fill="none" stroke="#C99700" stroke-width="2.5" stroke-linecap="round"/>
+    <circle cx="24" cy="35" r="4" fill="#E4007C" stroke="#1B2A3A" stroke-width="2.5"/>
+    <path d="M9.5 30.5l1.5 5" fill="none" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round"/>
+  </symbol>
+
+  <symbol id="historial" viewBox="0 0 48 48">
+    <rect x="10" y="12" width="28" height="24" fill="#F6E3C3" stroke="#1B2A3A" stroke-width="3" stroke-linejoin="round"/>
+    <rect x="6" y="6" width="36" height="9" rx="4.5" fill="#D9A15B" stroke="#1B2A3A" stroke-width="3" stroke-linejoin="round"/>
+    <rect x="6" y="33" width="36" height="9" rx="4.5" fill="#D9A15B" stroke="#1B2A3A" stroke-width="3" stroke-linejoin="round"/>
+    <path d="M16 21h16M16 27h12" fill="none" stroke="#B5562B" stroke-width="3" stroke-linecap="round"/>
+    <path d="M11 10.5h6" fill="none" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round"/>
+  </symbol>
+
+  <symbol id="historial-sil" viewBox="0 0 48 48">
+    <path d="M10.5 6h27a4.5 4.5 0 0 1 0 9v18a4.5 4.5 0 0 1 0 9h-27a4.5 4.5 0 0 1 0-9V15a4.5 4.5 0 0 1 0-9zM15 20h18v3H15zM15 27h13v3H15z" fill="currentColor" fill-rule="evenodd"/>
+  </symbol>
 </svg>

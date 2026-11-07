@@ -395,6 +395,11 @@ export function ventasConPropina(state: State, id: string): number {
   return ventasPorSegundo(state, id) * (propinaActiva(b) ? PROPINA_MULT : 1);
 }
 
+/** Lo que deja una vuelta del empleado ahora mismo (con la propina si está activa): la moneda de la vuelta. */
+export function ingresoVuelta(state: State, id: string): number {
+  return revenuePerCycle(state, id) * (propinaActiva(biz(state, id)) ? PROPINA_MULT : 1);
+}
+
 /** Precio de la propina: lo que el negocio vende en PROPINA_COSTO_MS. Entero, como costOf. */
 export function propinaCosto(state: State, id: string): number {
   return Math.ceil((ventasPorSegundo(state, id) * PROPINA_COSTO_MS) / 1000);

@@ -48,6 +48,7 @@ import { portrait } from './characters';
 import { LOGROS, type LogroDef, type LogroIcono } from './logros';
 import { diaDeSemana, estadoRacha, type Regalo } from './racha';
 import { aparecer, coin, completar, confetti, deslizar, flip, pop, pulse, stamp, tilt } from './fx';
+import { crearHistorial, formatHora, HISTORIAL_MAX } from './historial';
 
 export interface Handlers {
   onStart(id: string): void;
@@ -182,7 +183,7 @@ interface Card {
   rapido: boolean;
   /** Barra fija (`barraFija`): llena, rayas corriendo, "$X/s". Lo pone renderBars. */
   fija: boolean;
-  /** Último tilt por vuelta de empleado: con barra fija se limita a uno por CICLO_RAPIDO_MS. */
+  /** Último tilt (y moneda) por vuelta de empleado: con barra fija se limita a uno por TILT_FIJA_MS. */
   ultimoTilt: number;
   /** Línea bajo la barra: cuánto deja cada vuelta. */
   meta: HTMLElement;
@@ -248,8 +249,8 @@ const CICLO_RAPIDO_MS = 1_000;
 const LLENO_MS = 300;
 
 /**
- * Con barra fija, tilt por vuelta de empleado como mucho cada tanto. Algo menos que CICLO_RAPIDO_MS:
- * el elote (1 s exacto) llega cada 983–1017 ms según el frame y no debe perder tilts.
+ * Con barra fija, tilt y moneda por vuelta de empleado como mucho cada tanto. Algo menos que
+ * CICLO_RAPIDO_MS: el elote (1 s exacto) llega cada 983–1017 ms según el frame y no debe perder tilts.
  */
 const TILT_FIJA_MS = 900;
 
@@ -333,15 +334,22 @@ function upgradeTarget(target: string): { art: UpgradeArt; label: string } {
 export interface UI {
   render(s: State, mode: BuyMode, audio: { sound: boolean; music: boolean }): void;
   renderBars(s: State): void;
-  announce(text: string): void;
+  /** Lee `text` en el aria-live y, salvo `registrar: false` (ajustes, no eventos), lo apunta en el Historial. */
+  announce(text: string, registrar?: boolean): void;
+  /** Apunta en el Historial sin leerlo (lo que ya dijo un diálogo, como la bienvenida). */
+  registrar(text: string): void;
   /** El gerente del negocio dice su frase del evento (bocadillo, 6 s); en un hito, la del n-ésimo alcanzado. */
   say(id: string, kind: ManagerEvent, hito?: number): void;
   /** Doña Chelo reemplaza su tip por la frase del evento (6 s). */
   cheloSays(kind: CheloEvent): void;
   /** Efectos de confirmación (sin efecto con reduced-motion). */
   sold(id: string, amount: number): void;
-  /** Un empleado completó una vuelta: el icono se tilda, sin moneda ni sonido. */
-  turned(id: string): void;
+  /**
+   * Un empleado completó una vuelta: el icono se tilda y sube la moneda de la vuelta (`vuelta`), sin
+   * sonido. Con barra fija, una moneda por TILT_FIJA_MS con lo ganado en esa ventana (`porSegundo`).
+   * Con 0 en ambos (al cargar o al volver de una ausencia) solo tilda.
+   */
+  turned(id: string, vuelta: number, porSegundo: number): void;
   /** Se dio propina: el plato se tilda (el anuncio lo hace main.ts). */
   tipped(id: string): void;
   /** Hitos cruzados por tipo: "×2 rápido", "×2 ventas" o ambos (×4 con Máx que cruza dos…) suben desde el plato. */
@@ -453,7 +461,7 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
   const rateSr = h('span', { class: 'sr-only' });
   const rate = h('p', { class: 'rate', hidden: true }, [rateVisible, rateSr]);
   const recipesText = h('span');
-  const recipes = h('p', { class: 'recipes', hidden: true }, [icon('recipe', 'icon icon-sm'), recipesText]);
+  const recipes = h('p', { class: 'recipes', hidden: true }, [icon('recipe', 'icon'), recipesText]);
 
   // Ajustes: un icono en el header móvil y un disco en el lateral abren el mismo diálogo (Sonido, Música, Respaldo).
   const ajustesBtn = h('button', { class: 'icon-btn', type: 'button', label: 'Ajustes', onclick: openAjustes }, [
@@ -483,9 +491,13 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
     icon('gente'),
     charsBadge,
   ]);
+  // Historial en móvil: silueta en el header (como gente y ajustes) que abre la lista en un diálogo.
+  const histBtn = h('button', { class: 'icon-btn', type: 'button', label: 'Historial', onclick: openHistorial }, [
+    icon('historial-sil'),
+  ]);
 
   // Menú lateral (web): copias de los controles del header y la barra; render() las sincroniza.
-  // Siete discos: Chelo, Mejoras, Empleados, Álbum, Cantidad, Herencia y Ajustes.
+  // Ocho discos: Historial, Chelo, Mejoras, Empleados, Álbum, Cantidad, Herencia y Ajustes.
   const mq = window.matchMedia('(min-width: 900px)');
   const latUp = latBtn('Mejoras', 'upgrade', () => upPanel.toggle());
   const latChars = latBtn('Empleados', 'personajes', () => charsPanel.toggle());
@@ -529,7 +541,10 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
       h('span', { class: 'lat-label', text: 'Chelo' }),
     ],
   );
+  const latHist = latBtn('Historial', 'historial', () => histPanel.toggle());
+  latHist.btn.classList.add('lat-top'); // pegado arriba; el resto se centra (CSS)
   const lateral = h('nav', { class: 'lateral', label: 'Menú' }, [
+    latHist.btn,
     latChelo,
     latUp.btn,
     latChars.btn,
@@ -552,6 +567,28 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
 
   const live = h('p', { class: 'sr-only' });
   live.setAttribute('aria-live', 'polite');
+
+  // Historial: lo que announce() leyó, más reciente primero, solo en memoria (ver historial.ts). La lista
+  // no lleva aria-live: el `live` ya lo lee. En web es panel del lateral; en móvil el cuerpo viaja a un diálogo.
+  const historial = crearHistorial();
+  const histLista = h('ul', { class: 'hist-lista' });
+  const histVacio = h('p', { class: 'hist-vacio', text: 'Aún no pasa nada.' });
+  const histBody = h('div', { class: 'hist-body' }, [histVacio, histLista]);
+  const histTitle = h('h2', { class: 'section-title', text: 'Historial' });
+  histTitle.id = 'historial-title';
+  histTitle.tabIndex = -1;
+  const histSection = h('section', { class: 'historial panel' }, [histTitle, histBody]);
+  histSection.setAttribute('aria-labelledby', 'historial-title');
+  histSection.id = 'historial'; // antes de sidePanel(): lo lee para aria-controls
+  function registrar(texto: string): void {
+    const e = historial.registrar(texto);
+    if (!e) return;
+    const hora = h('time', { class: 'hist-hora', text: formatHora(e.hora) });
+    hora.dateTime = new Date(e.hora).toISOString();
+    histLista.prepend(h('li', {}, [hora, h('span', { class: 'hist-texto', text: e.texto })]));
+    while (histLista.children.length > HISTORIAL_MAX) histLista.lastElementChild?.remove();
+    setHidden(histVacio, true);
+  }
 
   // Doña Chelo: panel propio. renderChelo() decide el texto: frase de evento (6 s) > respuesta
   // elegida > consejo según la partida > reposo. Sin aria-live: announce() ya lee eventos y respuestas.
@@ -697,7 +734,12 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
     };
   });
 
-  const appTitle = h('h1', { text: 'Imperio de Antojitos' });
+  // Logo (corona y banderín del sprite) más el nombre en Rye a dos líneas: el salto va en el texto
+  // (white-space: pre-line) y un solo nodo de texto da el nombre accesible, sin aria-label.
+  const appTitle = h('h1', { class: 'logo-title' }, [
+    icon('logo', 'icon logo'),
+    h('span', { class: 'logo-nombre', text: 'Imperio de\nAntojitos' }),
+  ]);
   appTitle.tabIndex = -1;
   let upgradeLockUntil = 0;
   let refocusAfterUpgrade = false;
@@ -1006,11 +1048,12 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
   root.replaceChildren(
     lateral,
     h('header', { class: 'top' }, [
-      h('div', { class: 'title-row' }, [appTitle, h('div', {}, [charsBtn, ajustesBtn])]),
+      h('div', { class: 'title-row' }, [appTitle, h('div', {}, [histBtn, charsBtn, ajustesBtn])]),
       h('div', { class: 'money-row' }, [money, rate, recipes]),
       picado,
     ]),
     h('div', { class: 'layout' }, [
+      histSection,
       guia,
       upgrades,
       chars,
@@ -1095,6 +1138,16 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
     });
   }
   const charsPanel = sidePanel(chars, latChars.btn, charsTitle);
+  const histPanel = sidePanel(histSection, latHist.btn, histTitle);
+
+  // Historial en móvil: el cuerpo se mueve al diálogo y vuelve a su sección al cerrar (como Empleados).
+  let histDialogTitle: HTMLElement | null = null;
+  function openHistorial(): void {
+    if (histDialogTitle) return;
+    histDialogTitle = openInDialog('Historial', histBody, histTitle, () => {
+      histDialogTitle = null;
+    });
+  }
 
   // Personajes en móvil: la misma lista se mueve al diálogo y vuelve a su sección al cerrar.
   // Un solo DOM: render() sigue escribiendo en los mismos nodos mientras está abierto.
@@ -1128,6 +1181,7 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
     charsDialogTitle?.closest('dialog')?.close();
     guiaDialogTitle?.closest('dialog')?.close();
     albumDialogTitle?.closest('dialog')?.close();
+    histDialogTitle?.closest('dialog')?.close();
   });
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape' || !activePanel || document.querySelector('dialog[open]')) return;
@@ -1571,9 +1625,12 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
       }
     },
 
-    announce(text) {
+    announce(text, reg = true) {
       live.textContent = text;
+      if (reg) registrar(text);
     },
+
+    registrar,
 
     say(id, kind, hito) {
       const c = cards.find((x) => x.def.id === id);
@@ -1613,13 +1670,21 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
       llenar(c);
     },
 
-    turned(id) {
+    turned(id, vuelta, porSegundo) {
       const c = cards.find((x) => x.def.id === id);
       if (!c) return;
-      // Con barra fija las vueltas llegan casi cada frame (62.5 ms con 4 hitos): un tilt por segundo.
+      // Con barra fija las vueltas llegan casi cada frame (62.5 ms con 4 hitos): un tilt y una moneda
+      // por TILT_FIJA_MS, con lo ganado desde la anterior (acotado a dos ventanas: una pestaña dormida
+      // no pinta una cifra absurda). formatMoney trunca: por debajo de $1 no hay moneda.
       const now = performance.now();
-      if (c.fija && now - c.ultimoTilt < TILT_FIJA_MS) return;
+      let monto = vuelta;
+      if (c.fija) {
+        if (now - c.ultimoTilt < TILT_FIJA_MS) return;
+        const ventana = c.ultimoTilt > 0 ? Math.min(now - c.ultimoTilt, 2 * TILT_FIJA_MS) : TILT_FIJA_MS;
+        monto = (porSegundo * ventana) / 1000;
+      }
       c.ultimoTilt = now;
+      if (monto >= 1) coin(c.sell, `+${formatMoney(monto)}`);
       tiltCard(c);
       if (!c.fija) llenar(c);
     },

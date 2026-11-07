@@ -216,11 +216,6 @@ p {
   object-fit: contain; /* los retratos raster (<img>) comparten estas clases */
 }
 
-.icon-sm {
-  width: 18px;
-  height: 18px;
-}
-
 /*
  * Estampa: halo troquelado en --halo (el papel dentro de una estampilla, blanco fuera) más sombra dura.
  * Son filtros CSS (sin recursos ni url), así que valen para todo el sprite.
@@ -317,13 +312,27 @@ p {
   line-height: 1.15;
 }
 
+/*
+ * Logo: corona y banderín de 40 px más el nombre en Rye en dos líneas ("Imperio de" / "Antojitos":
+ * el salto va en el texto, pre-line; min-content lo partía en tres). A 390 px la fila sigue en 44 px
+ * (dos líneas ≈ 36) junto a los tres iconos; el dinero sigue siendo el héroe.
+ */
 .title-row h1 {
-  font-size: clamp(1rem, 4.5vw, 1.15rem); /* en 390 px cabe entero junto a los dos iconos */
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: clamp(0.95rem, 4vw, 1.05rem);
   color: var(--text);
   min-width: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+}
+
+.logo {
+  width: 40px;
+  height: 40px;
+}
+
+.logo-nombre {
+  white-space: pre-line;
 }
 
 /* Total, "$X/s" luego luego a su derecha y recetas al extremo; si no caben, las recetas bajan. */
@@ -366,6 +375,12 @@ p {
   font-size: 0.9rem;
 }
 
+/* Recetas: icono ilustrado de 26 (el 24 base se perdía junto a la cifra). */
+.recipes .icon {
+  width: 26px;
+  height: 26px;
+}
+
 .icon-btn {
   position: relative; /* ancla del badge de Personajes */
   min-width: 44px;
@@ -379,8 +394,8 @@ p {
   border-radius: 12px;
 }
 
-/* Dos iconos en el header móvil (Empleados y Ajustes): caben a 44 px con el rótulo entero en 390 px. */
-/* El grupo de iconos no se encoge ni se parte: el que cede es el rótulo, con elipsis. */
+/* Tres iconos en el header móvil (Historial, Empleados y Ajustes): caben a 44 px con el logo en 390 px. */
+/* El grupo de iconos no se encoge ni se parte: el que cede es el nombre, que ya va en dos líneas. */
 .title-row > div {
   display: flex;
   flex: none;
@@ -631,6 +646,44 @@ p {
 /* Personajes: en móvil la sección solo guarda la lista (se abre en un diálogo); en web es panel. */
 .personajes {
   display: none;
+}
+
+/* Historial: como Personajes (el cuerpo viaja al diálogo móvil); en web, panel del lateral. */
+.historial {
+  display: none;
+}
+
+.hist-vacio {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.hist-lista {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.hist-lista li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 8px;
+  padding: 6px 0;
+  font-size: 0.9rem;
+  border-bottom: 1.5px dashed var(--marco);
+}
+
+.hist-lista li:last-child {
+  border-bottom: 0;
+}
+
+.hist-hora {
+  color: var(--muted);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }
 
 /* ---------- Álbum: estampillas de logros y Libreta ---------- */
@@ -1731,7 +1784,7 @@ p {
 /* ---------- Efectos (fx.ts) ---------- */
 .fx-coin {
   position: fixed;
-  z-index: 4;
+  z-index: 1; /* sobre letreros y bocadillos (1, va después en el DOM); bajo header, barra y paneles abiertos (2) */
   pointer-events: none;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
@@ -1783,16 +1836,22 @@ p {
   }
 
   /*
-   * Estampilla del Álbum bajo el ratón: la tarjeta se levanta 3 px y la sombra (::before del li) se
-   * queda, como despegarla del álbum. Nada de scale: la tarjeta enmascarada se rasteriza a 1× y se
-   * vería borrosa hasta el final de la transición.
+   * Cupón bajo el ratón (estampillas del Álbum, Mejoras y Empleados): la tarjeta se levanta 3 px y la
+   * sombra (::before del li) se queda, como despegarla del álbum. Nada de scale: la tarjeta enmascarada
+   * se rasteriza a 1× y se vería borrosa hasta el final de la transición. El cupón de un empleado sin
+   * abrir (.cerrado) no sube: es un estado deshabilitado. Las preguntas de Chelo suben 2 px.
    */
-  .estampilla .up-card {
+  .up-slot .up-card,
+  .guia-faq .btn {
     transition: transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
   }
 
-  .estampilla:hover .up-card {
+  .up-slot:not(.cerrado):hover .up-card {
     transform: translateY(-3px);
+  }
+
+  .guia-faq .btn:not(:disabled):hover {
+    transform: translateY(-2px);
   }
 
   /* Fila de la Libreta bajo el ratón: fondo suave y etiqueta y valor en negrita. */
@@ -1822,7 +1881,7 @@ p {
 @media (min-width: 900px) {
   :root {
     --picado-h: 28px;
-    --side-top: 151px; /* header sticky sin icon-btn (135 px) más padding de #app y margen */
+    --side-top: 162px; /* header sticky sin icon-btn (146 px con el logo de 40) más padding de #app y margen */
     --bar-h: 0px; /* sin barra inferior en web: el multiplicador vive en el lateral */
     --side-gap: 8px; /* aire bajo la última fila de tarjetas */
     --lateral-w: 80px;
@@ -1842,11 +1901,23 @@ p {
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: center; /* el grupo de discos centrado en el alto de la ventana */
+    justify-content: center; /* el grupo de discos centrado; Historial (.lat-top) pegado arriba */
     gap: 6px;
     padding: calc(env(safe-area-inset-top) + 12px) 0 12px;
     background: var(--grano), var(--card);
     border-right: 2px solid var(--border);
+  }
+  /*
+   * Historial arriba de todo y el resto centrado: los dos márgenes automáticos (el del disco y el del
+   * ::after vacío) se reparten el hueco a partes iguales, así el grupo queda centrado entre ambos.
+   */
+  .lateral .lat-top {
+    margin-bottom: auto;
+  }
+
+  .lateral::after {
+    content: '';
+    margin-top: auto;
   }
 
   #app {
@@ -1894,6 +1965,13 @@ p {
   }
 
   /* Los controles del header y el botón de heredar viven en el lateral. */
+  /* Recetas en la esquina superior derecha del header (.top es sticky: posiciona); en móvil siguen en la fila del dinero. */
+  .recipes {
+    position: absolute;
+    top: 8px;
+    right: 0;
+  }
+
   .title-row > div {
     display: none;
   }
@@ -1932,7 +2010,8 @@ p {
 
   .personajes,
   .guia,
-  .album {
+  .album,
+  .historial {
     display: block;
   }
 
@@ -1958,7 +2037,7 @@ p {
 }
 
 /*
- * Lateral compacto en ventanas bajas (1366×620 de PLAN.md): siete discos de 56 con etiqueta no
+ * Lateral compacto en ventanas bajas (1366×620 de PLAN.md): ocho discos de 56 con etiqueta no
  * caben; bajan a 44 con icono de 28 y la etiqueta se oculta visualmente (sigue en aria-label o en
  * el texto del botón para el lector). Nada cambia a 1280×800.
  */

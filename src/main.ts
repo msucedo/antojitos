@@ -19,9 +19,21 @@ import {
   type State,
   darPropina,
   estrellas,
+  ingresoVuelta,
   propinaCosto,
+  ventasConPropina,
 } from './game';
-import { AUSENCIA_MS, BUSINESSES, CHELO, ESTRELLA_BONO, fraseDe, LOGRO_BONO, PROPINA_MS, PROPINA_MULT } from './data';
+import {
+  AUSENCIA_MS,
+  BUSINESSES,
+  CHELO,
+  ESTRELLA_BONO,
+  fraseDe,
+  LOGRO_BONO,
+  PROPINA_MS,
+  PROPINA_MULT,
+  type BusinessDef,
+} from './data';
 import { createAudio, loadPrefs, savePrefs, type Sound } from './audio';
 import { desbloquear, nuevos, verLogros } from './logros';
 import { cobrar, diaSiguiente, estadoRacha, regalo } from './racha';
@@ -150,7 +162,7 @@ function start(root: HTMLElement): void {
         audio.unlock();
         audio.play('buy');
       }
-      ui.announce(on ? 'Efectos de sonido activados.' : 'Efectos de sonido desactivados.');
+      ui.announce(on ? 'Efectos de sonido activados.' : 'Efectos de sonido desactivados.', false); // ajuste, no evento
       dirty = true;
     },
     onToggleMusic: () => {
@@ -158,7 +170,7 @@ function start(root: HTMLElement): void {
       audio.setMusic(on);
       savePrefs(audio.prefs());
       if (on) audio.unlock();
-      ui.announce(on ? 'Música activada.' : 'Música desactivada.');
+      ui.announce(on ? 'Música activada.' : 'Música desactivada.', false);
       dirty = true;
     },
     onMode: (m) => {
@@ -233,14 +245,21 @@ function start(root: HTMLElement): void {
 
   // Todo avance de tiempo usa el reloj de pared contra lastSeen: un frame, una pausa
   // del hilo o horas fuera pasan por el mismo camino (tope 8 h, reloj atrasado → 0).
+  const textoEstrella = (def: BusinessDef): string => {
+    const n = estrellas(state.businesses[def.id]!);
+    const pct = Math.round(n * ESTRELLA_BONO * 100);
+    return `${def.manager.name}: ${n} ${n === 1 ? 'estrella' : 'estrellas'}, +${pct} % de ventas. ${def.manager.says.estrella}`;
+  };
   const catchUp = (notify: boolean) => {
     const before = state;
     // Un frame o la pestaña que se oculta cuentan como tiempo jugado; cargar o volver, no.
     const r = applyOffline(state, Date.now(), !notify);
     state = r.state;
     dirty ||= r.earned > 0;
-    // Ciclos manuales que terminaron (en un frame o al volver a la pestaña):
-    // moneda + sonido. Los gerentes no suenan; solo tildan el icono.
+    // Ciclos manuales que terminaron (en un frame o al volver a la pestaña): moneda + sonido.
+    // Los gerentes no suenan: tildan el icono y suben su moneda, salvo al cargar o al volver de una
+    // ausencia (la bienvenida ya dice el total; sin lluvia de monedas sobre el diálogo).
+    const silencio = notify || r.elapsedMs >= AUSENCIA_MS;
     for (const def of BUSINESSES) {
       const b0 = before.businesses[def.id];
       const b1 = state.businesses[def.id];
@@ -253,8 +272,9 @@ function start(root: HTMLElement): void {
         (b1.progressMs < b0.progressMs || r.elapsedMs >= cicloMs(def, b1.count))
       ) {
         // Vuelta de empleado: la barra volvió a empezar (o pasó un ciclo entero entre frames).
-        // Tras una ausencia larga, un solo tilt.
-        ui.turned(def.id);
+        // Tras una ausencia larga, un solo tilt. `before` trae el conteo y la propina del momento de
+        // la vuelta; el /s actual sirve para la ventana de la barra fija.
+        ui.turned(def.id, silencio ? 0 : ingresoVuelta(before, def.id), silencio ? 0 : ventasConPropina(state, def.id));
       }
     }
     // Estrellas de antigüedad ganadas en este tramo.
@@ -273,15 +293,17 @@ function start(root: HTMLElement): void {
           ganadas.map((d) => d.manager.name),
         );
         audio.play('welcome');
+        // El diálogo lo dice; al Historial va sin leerlo (la rama de abajo, hilo congelado > 60 s sin
+        // visibilitychange, lo registra vía announce: ramas excluyentes, nunca dos entradas).
+        ui.registrar(`Ganaste ${formatMoney(r.earned)} mientras no estabas.`);
+        for (const def of ganadas) ui.registrar(textoEstrella(def)); // el diálogo ya nombra a quien ganó estrella
       } else if (ganadas.length === 0) ui.announce(`Ganaste ${formatMoney(r.earned)} mientras no estabas.`);
     }
     if (ganadas.length > 0 && !(aviso && notify)) {
       // Un solo anuncio y un solo sonido aunque ganen varios (el aria-live se pisaría).
       const textos = ganadas.map((def) => {
-        const n = estrellas(state.businesses[def.id]!);
         ui.say(def.id, 'estrella');
-        const pct = Math.round(n * ESTRELLA_BONO * 100);
-        return `${def.manager.name}: ${n} ${n === 1 ? 'estrella' : 'estrellas'}, +${pct} % de ventas. ${def.manager.says.estrella}`;
+        return textoEstrella(def);
       });
       if (aviso) textos.unshift(`Ganaste ${formatMoney(r.earned)} mientras no estabas.`);
       ui.announce(textos.join(' '));

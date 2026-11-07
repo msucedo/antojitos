@@ -22,6 +22,9 @@ export const ICON_NAMES = [
   'estrella',
   'estrella-off',
   'album',
+  'logo',
+  'historial',
+  'historial-sil',
 ] as const;
 
 export type IconName = (typeof ICON_NAMES)[number];

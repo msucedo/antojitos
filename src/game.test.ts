@@ -49,6 +49,7 @@ import {
   PROPINA_TOTAL_MS,
   quantityFor,
   prestige,
+  ingresoVuelta,
   revenuePerCycle,
   startCycle,
   tick,
@@ -586,6 +587,14 @@ describe('propina y antigüedad', () => {
     expect(propinaActiva(b(casi))).toBe(false);
     expect(propinaLista(b(casi))).toBe(false);
     expect(propinaLista(b(tick(casi, 1)))).toBe(true);
+  });
+
+  it('ingresoVuelta es lo de una vuelta, ×PROPINA_MULT solo con la propina activa', () => {
+    const s0 = conBeto();
+    expect(ingresoVuelta(s0, 'elotes')).toBe(revenuePerCycle(s0, 'elotes'));
+    const s = darPropina(s0, 'elotes');
+    expect(ingresoVuelta(s, 'elotes')).toBe(revenuePerCycle(s, 'elotes') * PROPINA_MULT);
+    expect(ingresoVuelta(tick(s, PROPINA_TOTAL_MS), 'elotes')).toBe(revenuePerCycle(s, 'elotes'));
   });
 
   it('×1.5 de ventas solo en su ventana; la barra va al ritmo de siempre', () => {
