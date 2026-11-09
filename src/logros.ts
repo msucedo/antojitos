@@ -1,11 +1,8 @@
-import type { CharacterId } from './characters';
-import { BUSINESSES, UPGRADES } from './data';
+import { BUSINESSES, UPGRADES, type Arte } from './data';
 import { estrellas, heredadas, type State } from './game';
-import type { IconName } from './icons';
-import type { PlatoId } from './platos';
 
 /** Arte de la estampilla: un plato, un retrato o un símbolo del sprite (nada nuevo que ilustrar). */
-export type LogroIcono = { plato: PlatoId } | { retrato: CharacterId } | { sprite: IconName };
+export type LogroIcono = Arte;
 
 export interface LogroDef {
   readonly id: string;
@@ -17,6 +14,12 @@ export interface LogroDef {
   readonly icono: LogroIcono;
   readonly cumple: (s: State) => boolean;
 }
+
+/**
+ * Meta del logro final `imperio`: los 8 negocios con estas unidades. El costo por unidad es geométrico
+ * (`growth` 1.07–1.15): a 350 el acumulado ronda $3e24 (17 días de juego óptimo); 1000 no se alcanza nunca.
+ */
+export const IMPERIO_UNIDADES = 350;
 
 const negocios = (s: State) => BUSINESSES.map((d) => s.businesses[d.id]).filter((b) => b !== undefined);
 const algunNegocio = (s: State, f: (count: number) => boolean) => negocios(s).some((b) => f(b.count));
@@ -225,9 +228,23 @@ export const LOGROS: readonly LogroDef[] = [
     icono: { sprite: 'recipe' },
     cumple: (s) => s.racha.dias >= 7,
   },
+  // Siempre al final: el Álbum conserva su orden para quien ya tiene las estampillas anteriores.
+  {
+    id: 'imperio',
+    nombre: 'Corona del imperio',
+    pista: `Los 8 negocios con ${IMPERIO_UNIDADES} unidades`,
+    logrado: `Los 8 negocios llegaron a ${IMPERIO_UNIDADES}`,
+    icono: { sprite: 'logo' },
+    cumple: (s) => todosNegocios(s, (n) => n >= IMPERIO_UNIDADES),
+  },
 ];
 
 export const LOGRO_IDS: ReadonlySet<string> = new Set(LOGROS.map((l) => l.id));
+
+/** Todas las estampillas pegadas: el letrero "Álbum completo" y la última frase de Chelo. */
+export function albumCompleto(s: State): boolean {
+  return s.logros.length === LOGROS.length;
+}
 
 export function getLogro(id: string): LogroDef {
   const def = LOGROS.find((l) => l.id === id);

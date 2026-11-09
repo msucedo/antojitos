@@ -1,9 +1,22 @@
 import type { CharacterId } from './characters';
+import type { IconName } from './icons';
 import type { PlatoId } from './platos';
 
 export type ManagerEvent = 'hire' | 'milestone' | 'upgrade' | 'estrella';
 export type CheloEvent =
-  'milestone' | 'upgrade' | 'upgradeOne' | 'prestige' | 'empleado' | 'logro' | 'racha' | 'rachaReceta';
+  | 'milestone'
+  | 'upgrade'
+  | 'upgradeOne'
+  | 'prestige'
+  | 'empleado'
+  | 'logro'
+  | 'racha'
+  | 'rachaReceta'
+  | 'recetario'
+  | 'album';
+
+/** Arte de una estampilla o cupón: un plato, un retrato o un símbolo del sprite (nada nuevo que ilustrar). */
+export type Arte = { plato: PlatoId } | { retrato: CharacterId } | { sprite: IconName };
 
 /** Frases de un gerente: una por evento, y una por hito en el orden de MILESTONES. */
 export interface ManagerSays {
@@ -76,6 +89,7 @@ export const BUSINESSES: readonly BusinessDef[] = [
           'Doscientos. Ya no sé ni dónde los estaciono.',
           'Trescientos carritos. El maíz lo traen en tráiler.',
           'Cuatrocientos. Ya hasta el mercado nos pide elote.',
+          'Quinientos carritos. Despacio, pero el elote llegó lejos.',
         ],
         upgrade: 'Con eso ni el chile pica igual. Mejor, pues.',
         estrella: 'Con los años el elote sabe mejor. Usted nomás vea.',
@@ -105,6 +119,7 @@ export const BUSINESSES: readonly BusinessDef[] = [
           '¡Doscientos! Hasta la lluvia se me pone celosa.',
           '¡Trescientos puestos! Ya tengo pregón con eco.',
           '¡Cuatrocientos! Se me acaban los limones del país.',
+          '¡Quinientos puestos! ¡Hasta el hielo pide descanso!',
         ],
         upgrade: 'Pruébela. Esta sí sabe a fruta de verdad.',
         estrella: '¡Ya me sé el pregón de memoria! ¡Aguas, aguas frescas!',
@@ -134,6 +149,7 @@ export const BUSINESSES: readonly BusinessDef[] = [
           'Doscientas taquerías. Pastor para toda la ciudad.',
           'Trescientas. La piña ya viene por camión.',
           'Cuatrocientas taquerías. Con todo, siempre con todo.',
+          'Quinientas taquerías. El trompo ya pidió vacaciones.',
         ],
         upgrade: 'Esa salsa ya hizo llorar a tres. Buena señal.',
         estrella: 'Ya corto el trompo con los ojos cerrados. Bueno, casi.',
@@ -163,6 +179,7 @@ export const BUSINESSES: readonly BusinessDef[] = [
           'Doscientas. Hasta mis vecinas ya comen aquí.',
           'Trescientas torterías. Siga así y no se me canse.',
           'Cuatrocientas. Ya le dije: bien servidas, siempre.',
+          'Quinientas torterías. Bien, pero no se me relaje.',
         ],
         upgrade: 'Ahora sí hay con qué trabajar. Siga así.',
         estrella: 'La experiencia no se improvisa. Las tortas tampoco.',
@@ -192,6 +209,7 @@ export const BUSINESSES: readonly BusinessDef[] = [
           'Doscientas. Hasta los domingos se llenan.',
           'Trescientas fondas. Ya sale la comida más rápido.',
           'Cuatrocientas. Nadie se va con hambre, nunca.',
+          'Quinientas fondas. Siéntese, que esto hay que celebrarlo.',
         ],
         upgrade: 'Con sazón nuevo hasta el arroz sabe a domingo.',
         estrella: 'Ya sé el gusto de cada cliente. Aquí nadie se va con hambre.',
@@ -221,6 +239,7 @@ export const BUSINESSES: readonly BusinessDef[] = [
           'Doscientas panaderías. Las charolas salen volando.',
           'Trescientas. El pan sale más rápido que antes.',
           'Cuatrocientas. Ya ni el horno descansa.',
+          'Quinientas panaderías. Huele a concha hasta en la luna.',
         ],
         upgrade: 'Con el horno nuevo hasta la masa está de buenas.',
         estrella: 'Ya sé cuándo sale el pan nomás por el olor.',
@@ -250,6 +269,7 @@ export const BUSINESSES: readonly BusinessDef[] = [
           'Doscientas. Abrimos oficina regional. Era inevitable.',
           'Trescientas. Los tiempos de servicio bajaron. Eficiencia.',
           'Cuatrocientas sucursales. Lo presento en la asamblea.',
+          'Quinientas sucursales. Superamos la proyección a cinco años.',
         ],
         upgrade: 'Inversión alineada con la estrategia. Excelente.',
         estrella: 'Antigüedad acreditada: rendimiento al alza, sin excepción.',
@@ -279,6 +299,7 @@ export const BUSINESSES: readonly BusinessDef[] = [
           'Doscientas. No se detenga.',
           'Trescientas. Más rápido, como debe ser.',
           'Cuatrocientas. Ahora sí es nacional.',
+          'Quinientas. Esperaba más, pero bien.',
         ],
         upgrade: 'Era lo que faltaba. Siguiente.',
         estrella: 'Experiencia. Se nota.',
@@ -305,8 +326,10 @@ export const CHELO = {
     rachaReceta: '¡Siete días seguidos, mijo! Esta receta es tuya sin heredar.',
     upgrade: 'Esa mejora le sirve a todos los negocios, mijo.',
     upgradeOne: 'Esa mejora se nota en el puesto, mijo.',
-    prestige: 'Qué orgullo. Con las recetas de la abuela todo vende más.',
+    prestige: 'Qué orgullo, mijo. Guarda las recetas o cocínalas en Herencia.',
     empleado: 'Ya te alcanza para un empleado, mijo: vende por ti aunque cierres.',
+    recetario: 'Así se hace, mijo. Esa receta ya es de la casa.',
+    album: '¡Lo lograste todo, mijo! El álbum quedó completo. Qué orgullo.',
   },
   /** Cuando no hay consejo pendiente. */
   idle: 'Todo en orden, mijo. Sigue vendiendo y yo te aviso.',
@@ -318,7 +341,7 @@ export const CHELO = {
     },
     {
       q: '¿Qué hace un empleado?',
-      a: 'Vende por ti, hasta con el juego cerrado. Se contrata en Empleados, mijo.',
+      a: 'Vende por ti, hasta con el juego cerrado: al volver cobras hasta 8 h de ventas. Se contrata en Empleados, mijo.',
     },
     {
       q: '¿Qué es la herencia?',
@@ -326,7 +349,11 @@ export const CHELO = {
     },
     {
       q: '¿Qué son las recetas?',
-      a: 'Se ganan solas al vender: la primera al juntar un billón en total, y cada una pide más. Se cobran al heredar: +2 % a todo, para siempre.',
+      a: 'Se ganan solas al vender y se cobran al heredar. Cada una da +2 % a todo; en Herencia las cocinas en el recetario de la abuela.',
+    },
+    {
+      q: '¿Qué es el recetario?',
+      a: 'Mejoras de la abuela que duran para siempre. Cocinar una receta gasta su +2 %, pero lo que compras no se pierde al heredar.',
     },
     {
       q: '¿Qué es la racha?',
@@ -348,9 +375,11 @@ export const CHELO = {
 /**
  * Unidades de cada hito. Los cuatro primeros parten la vuelta a la mitad; del quinto en adelante
  * la parten solo si el negocio todavía barre, si no doblan las ventas (`hitoEfecto` en game.ts).
+ * El 500 solo lo alcanza elotes en la práctica (unidad 500 ≈ $1.8e15; cadena ≈ $8.5e26).
  */
-export const MILESTONES: readonly number[] = [25, 50, 100, 200, 300, 400];
+export const MILESTONES: readonly number[] = [25, 50, 100, 200, 300, 400, 500];
 
+/** Tope de ausencia que se cobra; el recetario (`olla`) lo sube (`offlineCapMs` en game.ts). */
 export const OFFLINE_CAP_MS = 8 * 60 * 60 * 1000;
 /** Racha diaria: el día 7 de cada semana de racha regala una receta; los demás, minutos de ventas. */
 export const RACHA_SEMANA = 7;
@@ -359,7 +388,10 @@ export const RACHA_MIN_POR_DIA = 2;
 /** Ausencia desde la que se avisa lo ganado; por debajo, el tiempo cuenta como jugado. */
 export const AUSENCIA_MS = 60_000;
 
-/** Propina: el negocio vende más durante PROPINA_MS y luego hay que esperar PROPINA_ESPERA_MS. */
+/**
+ * Propina: el negocio vende más durante PROPINA_MS y luego hay que esperar PROPINA_ESPERA_MS.
+ * El recetario (`cafecito`) alarga la duración (`propinaDuracionMs` en game.ts).
+ */
 export const PROPINA_MS = 30_000;
 export const PROPINA_ESPERA_MS = 300_000;
 /** Durante la propina el negocio vende ×PROPINA_MULT; cuesta lo que vende en PROPINA_COSTO_MS. */
@@ -369,10 +401,103 @@ export const PROPINA_COSTO_MS = 10_000;
 export const ANTIGUEDAD_MS: readonly number[] = [600_000, 3_600_000, 21_600_000];
 /** Ventas extra por estrella de antigüedad. */
 export const ESTRELLA_BONO = 0.1;
+/** Ventas extra por receta activa (ganada y no cocinada en el recetario). */
 export const RECIPE_BONUS = 0.02;
-export const RECIPE_DIVISOR = 1e12;
+/** `recetas = floor(sqrt(ganadoTotal / RECIPE_DIVISOR))`: 5 recetas al juntar $1e12 (la primera herencia típica). */
+export const RECIPE_DIVISOR = 4e10;
+/** Chelo sugiere heredar (consejo y sonido `heir`) desde estas pendientes; el badge las muestra desde 1. */
+export const HERENCIA_MIN = 5;
 /** Ventas extra por cada logro desbloqueado (sobrevive la herencia, como las recetas). */
 export const LOGRO_BONO = 0.02;
+
+export type RecetarioEfecto =
+  'arranque-elotes' | 'arranque-dinero' | 'offline-cap' | 'propina-ms' | 'antiguedad-inicial' | 'ventas';
+
+/** Un nivel del cupón: cuesta `costo` recetas y deja el efecto en `valor` (reemplaza, no suma). */
+export interface RecetarioNivel {
+  readonly costo: number;
+  readonly valor: number;
+}
+
+/** Cupón del recetario de la abuela: mejora permanente que se paga con recetas y sobrevive la herencia. */
+export interface RecetarioDef {
+  readonly id: string;
+  readonly name: string;
+  /** Un solo cupón por efecto: `valorRecetario` (game.ts) busca el def por efecto. */
+  readonly efecto: RecetarioEfecto;
+  readonly icono: Arte;
+  readonly niveles: readonly RecetarioNivel[];
+}
+
+/**
+ * Catálogo fijo (88 recetas en total). Cocinar una receta quita su +2 %: con 5 recetas (primera
+ * herencia) se elige entre arranque y bono. Sin cupón de empleado: Guardadito 1 paga a Don Beto.
+ */
+export const RECETARIO: readonly RecetarioDef[] = [
+  {
+    id: 'canasta',
+    name: 'Canasta de elotes',
+    efecto: 'arranque-elotes',
+    icono: { plato: 'elote' },
+    niveles: [
+      { costo: 1, valor: 25 },
+      { costo: 2, valor: 100 },
+      { costo: 3, valor: 200 },
+    ],
+  },
+  {
+    id: 'guardadito',
+    name: 'Guardadito',
+    efecto: 'arranque-dinero',
+    icono: { sprite: 'pilas' },
+    niveles: [
+      { costo: 1, valor: 500 },
+      { costo: 2, valor: 10_000 },
+      { costo: 4, valor: 200_000 },
+    ],
+  },
+  {
+    id: 'olla',
+    name: 'Olla de barro',
+    efecto: 'offline-cap',
+    icono: { plato: 'olla' },
+    niveles: [
+      { costo: 2, valor: 12 * 60 * 60 * 1000 },
+      { costo: 4, valor: 24 * 60 * 60 * 1000 },
+    ],
+  },
+  {
+    id: 'cafecito',
+    name: 'Cafecito',
+    efecto: 'propina-ms',
+    icono: { plato: 'agua' },
+    niveles: [
+      { costo: 1, valor: 45_000 },
+      { costo: 2, valor: 60_000 },
+      { costo: 4, valor: 90_000 },
+    ],
+  },
+  {
+    id: 'molcajete',
+    name: 'Molcajete heredado',
+    efecto: 'antiguedad-inicial',
+    icono: { sprite: 'estrella' },
+    niveles: [
+      { costo: 2, valor: 600_000 },
+      { costo: 5, valor: 3_600_000 },
+    ],
+  },
+  {
+    id: 'caldo',
+    name: 'Caldo de la abuela',
+    efecto: 'ventas',
+    icono: { sprite: 'recipe' },
+    niveles: [
+      { costo: 15, valor: 2 },
+      { costo: 40, valor: 4 },
+    ],
+  },
+];
 
 export interface UpgradeDef {
   readonly id: string;
@@ -383,7 +508,10 @@ export interface UpgradeDef {
   readonly multiplier: number;
 }
 
-/** Mejoras de compra única: ×3 a un negocio o ×2 a todos. Se reinician con la herencia. */
+/**
+ * Mejoras de compra única: ×3 a un negocio o ×2 a todos. Se reinician con la herencia.
+ * Las diez últimas (desde $2e14) son la segunda ronda: por costo solo se ven con decenas de recetas.
+ */
 export const UPGRADES: readonly UpgradeDef[] = [
   { id: 'chile', name: 'Chile en polvo', cost: 20_000, target: 'elotes', multiplier: 3 },
   { id: 'hielo', name: 'Hielo de garrafón', cost: 300_000, target: 'aguas', multiplier: 3 },
@@ -405,4 +533,14 @@ export const UPGRADES: readonly UpgradeDef[] = [
   { id: 'bolsas', name: 'Logo en las bolsas', cost: 8_000_000_000_000, target: 'franquicia', multiplier: 3 },
   { id: 'fama', name: 'Fama nacional', cost: 10_000_000_000_000, target: 'all', multiplier: 2 },
   { id: 'comercial', name: 'Comercial en la tele', cost: 100_000_000_000_000, target: 'cadena', multiplier: 3 },
+  { id: 'esquites', name: 'Esquites en vaso', cost: 2e14, target: 'elotes', multiplier: 3 },
+  { id: 'chamoy', name: 'Chamoy de la casa', cost: 5e14, target: 'aguas', multiplier: 3 },
+  { id: 'tortillas', name: 'Tortillas a mano', cost: 1e15, target: 'tacos', multiplier: 3 },
+  { id: 'telera', name: 'Telera propia', cost: 3e15, target: 'tortas', multiplier: 3 },
+  { id: 'menu-abuela', name: 'Receta de la abuela en el menú', cost: 6e15, target: 'all', multiplier: 2 },
+  { id: 'cazuelas', name: 'Cazuelas de barro', cost: 1e16, target: 'fonda', multiplier: 3 },
+  { id: 'rosca', name: 'Rosca todo el año', cost: 3e16, target: 'panaderia', multiplier: 3 },
+  { id: 'app', name: 'App de pedidos', cost: 6e16, target: 'franquicia', multiplier: 3 },
+  { id: 'bodega', name: 'Bodega central', cost: 1e17, target: 'cadena', multiplier: 3 },
+  { id: 'guia', name: 'Estrella en la guía', cost: 3e17, target: 'all', multiplier: 2 },
 ];

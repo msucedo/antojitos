@@ -1,12 +1,13 @@
 // Capturas de verificación visual (ver DESIGN.md, "Verificación visual").
 //
-//   node scripts/capturas.mjs [--sprite | --album | --ajustes] [--semilla ruta.json] [--nombre prefijo]
+//   node scripts/capturas.mjs [--sprite | --album | --ajustes | --herencia] [--semilla ruta.json] [--nombre prefijo]
 //
 // Arranca Vite en localhost:5174, abre el Chrome del sistema en headless,
 // siembra la partida (si hay semilla) y deja los PNG en capturas/.
 // Sin --sprite: juego en móvil 390×844 y web 1280×800, tema claro y oscuro.
 // Con --sprite: docs/sprite.html a 1280 de ancho, página completa, claro y oscuro.
 // Con --album: abre el Álbum y guarda album-* y libreta-*. Con --ajustes: abre el diálogo de Ajustes (ajustes-*).
+// Con --herencia: abre Herencia (recetario + Heredar): panel del lateral en web, diálogo desde la barra en móvil.
 // --nombre cambia el prefijo "juego" de los PNG.
 
 import { mkdir, readFile } from 'node:fs/promises';
@@ -34,6 +35,7 @@ const { values: flags } = parseArgs({
     sprite: { type: 'boolean', default: false },
     album: { type: 'boolean', default: false }, // abre el Álbum y captura sus dos pestañas
     ajustes: { type: 'boolean', default: false }, // abre el diálogo de Ajustes
+    herencia: { type: 'boolean', default: false }, // abre Herencia (hace falta una semilla con recetas)
     semilla: { type: 'string' },
     nombre: { type: 'string' }, // prefijo de los PNG en vez de "juego" (p. ej. --nombre racha7)
   },
@@ -107,6 +109,16 @@ const esperarAjustes = (vista) => async (page) => {
   await page.waitForTimeout(400);
 };
 
+/** Como esperarAlbum, pero abre Herencia: botón Heredar de la barra en móvil, disco del lateral en web. */
+const esperarHerencia = (vista) => async (page) => {
+  await esperarJuego(page);
+  await page.waitForTimeout(ASIENTO_MS);
+  await page.keyboard.press('Escape');
+  if (vista === 'movil') await page.locator('.bottom .btn.heir').click();
+  else await page.locator('.lateral button[aria-label^="Herencia"]').click();
+  await page.waitForTimeout(400);
+};
+
 const capturarLibreta = (vista, tema) => async (page, guardar) => {
   await page.getByRole('tab', { name: 'Libreta' }).click();
   await page.waitForTimeout(ASIENTO_MS);
@@ -154,15 +166,25 @@ function tareas(semilla) {
                 semilla,
                 esperar: esperarAjustes(vista),
               }
-            : {
-                viewport,
-                tema,
-                url: `${ORIGEN}/`,
-                archivo: `${flags.nombre ?? 'juego'}-${vista}-${tema}.png`,
-                fullPage: false,
-                semilla,
-                esperar: esperarJuego,
-              },
+            : flags.herencia
+              ? {
+                  viewport,
+                  tema,
+                  url: `${ORIGEN}/`,
+                  archivo: `herencia-${vista}-${tema}.png`,
+                  fullPage: false,
+                  semilla,
+                  esperar: esperarHerencia(vista),
+                }
+              : {
+                  viewport,
+                  tema,
+                  url: `${ORIGEN}/`,
+                  archivo: `${flags.nombre ?? 'juego'}-${vista}-${tema}.png`,
+                  fullPage: false,
+                  semilla,
+                  esperar: esperarJuego,
+                },
       );
     }
   }

@@ -5,14 +5,16 @@ import {
   hireManager,
   newState,
   pendingRecipes,
-  PROPINA_TOTAL_MS,
+  PROPINA_TOTAL_MAX_MS,
   tick,
   TRABAJADO_TOPE_MS,
   type State,
   SAVE_VERSION,
   emptyStats,
 } from './game';
+import { RECETARIO, RECIPE_DIVISOR, UPGRADES } from './data';
 import { claveDia } from './fecha';
+import { LOGROS } from './logros';
 import {
   BACKUP_KEY,
   exportSave,
@@ -180,16 +182,21 @@ describe('v2: mejoras', () => {
     expect(s!.businesses.aguas).toEqual({ ...v1.businesses.aguas, propinaMs: 0, trabajadoMs: 0 });
   });
 
-  it('migrar conserva recetas pendientes y la distancia a la siguiente', () => {
-    // Con el divisor de v1 (3e10): 1e11 ganado → floor(sqrt(3.33)) = 1 receta pendiente.
-    const pending = validate({ ...v1, recipes: 0, lifetimeEarned: 1e11 });
-    expect(pendingRecipes(pending!)).toBe(1);
-    // recipes = 3 y 4.7e11 ganado (v1: floor(sqrt(15.7)) = 3): aún sin la 4.ª…
-    const near = validate({ ...v1, recipes: 3, lifetimeEarned: 4.7e11 });
-    expect(pendingRecipes(near!)).toBe(0);
-    // …y con 4.9e11 (v1: floor(sqrt(16.3)) = 4) ya la tiene, igual que en v1.
-    const reached = validate({ ...v1, recipes: 3, lifetimeEarned: 4.9e11 });
-    expect(pendingRecipes(reached!)).toBe(1);
+  it('migrar un v1 equivale a un v2 reescalado por 1e12/3e10 (razón congelada: el divisor actual no la mueve)', () => {
+    // v1 escribía con divisor 3e10 y v2 con 1e12; desde v6 el divisor es 4e10 y el salto de pendientes
+    // es el mismo regalo para v1 que para v2–v5.
+    const RAZON = 1e12 / 3e10;
+    for (const [recipes, lifetimeEarned] of [
+      [0, 1e11],
+      [3, 4.7e11],
+      [3, 4.9e11],
+    ] as const) {
+      const desdeV1 = validate({ ...v1, recipes, lifetimeEarned });
+      const desdeV2 = validate({ ...v1, version: 2, upgrades: [], recipes, lifetimeEarned: lifetimeEarned * RAZON });
+      expect(desdeV1!.lifetimeEarned).toBeCloseTo(desdeV2!.lifetimeEarned);
+      expect(pendingRecipes(desdeV1!)).toBe(pendingRecipes(desdeV2!));
+    }
+    expect(RECIPE_DIVISOR).toBe(4e10);
   });
 
   it('carga un guardado v1 desde storage', () => {
@@ -266,7 +273,7 @@ describe('v3: propina y antigüedad', () => {
     const s = conBeto();
     const fuera = { ...s.businesses.elotes!, propinaMs: 9e9, trabajadoMs: 9e12 };
     const r = validate({ ...s, businesses: { ...s.businesses, elotes: fuera } });
-    expect(r?.businesses.elotes?.propinaMs).toBe(PROPINA_TOTAL_MS);
+    expect(r?.businesses.elotes?.propinaMs).toBe(PROPINA_TOTAL_MAX_MS); // el tope cubre la propina alargada del recetario
     expect(r?.businesses.elotes?.trabajadoMs).toBe(TRABAJADO_TOPE_MS);
     const sin = validate({ ...s, businesses: { ...s.businesses, elotes: { ...fuera, manager: false } } });
     expect(sin?.businesses.elotes?.propinaMs).toBe(0);
@@ -374,7 +381,7 @@ describe('v5: racha diaria y recetas de regalo', () => {
     const kv = memory({ [SAVE_KEY]: JSON.stringify(v4) });
     const { state, source } = load(kv, T0);
     expect(source).toBe('save');
-    expect(state.version).toBe(5);
+    expect(state.version).toBe(SAVE_VERSION);
     expect(state.racha).toEqual({ dias: 0, ultimoDia: HOY });
     expect(state.recetasRegalo).toBe(0);
     expect(state.stats.regalos).toBe(0);
@@ -433,5 +440,53 @@ describe('v5: racha diaria y recetas de regalo', () => {
     expect(source).toBe('newer');
     expect(problem).toBe(true);
     expect(kv.data[BACKUP_KEY]).toBe(futuro);
+  });
+});
+
+describe('v6: recetario', () => {
+  it('migra v5 → v6 con recetario vacío; una semilla sin el campo también', () => {
+    const v5: Record<string, unknown> = { ...newState(T0), version: 5 };
+    delete v5.recetario;
+    const { state, source } = load(memory({ [SAVE_KEY]: JSON.stringify(v5) }), T0);
+    expect(source).toBe('save');
+    expect(state.version).toBe(6);
+    expect(state.recetario).toEqual({});
+    // Sin reescalar lo ganado: el salto de recetas pendientes es el regalo de la curva nueva.
+    expect(validate({ ...v5, lifetimeEarned: 1e12 })?.lifetimeEarned).toBe(1e12);
+  });
+
+  it('validate: id desconocido se descarta, nivel se recorta al tope, 0 se descarta; fraccionario o no objeto se rechaza', () => {
+    const base = { ...newState(T0), recipes: 10 };
+    expect(validate({ ...base, recetario: { canasta: 2, nada: 1 } })?.recetario).toEqual({ canasta: 2 });
+    expect(validate({ ...base, recetario: { canasta: 9 } })?.recetario).toEqual({ canasta: 3 });
+    expect(validate({ ...base, recetario: { canasta: 0, olla: 1 } })?.recetario).toEqual({ olla: 1 });
+    expect(validate({ ...base, recetario: null })?.recetario).toEqual({});
+    expect(validate({ ...base, recetario: { canasta: 1.5 } })).toBeNull();
+    expect(validate({ ...base, recetario: { canasta: -1 } })).toBeNull();
+    expect(validate({ ...base, recetario: 3 })).toBeNull();
+    expect(validate({ ...base, recetario: [1] })).toBeNull();
+  });
+
+  it('la cuenta regresiva de una propina alargada sobrevive a la recarga', () => {
+    const s = { ...newState(T0), recipes: 1, recetario: { cafecito: 1 } };
+    s.businesses.elotes = { ...s.businesses.elotes!, manager: true, propinaMs: PROPINA_TOTAL_MAX_MS };
+    expect(validate(JSON.parse(JSON.stringify(s)))?.businesses.elotes?.propinaMs).toBe(PROPINA_TOTAL_MAX_MS);
+    expect(
+      validate({ ...s, businesses: { elotes: { ...s.businesses.elotes, propinaMs: 1e9 } } })?.businesses.elotes
+        ?.propinaMs,
+    ).toBe(PROPINA_TOTAL_MAX_MS);
+  });
+
+  it('export / import conserva el recetario, y un estado al tope cabe en el código', () => {
+    const tope = {
+      ...played(),
+      recipes: 200,
+      upgrades: UPGRADES.map((u) => u.id),
+      logros: LOGROS.map((l) => l.id),
+      recetario: Object.fromEntries(RECETARIO.map((r) => [r.id, r.niveles.length])),
+    };
+    const code = exportSave(tope);
+    expect(code.length).toBeLessThan(MAX_IMPORT_CHARS);
+    expect(importSave(code, T0)?.recetario).toEqual(tope.recetario);
   });
 });

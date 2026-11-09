@@ -6,15 +6,20 @@ import {
   CHELO,
   ESTRELLA_BONO,
   PROPINA_ESPERA_MS,
-  PROPINA_MS,
   PROPINA_MULT,
   RACHA_SEMANA,
+  RECETARIO,
+  RECIPE_BONUS,
+  HERENCIA_MIN,
+  type Arte,
   type BusinessDef,
   fraseDe,
   type CheloEvent,
   type ManagerEvent,
+  type RecetarioDef,
 } from './data';
 import {
+  canBuyRecetario,
   canBuyUpgrade,
   canHireManager,
   cicloMs,
@@ -24,19 +29,25 @@ import {
   getUpgrade,
   firstHireReady,
   heredadas,
+  heredarVale,
   hireableIds,
   incomePerSecond,
   MODES,
   nextMilestone,
   nextMode,
   nextUpgrades,
+  nivelRecetario,
   pendingRecipes,
   propinaActiva,
   propinaCosto,
+  propinaDuracionMs,
   propinaLista,
   puedeDarPropina,
   quantityFor,
+  recetasActivas,
+  recetasGastadas,
   revenuePerCycle,
+  siguienteNivel,
   ventasConPropina,
   type BizState,
   type BuyMode,
@@ -45,7 +56,7 @@ import {
 import { formatDuration, formatMoney, formatNumber, formatReloj, recetas } from './format';
 import { icon, setIcon, tabla, use, type IconName } from './icons';
 import { portrait } from './characters';
-import { LOGROS, type LogroDef, type LogroIcono } from './logros';
+import { albumCompleto, LOGROS, type LogroDef } from './logros';
 import { diaDeSemana, estadoRacha, type Regalo } from './racha';
 import { aparecer, coin, completar, confetti, deslizar, flip, pop, pulse, stamp, tilt } from './fx';
 import { crearHistorial, formatHora, HISTORIAL_MAX } from './historial';
@@ -56,6 +67,8 @@ export interface Handlers {
   onHire(id: string): void;
   onPropina(id: string): void;
   onUpgrade(id: string): void;
+  /** Cocina el siguiente nivel de un cupón del recetario (gasta recetas). */
+  onRecetario(id: string): void;
   onMode(mode: BuyMode): void;
   onPrestige(): void;
   onToggleSound(): void;
@@ -135,8 +148,8 @@ function latBtn(
 
 const ORDINALES = ['primero', 'segundo', 'tercero', 'cuarto', 'quinto', 'sexto', 'séptimo'] as const;
 
-/** Arte de una estampilla del Álbum: plato, retrato o símbolo del sprite, al tamaño del cupón. */
-function logroArte(icono: LogroIcono): Element {
+/** Arte de una estampilla o cupón: plato, retrato o símbolo del sprite, al tamaño del cupón. */
+function arte(icono: Arte): Element {
   if ('plato' in icono) return plato(icono.plato, 'icon up-icon');
   if ('retrato' in icono) return portrait(icono.retrato, 'icon up-icon', true, '44px');
   return icon(icono.sprite, 'icon up-icon sticker');
@@ -152,6 +165,7 @@ const LIBRETA: readonly { label: string; valor: (s: State) => string }[] = [
   { label: 'Tiempo jugado', valor: (s) => formatDuration(s.stats.jugadoMs) },
   { label: 'Herencias', valor: (s) => formatNumber(s.stats.herencias) },
   { label: 'Recetas', valor: (s) => formatNumber(s.recipes) },
+  { label: 'Recetas cocinadas', valor: (s) => formatNumber(recetasGastadas(s)) },
   { label: 'Empleados contratados', valor: (s) => formatNumber(s.stats.contratados) },
   {
     label: 'Estrellas ahora',
@@ -287,6 +301,27 @@ const modeLabel = (m: BuyMode) => (m === 'max' ? 'Máx' : `×${m}`);
 const modeIcon = (m: BuyMode): IconName => (m === 'max' ? 'pilas' : m === 10 ? 'monedas' : 'moneda');
 const UPGRADE_SLOTS = 4;
 const UPGRADE_LOCK_MS = 500;
+
+/** Qué deja el nivel `nivel` (1-based) de un cupón del recetario, en una frase corta (cupón y anuncio). */
+export function textoNivel(def: RecetarioDef, nivel: number): string {
+  const valor = def.niveles[Math.min(Math.max(nivel, 1), def.niveles.length) - 1]?.valor ?? 0;
+  switch (def.efecto) {
+    case 'arranque-elotes':
+      return `Empiezas con ${formatNumber(valor)} elotes`;
+    case 'arranque-dinero':
+      return `Empiezas con ${formatMoney(valor)}`;
+    case 'offline-cap':
+      return `Al volver cobras hasta ${formatDuration(valor)} de ventas`;
+    case 'propina-ms':
+      return `La propina dura ${formatDuration(valor)}`;
+    case 'antiguedad-inicial': {
+      const estrellasN = ANTIGUEDAD_MS.filter((ms) => valor >= ms).length;
+      return `Empleados nuevos con ${estrellasN} ${estrellasN === 1 ? 'estrella' : 'estrellas'}`;
+    }
+    case 'ventas':
+      return `Todo vende ×${formatNumber(valor)}`;
+  }
+}
 /** Chelo avisa del siguiente hito (vuelta ×2 más rápida) cuando faltan esto o menos unidades. */
 const MILESTONE_TIP_FALTAN = 5;
 
@@ -294,8 +329,11 @@ function tipFor(s: State, regaloPendiente: boolean): string | null {
   if (regaloPendiente) return 'Tu regalo del día te espera: tócalo aquí abajo.';
   const elotes = s.businesses.elotes;
   const managers = BUSINESSES.filter((d) => s.businesses[d.id]?.manager).length;
-  if (pendingRecipes(s) > 0 && heredadas(s) === 0)
-    return 'Ya puedes heredar: vuelves a empezar, pero con recetas que suben todas tus ventas.';
+  // Sin números: el consejo no cambia con cada receta y el punto de "consejo nuevo" no parpadea.
+  if (heredarVale(s))
+    return heredadas(s) === 0
+      ? 'Ya puedes heredar: vuelves a empezar, pero con recetas que suben todas tus ventas.'
+      : 'Ya juntaste buenas recetas, mijo: heredar vale la pena.';
   if (s.lifetimeEarned > 0 || s.recipes > 0) {
     if (managers === 0 && canHireManager(s, 'elotes'))
       return `En Empleados contrata a ${getDef('elotes').manager.name}; ya te alcanza.`;
@@ -365,7 +403,7 @@ export interface UI {
   fiesta(): void;
   /** La partida guardada es de una versión más nueva: se juega sin guardar hasta recargar. */
   showNewer(onReload: () => void): void;
-  confirm(kind: 'buy' | 'hire' | 'upgrade', id: string): void;
+  confirm(kind: 'buy' | 'hire' | 'upgrade' | 'recetario', id: string): void;
   celebrate(): void;
   /** `estrellas`: nombres de los empleados que ganaron estrella mientras no estabas. */
   showOffline(earned: number, elapsedMs: number, estrellas: string[]): void;
@@ -522,7 +560,10 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
   const latAlbumBadge = h('span', { class: 'lat-badge', hidden: true });
   latAlbumBadge.setAttribute('aria-hidden', 'true');
   latAlbum.disc.append(latAlbumBadge);
-  const latHeir = latBtn('Herencia', 'recipe', confirmPrestige);
+  const latHeir = latBtn('Herencia', 'recipe', () => {
+    heirPanel.toggle();
+    if (last && herenciaAbierta()) renderHerencia(last); // pintado en el acto, como en móvil
+  });
   const latHeirBadge = h('span', { class: 'lat-badge', hidden: true });
   latHeir.disc.append(latHeirBadge);
   // Cantidad: un solo botón que cicla ×1 → ×10 → Máx; render() lo sincroniza con el segmentado móvil.
@@ -878,7 +919,7 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
     // Sello de goma "Bloqueado" en diagonal sobre la estampilla, como el de "Contratado" (solo con .bloqueada).
     const sello = h('span', { class: 'sello-bloqueado' }, [h('span', { class: 'sello-goma', text: 'Bloqueado' })]);
     sello.setAttribute('aria-hidden', 'true'); // el sr-only de la pista ya lo dice
-    const card = h('div', { class: 'up-card estampilla-card' }, [logroArte(def.icono), nombre, estado, sello]);
+    const card = h('div', { class: 'up-card estampilla-card' }, [arte(def.icono), nombre, estado, sello]);
     const nuevo = h('span', { class: 'nuevo', text: 'Nuevo' });
     nuevo.setAttribute('aria-hidden', 'true'); // el sr-only del nombre ya lo dice
     // El marcador va después de la tarjeta enmascarada: el orden del árbol lo pinta encima.
@@ -1031,6 +1072,70 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
   const album = h('section', { class: 'album panel' }, [albumTitle, albumBody]);
   album.setAttribute('aria-labelledby', 'album-title');
   album.id = 'album';
+  // Álbum completo: letrero sobre las estampillas y la última frase de Chelo. render() lo muestra.
+  const albumCompletoEl = h('div', { class: 'album-completo', hidden: true }, [
+    h('span', { class: 'sello-goma', text: 'Álbum completo' }),
+    h('p', { text: `${CHELO.name}: ${CHELO.says.album}` }),
+  ]);
+  albumCompletoEl.firstElementChild?.setAttribute('aria-hidden', 'true'); // la frase ya lo dice
+  tabEls[0]!.panel.prepend(albumCompletoEl);
+
+  // Herencia: recetario de la abuela (cupones que se pagan con recetas) y, abajo, Heredar.
+  // Web: panel del lateral; móvil: el cuerpo viaja al diálogo que abre el botón de la barra.
+  let recetaLockUntil = 0;
+  let refocusAfterReceta = false;
+  /** Cupón recién completado: el sello entra con `stamp` cuando renderHerencia lo destapa. */
+  let sellarReceta: string | null = null;
+  const recetaSlots = RECETARIO.map((def) => {
+    const buy = h('button', {
+      class: 'btn primary',
+      type: 'button',
+      onclick: () => {
+        // Bloqueo corto como en Mejoras: el mismo botón pasa al siguiente nivel (más caro).
+        const now = performance.now();
+        if (now < recetaLockUntil) return;
+        recetaLockUntil = now + UPGRADE_LOCK_MS;
+        handlers.onRecetario(def.id);
+      },
+    });
+    const sello = h('span', { class: 'sello-goma', text: 'Completa' });
+    const state = h('p', { class: 'char-state', hidden: true }, [sello]);
+    const efecto = h('p', { class: 'up-effect' });
+    const puntos = def.niveles.map(() => h('span', { class: 'punto' }));
+    const nivel = h('div', { class: 'receta-nivel' }, puntos);
+    nivel.setAttribute('role', 'img');
+    const root = h('li', { class: 'up-slot' }, [
+      h('div', { class: 'up-card receta-card' }, [
+        h('div', { class: 'char-foto' }, [arte(def.icono), state]),
+        h('h3', { class: 'up-name', text: def.name }),
+        efecto,
+        nivel,
+        buy,
+      ]),
+    ]);
+    return { def, root, buy, sello, state, efecto, nivel, puntos, shownNivel: -1 };
+  });
+  const herenciaResumen = h('p', { class: 'herencia-resumen' });
+  const heredarBtn = h('button', { class: 'btn heir', type: 'button', onclick: confirmPrestige });
+  heredarBtn.id = 'heredar';
+  const herenciaBody = h('div', { class: 'herencia-body' }, [
+    herenciaResumen,
+    h(
+      'ul',
+      { class: 'up-list recetario' },
+      recetaSlots.map((r) => r.root),
+    ),
+    h('div', { class: 'herencia-heredar' }, [
+      h('p', { text: 'Le pasas el negocio a la familia: pierdes dinero, negocios, empleados y mejoras.' }),
+      heredarBtn,
+    ]),
+  ]);
+  const herenciaTitle = h('h2', { class: 'section-title', text: 'Herencia' });
+  herenciaTitle.id = 'herencia-title';
+  herenciaTitle.tabIndex = -1;
+  const herencia = h('section', { class: 'herencia panel' }, [herenciaTitle, herenciaBody]);
+  herencia.setAttribute('aria-labelledby', 'herencia-title');
+  herencia.id = 'herencia';
   // Móvil: botón en la barra inferior, junto a Chelo, que abre el Álbum en un diálogo.
   const albumBadge = h('span', { class: 'lat-badge', hidden: true });
   albumBadge.setAttribute('aria-hidden', 'true');
@@ -1039,7 +1144,8 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
     albumBadge,
   ]);
 
-  const prestigeBtn = h('button', { class: 'btn heir', type: 'button', onclick: confirmPrestige });
+  // Móvil: abre el panel Herencia (recetario + Heredar) en un diálogo; el Heredar de dentro pide confirmación.
+  const prestigeBtn = h('button', { class: 'btn heir', type: 'button', onclick: openHerencia });
   const picado = papelPicado();
   picado.addEventListener('animationend', () => picado.classList.remove('shake'));
 
@@ -1058,6 +1164,7 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
       upgrades,
       chars,
       album,
+      herencia,
       h('div', { class: 'col-main' }, [
         h(
           'ul',
@@ -1175,6 +1282,17 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
   }
   const albumAbierto = () => activePanel === albumPanel || albumDialogTitle !== null;
 
+  const heirPanel = sidePanel(herencia, latHeir.btn, herenciaTitle);
+  let heirDialogTitle: HTMLElement | null = null;
+  function openHerencia(): void {
+    if (heirDialogTitle) return;
+    heirDialogTitle = openInDialog('Herencia', herenciaBody, herenciaTitle, () => {
+      heirDialogTitle = null;
+    });
+    if (last) renderHerencia(last); // pintado en el acto: sin botones rancios durante la transición
+  }
+  const herenciaAbierta = () => activePanel === heirPanel || heirDialogTitle !== null;
+
   // Al cruzar los 900 px todo vuelve al estado en línea / cerrado: nada queda a medias.
   mq.addEventListener('change', () => {
     activePanel?.close(false);
@@ -1182,6 +1300,7 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
     guiaDialogTitle?.closest('dialog')?.close();
     albumDialogTitle?.closest('dialog')?.close();
     histDialogTitle?.closest('dialog')?.close();
+    heirDialogTitle?.closest('dialog')?.close();
   });
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape' || !activePanel || document.querySelector('dialog[open]')) return;
@@ -1203,24 +1322,29 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
     const go = h('button', {
       class: 'btn heir',
       type: 'button',
-      text: `Heredar (+${formatNumber(n)} recetas)`,
+      text: `Heredar (+${recetas(n)})`,
       onclick: () => {
         d.close();
+        // El panel o el diálogo de Herencia se cierran antes: el confeti y la frase de Chelo se ven.
+        heirPanel.close(false);
+        heirDialogTitle?.closest('dialog')?.close();
         handlers.onPrestige();
       },
     });
-    const d = dialog(
-      'Herencia',
-      [
-        h('p', {
-          text: `Le pasas el negocio a la familia: pierdes dinero, negocios, empleados y mejoras, pero ganas ${formatNumber(n)} recetas de la abuela.`,
-        }),
-        h('p', {
-          text: 'Cada receta suma +2 % a todas tus ventas, para siempre. Las recetas y los logros que ya tienes se quedan.',
-        }),
-      ],
-      [go],
-    );
+    const cuerpo = [
+      h('p', {
+        text: `Le pasas el negocio a la familia: pierdes dinero, negocios, empleados y mejoras, pero ganas ${recetas(n)} de la abuela.`,
+      }),
+      h('p', {
+        text: 'Cada receta suma +2 % a tus ventas mientras no la cocines. Recetas, recetario y logros se quedan.',
+      }),
+    ];
+    if (!heredarVale(last)) {
+      // El mismo umbral que heredarVale: HERENCIA_MIN o la mitad de las activas, lo que sea mayor.
+      const meta = Math.max(HERENCIA_MIN, Math.ceil(recetasActivas(last) / 2));
+      cuerpo.push(h('p', { text: `${CHELO.name} recomienda esperar a ${recetas(meta)} pendientes.` }));
+    }
+    const d = dialog('Herencia', cuerpo, [go]);
   }
 
   function openAjustes(): void {
@@ -1277,6 +1401,62 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
       load,
       msg,
     ]);
+  }
+
+  function renderHerencia(s: State): void {
+    const activo = document.activeElement; // antes de ocultar botones: el focus fixup lo movería a body
+    const n = pendingRecipes(s);
+    const activas = recetasActivas(s);
+    // El disco y el botón de la barra abren el panel: encendidos con algo pendiente o algo que cocinar.
+    // Siempre a la vista, deshabilitados al principio: el jugador nuevo sabe que hay más por descubrir.
+    const abre = n > 0 || s.recipes > 0;
+    const label = n > 0 ? `Herencia · +${recetas(n)}` : abre ? 'Herencia' : 'Herencia: sigue vendiendo';
+    for (const b of [prestigeBtn, latHeir.btn]) setDisabled(b, !abre);
+    setText(prestigeBtn, label);
+    setAttr(latHeir.btn, 'aria-label', label);
+    if (!abre) heirPanel.close(false);
+    setHidden(latHeirBadge, n === 0);
+    // Con miles de recetas el badge taparía el disco: tope visual; el número completo va en el aria-label.
+    setText(latHeirBadge, n > 999 ? '+999+' : `+${formatNumber(n)}`);
+    setText(heredarBtn, n > 0 ? `Heredar · +${recetas(n)}` : 'Sigue vendiendo para heredar');
+    setDisabled(heredarBtn, n === 0);
+    if (!herenciaAbierta()) return;
+    setText(
+      herenciaResumen,
+      `Tienes ${recetas(activas)} para cocinar.${n > 0 ? ` Al heredar ganas ${recetas(n)}.` : ''}`,
+    );
+    for (const slot of recetaSlots) {
+      const nivel = nivelRecetario(s, slot.def.id);
+      const siguiente = siguienteNivel(s, slot.def.id);
+      const tope = siguiente === null;
+      setText(slot.efecto, textoNivel(slot.def, tope ? nivel : nivel + 1));
+      setHidden(slot.buy, tope);
+      setHidden(slot.state, !tope);
+      if (tope && sellarReceta === slot.def.id) {
+        sellarReceta = null;
+        stamp(slot.sello);
+      }
+      if (!tope) {
+        setText(slot.buy, recetas(siguiente.costo));
+        setAttr(
+          slot.buy,
+          'aria-label',
+          `Cocinar ${slot.def.name} por ${recetas(siguiente.costo)}: ${textoNivel(slot.def, nivel + 1)}`,
+        );
+        setDisabled(slot.buy, !canBuyRecetario(s, slot.def.id));
+      }
+      if (nivel !== slot.shownNivel) {
+        slot.shownNivel = nivel;
+        slot.puntos.forEach((p, i) => p.classList.toggle('lleno', i < nivel));
+        setAttr(slot.nivel, 'aria-label', `Nivel ${nivel} de ${slot.def.niveles.length}`);
+      }
+    }
+    if (refocusAfterReceta) {
+      // El botón cocinado ahora cuesta más (o desapareció): si quedó deshabilitado, el foco va al título.
+      refocusAfterReceta = false;
+      if (recetaSlots.some((r) => r.buy === activo && (r.buy.disabled || r.buy.hidden)))
+        herenciaTitle.focus({ preventScroll: true });
+    }
   }
 
   function renderUpgrades(s: State): void {
@@ -1379,7 +1559,7 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
 
   function renderPropina(slot: CharSlot, s: State, b: BizState): void {
     const name = slot.def.manager.name;
-    const efecto = `vende ×${PROPINA_MULT} durante ${PROPINA_MS / 1000} s`;
+    const efecto = `vende ×${PROPINA_MULT} durante ${formatDuration(propinaDuracionMs(s))}`;
     slot.buy.dataset.accion = 'propina';
     setDisabled(slot.buy, false);
     const lista = propinaLista(b);
@@ -1419,6 +1599,7 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
     }
     const tiene = new Set(s.logros);
     for (const e of estampillas) if (tiene.has(e.def.id) !== e.lograda) setEstado(e, tiene.has(e.def.id));
+    setHidden(albumCompletoEl, !albumCompleto(s));
     if (!albumAbierto()) {
       if (resaltadas.size > 0) limpiarNuevas(); // cerrado con Esc o clic fuera (sin pasar por el botón)
       return;
@@ -1509,8 +1690,10 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
         setText(rateVisible, `${ipsText}/s`);
         setText(rateSr, `${ipsText} por segundo`);
       }
+      // Activas = las que dan su +2 % = las que se pueden cocinar: un solo número. El total va en la Libreta.
+      const activas = recetasActivas(s);
       setHidden(recipes, s.recipes === 0);
-      setText(recipesText, `${recetas(s.recipes)} (+${formatNumber(s.recipes * 2)}%)`);
+      setText(recipesText, `${recetas(activas)} (+${formatNumber(Math.round(activas * RECIPE_BONUS * 100))}%)`);
 
       for (const [btn, ic, canal, onName, offName] of audioBtns) {
         const on = audio[canal];
@@ -1583,15 +1766,7 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
         setHidden(c.bubble, !bubbleVisible(now, c.bubbleUntil));
       }
 
-      const n = pendingRecipes(s);
-      const heirLabel = n > 0 ? `Heredar · +${formatNumber(n)} recetas` : 'Herencia: sigue vendiendo';
-      // Siempre a la vista, deshabilitado sin recetas: el jugador nuevo sabe que hay más por descubrir.
-      for (const b of [prestigeBtn, latHeir.btn]) setDisabled(b, n === 0);
-      setText(prestigeBtn, heirLabel);
-      if (latHeir.btn.getAttribute('aria-label') !== heirLabel) latHeir.btn.setAttribute('aria-label', heirLabel);
-      setHidden(latHeirBadge, n === 0);
-      // Con miles de recetas el badge taparía el disco: tope visual; el número completo va en el aria-label.
-      setText(latHeirBadge, n > 999 ? '+999+' : `+${formatNumber(n)}`);
+      renderHerencia(s);
     },
 
     renderBars(s) {
@@ -1725,6 +1900,16 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
     },
 
     confirm(kind, id) {
+      if (kind === 'recetario') {
+        const slot = recetaSlots.find((r) => r.def.id === id);
+        if (!slot || !last) return;
+        // `last` es el estado anterior a la compra (render() corre al frame siguiente): el tope se
+        // calcula desde él, y el sello se estampa cuando renderHerencia lo destape.
+        if (nivelRecetario(last, id) + 1 >= slot.def.niveles.length) sellarReceta = id;
+        else pulse(slot.nivel);
+        if (slot.buy === document.activeElement) refocusAfterReceta = true;
+        return;
+      }
       if (kind === 'upgrade') {
         // Se anima lo que cambió de verdad: el ingreso de los negocios afectados.
         const { target } = getUpgrade(id);

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { BUSINESSES, LOGRO_BONO, UPGRADES } from './data';
 import { hireManager, newState, revenuePerCycle, type State } from './game';
-import { desbloquear, getLogro, LOGRO_IDS, LOGROS, nuevos, verLogros } from './logros';
+import { albumCompleto, desbloquear, getLogro, IMPERIO_UNIDADES, LOGRO_IDS, LOGROS, nuevos, verLogros } from './logros';
 
 const T0 = 1_700_000_000_000;
 const base = (): State => newState(T0);
@@ -13,8 +13,8 @@ const conNegocios = (count: number, manager = false, trabajadoMs = 0): State => 
 };
 
 describe('catálogo', () => {
-  it('25 logros con ids únicos, nombre y pista cortos, sin pictogramas', () => {
-    expect(LOGROS.length).toBe(25);
+  it('26 logros con ids únicos, nombre y pista cortos, sin pictogramas', () => {
+    expect(LOGROS.length).toBe(26);
     expect(LOGRO_IDS.size).toBe(LOGROS.length);
     for (const l of LOGROS) {
       expect(l.nombre.length).toBeLessThanOrEqual(22);
@@ -73,6 +73,16 @@ describe('predicados', () => {
     expect(ids({ ...base(), recipes: 50 })).toEqual(['herencia', 'recetas-10', 'recetas-50']); // recetas ⇒ ya heredó
     expect(ids({ ...base(), lifetimeEarned: 1e15 })).toEqual(['ganado-1e6', 'ganado-1e12', 'ganado-1e15']);
     expect(ids({ ...base(), lifetimeEarned: 999_999 })).toEqual([]);
+  });
+
+  it('imperio: los 8 negocios con IMPERIO_UNIDADES; el álbum está completo con todos los logros', () => {
+    expect(IMPERIO_UNIDADES).toBe(350);
+    expect(ids(conNegocios(IMPERIO_UNIDADES - 1))).not.toContain('imperio');
+    expect(ids(conNegocios(IMPERIO_UNIDADES))).toContain('imperio');
+    expect(LOGROS[LOGROS.length - 1]!.id).toBe('imperio'); // al final: el orden del Álbum no cambia para nadie
+    expect(albumCompleto(base())).toBe(false);
+    expect(albumCompleto({ ...base(), logros: LOGROS.map((l) => l.id) })).toBe(true);
+    expect(albumCompleto({ ...base(), logros: LOGROS.slice(1).map((l) => l.id) })).toBe(false);
   });
 });
 

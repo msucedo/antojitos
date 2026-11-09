@@ -3,6 +3,7 @@ import {
   AUSENCIA_MS,
   BUSINESSES,
   ESTRELLA_BONO,
+  HERENCIA_MIN,
   LOGRO_BONO,
   MILESTONES,
   OFFLINE_CAP_MS,
@@ -10,15 +11,19 @@ import {
   PROPINA_ESPERA_MS,
   PROPINA_MS,
   PROPINA_MULT,
+  RECETARIO,
   RECIPE_BONUS,
   RECIPE_DIVISOR,
   UPGRADES,
   type BusinessDef,
+  type RecetarioDef,
+  type RecetarioEfecto,
+  type RecetarioNivel,
   type UpgradeDef,
 } from './data';
 import { claveDia } from './fecha';
 
-export const SAVE_VERSION = 5;
+export const SAVE_VERSION = 6;
 
 export interface BizState {
   count: number;
@@ -36,8 +41,15 @@ export interface BizState {
   trabajadoMs: number;
 }
 
-/** Cuenta regresiva completa de una propina: el doble más la espera. */
+/** Cuenta regresiva completa de una propina sin recetario: la duración base más la espera. */
 export const PROPINA_TOTAL_MS = PROPINA_MS + PROPINA_ESPERA_MS;
+/** Tope de la cuenta regresiva con la propina más larga del recetario (`cafecito`); clamp de save.ts. */
+export const PROPINA_TOTAL_MAX_MS =
+  PROPINA_ESPERA_MS +
+  Math.max(
+    PROPINA_MS,
+    ...RECETARIO.filter((r) => r.efecto === 'propina-ms').flatMap((r) => r.niveles.map((n) => n.valor)),
+  );
 /** trabajadoMs no pasa de aquí: con la última estrella ya no cambia nada. */
 export const TRABAJADO_TOPE_MS = ANTIGUEDAD_MS[ANTIGUEDAD_MS.length - 1] ?? 0;
 
@@ -101,6 +113,8 @@ export interface State {
   racha: Racha;
   /** Recetas regaladas por la racha (ya sumadas en `recipes`); no cuentan como herencia ni como pendientes. */
   recetasRegalo: number;
+  /** Recetario de la abuela: id del cupón → nivel comprado (ausente = 0). Sobrevive la herencia. */
+  recetario: Record<string, number>;
 }
 
 export interface Racha {
@@ -142,6 +156,7 @@ export function newState(now: number): State {
     // Sin regalo el primer día: la racha arranca al volver mañana.
     racha: { dias: 0, ultimoDia: claveDia(now) },
     recetasRegalo: 0,
+    recetario: {},
   };
 }
 
@@ -268,10 +283,11 @@ function revenueWithStars(state: State, id: string, stars: number): number {
     def.baseRevenue *
       count *
       2 ** hitosVentas(def, count) *
-      (1 + RECIPE_BONUS * state.recipes) *
+      (1 + RECIPE_BONUS * recetasActivas(state)) *
       (1 + LOGRO_BONO * state.logros.length) *
       (1 + ESTRELLA_BONO * stars) *
-      upgradeMultiplier(state, id),
+      upgradeMultiplier(state, id) *
+      recetarioMultiplier(state),
     Number.MAX_VALUE,
   );
 }
@@ -366,7 +382,7 @@ export function hireManager(state: State, id: string): State {
     running: false,
     progressMs: b.running ? b.progressMs : 0,
     propinaMs: 0,
-    trabajadoMs: 0,
+    trabajadoMs: antiguedadInicialMs(state),
   });
 }
 
@@ -409,7 +425,10 @@ export function puedeDarPropina(state: State, id: string): boolean {
   return propinaLista(biz(state, id)) && state.money >= propinaCosto(state, id);
 }
 
-/** Paga la propina: ×PROPINA_MULT de ventas durante PROPINA_MS y luego la espera. Sin efecto si no se puede. */
+/**
+ * Paga la propina: ×PROPINA_MULT de ventas durante `propinaDuracionMs` y luego la espera.
+ * Sin efecto si no se puede.
+ */
 export function darPropina(state: State, id: string): State {
   if (!puedeDarPropina(state, id)) return state;
   const pagado = withStats(
@@ -418,7 +437,7 @@ export function darPropina(state: State, id: string): State {
       propinas: state.stats.propinas + 1,
     },
   );
-  return withBiz(pagado, id, { propinaMs: PROPINA_TOTAL_MS });
+  return withBiz(pagado, id, { propinaMs: propinaDuracionMs(state) + PROPINA_ESPERA_MS });
 }
 
 /**
@@ -509,7 +528,7 @@ function advanceManaged(state: State, def: BusinessDef, b: BizState, dtMs: numbe
 }
 
 /**
- * Aplica el tiempo desde `lastSeen` (tope 8 h, reloj atrasado → 0). Con `jugando` (un frame o la
+ * Aplica el tiempo desde `lastSeen` (tope `offlineCapMs`, reloj atrasado → 0). Con `jugando` (un frame o la
  * pestaña que se oculta) el tramo cuenta como tiempo jugado si es corto: una pausa del hilo sin
  * visibilitychange (laptop dormida) no suma horas.
  */
@@ -518,7 +537,7 @@ export function applyOffline(
   now: number,
   jugando = false,
 ): { state: State; earned: number; elapsedMs: number } {
-  const elapsedMs = Math.min(Math.max(now - state.lastSeen, 0), OFFLINE_CAP_MS);
+  const elapsedMs = Math.min(Math.max(now - state.lastSeen, 0), offlineCapMs(state));
   const { state: advanced, earned } = advance(state, elapsedMs);
   const jugadoMs = jugando && elapsedMs < AUSENCIA_MS ? advanced.stats.jugadoMs + elapsedMs : advanced.stats.jugadoMs;
   return { state: withStats({ ...advanced, lastSeen: now }, { jugadoMs }), earned, elapsedMs };
@@ -545,6 +564,100 @@ export function pendingRecipes(state: State): number {
 /** Recetas ganadas heredando (las de regalo no cuentan como "ya heredó"). */
 export function heredadas(state: State): number {
   return Math.max(state.recipes - state.recetasRegalo, 0);
+}
+
+/**
+ * Chelo sugiere heredar (consejo y sonido `heir`): al menos HERENCIA_MIN pendientes y al menos la
+ * mitad de las activas, como "doblar ángeles". El botón y el badge van desde 1 pendiente.
+ */
+export function heredarVale(state: State): boolean {
+  return pendingRecipes(state) >= Math.max(HERENCIA_MIN, Math.ceil(recetasActivas(state) / 2));
+}
+
+// Recetario de la abuela: mejoras permanentes pagadas con recetas. Cocinar una receta quita su
+// +2 %; `recipes` sigue siendo el total de por vida (pendientes y logros lo leen) y las gastadas
+// se derivan del recetario, así una semilla no puede desincronizarlas.
+
+export function getRecetario(id: string): RecetarioDef {
+  const def = RECETARIO.find((r) => r.id === id);
+  if (!def) throw new Error(`Cupón desconocido: ${id}`);
+  return def;
+}
+
+export function nivelRecetario(state: State, id: string): number {
+  return state.recetario[id] ?? 0;
+}
+
+/** Recetas cocinadas: la suma de los niveles comprados. */
+export function recetasGastadas(state: State): number {
+  let total = 0;
+  for (const def of RECETARIO) {
+    const nivel = nivelRecetario(state, def.id);
+    for (let i = 0; i < nivel; i++) total += def.niveles[i]?.costo ?? 0;
+  }
+  return total;
+}
+
+/** Recetas que dan su +2 % y que se pueden cocinar. */
+export function recetasActivas(state: State): number {
+  return Math.max(state.recipes - recetasGastadas(state), 0);
+}
+
+/** Siguiente nivel del cupón, o null al tope. */
+export function siguienteNivel(state: State, id: string): RecetarioNivel | null {
+  return getRecetario(id).niveles[nivelRecetario(state, id)] ?? null;
+}
+
+export function canBuyRecetario(state: State, id: string): boolean {
+  const nivel = siguienteNivel(state, id);
+  return nivel !== null && recetasActivas(state) >= nivel.costo;
+}
+
+/** Cocina el siguiente nivel del cupón. Sin efecto si no alcanza o está al tope. El arranque se nota en el acto. */
+export function buyRecetario(state: State, id: string): State {
+  if (!canBuyRecetario(state, id)) return state;
+  return arranque({ ...state, recetario: { ...state.recetario, [id]: nivelRecetario(state, id) + 1 } });
+}
+
+/** Valor del nivel comprado del cupón con ese efecto, o `base` sin cupón. */
+function valorRecetario(state: State, efecto: RecetarioEfecto, base: number): number {
+  const def = RECETARIO.find((r) => r.efecto === efecto);
+  if (!def) return base;
+  return def.niveles[nivelRecetario(state, def.id) - 1]?.valor ?? base;
+}
+
+/** Tope de ausencia que se cobra (`olla`). */
+export function offlineCapMs(state: State): number {
+  return valorRecetario(state, 'offline-cap', OFFLINE_CAP_MS);
+}
+
+/** Cuánto dura la propina (`cafecito`). */
+export function propinaDuracionMs(state: State): number {
+  return valorRecetario(state, 'propina-ms', PROPINA_MS);
+}
+
+/** Antigüedad con la que arranca un empleado recién contratado (`molcajete`). */
+export function antiguedadInicialMs(state: State): number {
+  return valorRecetario(state, 'antiguedad-inicial', 0);
+}
+
+/** Multiplicador global de ventas del recetario (`caldo`). */
+export function recetarioMultiplier(state: State): number {
+  return valorRecetario(state, 'ventas', 1);
+}
+
+/**
+ * Arranque según el recetario: elotes (`canasta`) y dinero (`guardadito`) suben hasta el valor del
+ * cupón y nunca bajan. Lo aplica la herencia y también cocinar, así el cupón recién comprado se nota
+ * en el acto y no hasta la siguiente partida. Los hitos de velocidad cruzados parten el progreso, como en `buy`.
+ */
+function arranque(state: State): State {
+  const id = BUSINESSES[0]!.id;
+  const b = biz(state, id);
+  const count = Math.max(b.count, valorRecetario(state, 'arranque-elotes', 0));
+  const crossed = hitosVelocidad(getDef(id), count) - hitosVelocidad(getDef(id), b.count);
+  const money = Math.max(state.money, valorRecetario(state, 'arranque-dinero', 0));
+  return withBiz({ ...state, money }, id, { count, progressMs: b.progressMs / 2 ** crossed });
 }
 
 export function getUpgrade(id: string): UpgradeDef {
@@ -584,11 +697,11 @@ export function nextUpgrades(state: State, n: number): UpgradeDef[] {
     .slice(0, n);
 }
 
-/** Herencia: reinicia la partida y suma las recetas pendientes. Contadores y logros se quedan. */
+/** Herencia: reinicia la partida y suma las recetas pendientes. Contadores, logros y recetario se quedan. */
 export function prestige(state: State, now: number): State {
   const gained = pendingRecipes(state);
   if (gained === 0) return state;
-  return {
+  return arranque({
     ...newState(now),
     lifetimeEarned: state.lifetimeEarned,
     recipes: state.recipes + gained,
@@ -597,5 +710,6 @@ export function prestige(state: State, now: number): State {
     logrosVistos: state.logrosVistos,
     racha: state.racha,
     recetasRegalo: state.recetasRegalo,
-  };
+    recetario: state.recetario,
+  });
 }

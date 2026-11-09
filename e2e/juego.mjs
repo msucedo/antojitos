@@ -63,6 +63,36 @@ after(async () => {
   await new Promise((r) => server?.close(r));
 });
 
+/** Los 26 logros, en el orden del catálogo (src/logros.ts). */
+const LOGRO_IDS = [
+  'venta',
+  'clics-100',
+  'clics-1000',
+  'negocios-8',
+  'unidades-25',
+  'unidades-200',
+  'todos-100',
+  'empleado',
+  'empleados-8',
+  'estrella',
+  'estrellas-3',
+  'todos-estrella',
+  'propina',
+  'propinas-10',
+  'mejoras-todas',
+  'herencia',
+  'herencias-5',
+  'recetas-10',
+  'recetas-50',
+  'ganado-1e6',
+  'ganado-1e12',
+  'ganado-1e15',
+  'jugado-1h',
+  'jugado-10h',
+  'racha-7',
+  'imperio',
+];
+
 /** Partida v3 con lo mínimo; `negocios` sobrescribe por id. */
 function partida(extra = {}, negocios = {}) {
   const vacio = { count: 0, progressMs: 0, running: false, manager: false, propinaMs: 0, trabajadoMs: 0 };
@@ -280,13 +310,13 @@ test('logro: la primera venta a mano lo desbloquea y el badge del Álbum se apag
   await albumBtn.click();
   await page.locator('#album .estampilla.nueva').waitFor(); // el marcado va en un rAF tras abrir
   assert.equal(await page.locator('#album .estampilla:not(.bloqueada)').count(), 1);
-  assert.equal(await page.locator('#album .estampilla').count(), 25);
+  assert.equal(await page.locator('#album .estampilla').count(), 26);
   assert.equal(await albumBtn.getAttribute('aria-label'), 'Álbum');
   // Abre en Logros con el recién desbloqueado marcado como nuevo; la Libreta se escribe aunque esté oculta.
   assert.equal(await page.locator('#album [role="tab"][aria-selected="true"]').textContent(), 'Logros');
   assert.equal(await page.locator('#album .estampilla.nueva').count(), 1);
   assert.match(await page.locator('#album .estampilla.nueva .up-name').textContent(), /Primer elote/);
-  assert.match(await page.locator('#album .libreta').textContent(), /Logros1 de 25/);
+  assert.match(await page.locator('#album .libreta').textContent(), /Logros1 de 26/);
   // Teclado: → activa Libreta, ← vuelve.
   await page.locator('#album [role="tab"][aria-selected="true"]').focus();
   await page.keyboard.press('ArrowRight');
@@ -329,15 +359,15 @@ test('móvil: el Álbum abre en diálogo desde la barra inferior y el cuerpo vue
   await page.locator('.album-btn').tap();
   const dlg = page.locator('dialog[open]');
   await dlg.waitFor();
-  assert.equal(await dlg.locator('.estampilla').count(), 25);
-  assert.equal(await dlg.locator('.libreta dt').count(), 16);
+  assert.equal(await dlg.locator('.estampilla').count(), 26);
+  assert.equal(await dlg.locator('.libreta dt').count(), 17);
   assert.equal(await dlg.locator('.libreta').isHidden(), true); // abre en Logros
   await dlg.getByRole('tab', { name: 'Libreta' }).tap();
   assert.equal(await dlg.locator('.estampillas').isHidden(), true);
   assert.equal(await dlg.locator('.libreta').isVisible(), true);
   await page.keyboard.press('Escape');
   await page.waitForTimeout(300);
-  assert.equal(await page.locator('#album .estampilla').count(), 25);
+  assert.equal(await page.locator('#album .estampilla').count(), 26);
   assert.deepEqual(errores, []);
   await context.close();
 });
@@ -419,10 +449,17 @@ test('racha: el día 7 regala una receta sin heredar y no gasta las pendientes',
   assert.equal(guardado.recipes, 1);
   assert.equal(guardado.recetasRegalo, 1);
   assert.equal(guardado.racha.dias, 7);
-  // Ni pendientes ni "ya heredó": Herencia a la vista pero apagada (una receta de regalo no la enciende).
+  // Sin pendientes no se hereda, pero la receta regalada ya se puede cocinar: Herencia abre el panel.
   const herencia = page.locator('.lateral button[aria-label^="Here"]');
   assert.equal(await herencia.count(), 1);
-  assert.equal(await herencia.isDisabled(), true);
+  assert.equal(await herencia.isDisabled(), false);
+  assert.equal(await herencia.getAttribute('aria-label'), 'Herencia');
+  await herencia.click();
+  await page.waitForTimeout(400);
+  assert.equal(await page.locator('#herencia.open .receta-card').count(), 6);
+  assert.equal(await page.locator('#herencia button[aria-label^="Cocinar Canasta"]').isDisabled(), false);
+  assert.equal(await page.locator('#heredar').isDisabled(), true);
+  await sinPaneles(page);
   await page.waitForFunction(
     () => /Siete seguidos/.test(document.querySelector('p[aria-live]')?.textContent ?? ''),
     null,
@@ -510,6 +547,90 @@ test('ajustes: Sonido conmuta y un código exportado se carga desde el diálogo'
   await page.waitForFunction(() => document.querySelector('.money')?.textContent === '$2,000');
   assert.deepEqual(errores, []);
   await context.close();
+});
+
+test('herencia (web): cocinar una receta gasta su +2 %, se guarda, y Heredar pide confirmación y arranca con la canasta', async () => {
+  // 3 recetas de por vida, 2 pendientes (lifetime 1e12 ⇒ 5 ganadas en total).
+  const semilla = partida(
+    { version: 6, money: 10, lifetimeEarned: 1e12, runEarned: 1e12, recipes: 3 },
+    { elotes: { count: 1 } },
+  );
+  const { context, page, errores } = await abrir({ semilla });
+  await sinPaneles(page);
+  assert.match(await page.locator('.recipes').textContent(), /3 recetas \(\+6%\)/);
+  const herencia = page.locator('.lateral button[aria-label^="Herencia"]');
+  assert.equal(await herencia.getAttribute('aria-label'), 'Herencia · +2 recetas');
+  await herencia.click();
+  await page.waitForTimeout(400);
+  assert.match(await page.locator('.herencia-resumen').textContent(), /3 recetas para cocinar.*ganas 2 recetas/);
+  await page.locator('#herencia button[aria-label^="Cocinar Canasta"]').click();
+  await page.waitForTimeout(300);
+  assert.match(await page.locator('.recipes').textContent(), /2 recetas \(\+4%\)/);
+  assert.match(await page.locator('#app .card').first().locator('.count').textContent(), /25/); // la canasta se nota ya
+  const guardado = await page.evaluate((k) => JSON.parse(localStorage.getItem(k) ?? '{}'), SAVE_KEY);
+  assert.equal(guardado.recetario.canasta, 1);
+  assert.equal(guardado.recipes, 3);
+  // Heredar: confirmación aparte (destructivo) y la línea de Chelo porque 2 pendientes no llegan a 5.
+  await page.locator('#heredar').click();
+  const dlg = page.locator('dialog[open]');
+  await dlg.waitFor();
+  assert.match(await dlg.locator('h2').textContent(), /Herencia/);
+  assert.match(await dlg.textContent(), /recomienda esperar a 5 recetas/);
+  await dlg.getByRole('button', { name: 'Heredar (+2 recetas)' }).click();
+  await page.waitForTimeout(400);
+  assert.equal(await page.locator('dialog[open]').count(), 0);
+  assert.equal(await page.locator('#herencia.open').count(), 0);
+  assert.match(await page.locator('.recipes').textContent(), /4 recetas \(\+8%\)/); // 5 de por vida − 1 cocinada
+  assert.match(await page.locator('#app .card').first().locator('.count').textContent(), /25/);
+  assert.deepEqual(errores, []);
+  await context.close();
+});
+
+test('móvil: Herencia abre en diálogo desde la barra inferior y el cuerpo vuelve al cerrarlo', async () => {
+  const semilla = partida(
+    { version: 6, money: 10, lifetimeEarned: 10, runEarned: 10, recipes: 1 },
+    { elotes: { count: 1 } },
+  );
+  const { context, page, errores } = await abrir({ semilla, movil: true });
+  await sinPaneles(page);
+  const heir = page.locator('.bottom .btn.heir');
+  assert.equal(await heir.textContent(), 'Herencia');
+  await heir.click();
+  const dlg = page.locator('dialog[open]');
+  await dlg.waitFor();
+  assert.match(await dlg.locator('h2').textContent(), /Herencia/);
+  assert.equal(await dlg.locator('.receta-card').count(), 6);
+  assert.equal(await dlg.locator('#heredar').isDisabled(), true);
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(300);
+  assert.equal(await page.locator('dialog[open]').count(), 0);
+  assert.equal(await page.locator('#herencia .receta-card').count(), 6);
+  assert.deepEqual(errores, []);
+  await context.close();
+});
+
+test('álbum completo: con todos los logros sale el letrero', async () => {
+  const { context, page } = await abrir({
+    semilla: partida({ version: 6, lifetimeEarned: 1 }, { elotes: { count: 1 } }),
+  });
+  await sinPaneles(page);
+  const ids = await page.evaluate(() => [...document.querySelectorAll('.estampilla .up-name')].length);
+  assert.equal(ids, 26);
+  await context.close();
+  // Segunda carga con los 26 ids: el letrero se ve al abrir el Álbum.
+  const todos = partida(
+    { version: 6, lifetimeEarned: 1, logros: LOGRO_IDS, logrosVistos: 26 },
+    { elotes: { count: 1 } },
+  );
+  const otra = await abrir({ semilla: todos });
+  await sinPaneles(otra.page);
+  assert.equal(await otra.page.locator('.album-completo').isVisible(), false);
+  await otra.page.locator('.lateral button[aria-label^="Álbum"]').click();
+  await otra.page.waitForTimeout(400);
+  assert.equal(await otra.page.locator('#album.open .album-completo').isVisible(), true);
+  assert.match(await otra.page.locator('.album-completo').textContent(), /Álbum completo.*quedó completo/);
+  assert.deepEqual(otra.errores, []);
+  await otra.context.close();
 });
 
 test('guardado corrupto: aviso y copia ilegible conservada', async () => {

@@ -13,6 +13,8 @@ import {
   AUSENCIA_MS,
   LOGRO_BONO,
   MILESTONES,
+  HERENCIA_MIN,
+  RECETARIO,
 } from './data';
 import {
   applyOffline,
@@ -55,6 +57,19 @@ import {
   tick,
   TRABAJADO_TOPE_MS,
   ventasPorSegundo,
+  antiguedadInicialMs,
+  buyRecetario,
+  canBuyRecetario,
+  getRecetario,
+  heredarVale,
+  nivelRecetario,
+  offlineCapMs,
+  propinaDuracionMs,
+  PROPINA_TOTAL_MAX_MS,
+  recetarioMultiplier,
+  recetasActivas,
+  recetasGastadas,
+  siguienteNivel,
   type State,
 } from './game';
 
@@ -231,7 +246,7 @@ describe('hitos 300 y 400 (mixtos)', () => {
   });
 
   it('los cuatro primeros parten la vuelta en todos; después, solo mientras el negocio barre', () => {
-    expect(MILESTONES).toEqual([25, 50, 100, 200, 300, 400]);
+    expect(MILESTONES).toEqual([25, 50, 100, 200, 300, 400, 500]);
     for (const d of BUSINESSES) for (let i = 0; i < 4; i++) expect(hitoEfecto(d, i)).toBe('velocidad');
     // Rápidos (ya en barra fija): ventas ×2.
     for (const id of ['elotes', 'aguas', 'tacos', 'tortas']) {
@@ -249,6 +264,15 @@ describe('hitos 300 y 400 (mixtos)', () => {
     expect(cicloMs(def('panaderia'), 400)).toBe(750);
     expect(cicloMs(def('franquicia'), 400)).toBe(1500);
     expect(cicloMs(def('cadena'), 400)).toBe(3000);
+    // Hito 500 (índice 6): ventas en los que ya barren; velocidad en franquicia (750 ms) y cadena (1.5 s).
+    for (const id of ['elotes', 'aguas', 'tacos', 'tortas', 'fonda', 'panaderia']) {
+      expect(hitoEfecto(def(id), 6)).toBe('ventas');
+      expect(cicloMs(def(id), 500)).toBe(cicloMs(def(id), 400));
+    }
+    expect(hitoEfecto(def('franquicia'), 6)).toBe('velocidad');
+    expect(cicloMs(def('franquicia'), 500)).toBe(750);
+    expect(hitoEfecto(def('cadena'), 6)).toBe('velocidad');
+    expect(cicloMs(def('cadena'), 500)).toBe(1500);
   });
 
   it('un hito de ventas dobla el ingreso por vuelta y no parte la vuelta ni la barra', () => {
@@ -294,7 +318,9 @@ describe('hitos 300 y 400 (mixtos)', () => {
     expect(nextMilestone(elotes, 10)).toEqual({ count: 25, efecto: 'velocidad' });
     expect(nextMilestone(elotes, 250)).toEqual({ count: 300, efecto: 'ventas' });
     expect(nextMilestone(def('fonda'), 250)).toEqual({ count: 300, efecto: 'velocidad' });
-    expect(nextMilestone(elotes, 400)).toBeNull();
+    expect(nextMilestone(elotes, 400)).toEqual({ count: 500, efecto: 'ventas' });
+    expect(nextMilestone(def('cadena'), 400)).toEqual({ count: 500, efecto: 'velocidad' });
+    expect(nextMilestone(elotes, 500)).toBeNull();
   });
 });
 
@@ -698,5 +724,134 @@ describe('propina y antigüedad', () => {
     const heredado = prestige({ ...viejo, lifetimeEarned: RECIPE_DIVISOR * 10 }, T0);
     expect(b(heredado)).toEqual(emptyBiz(1));
     expect(PROPINA_TOTAL_MS).toBe(PROPINA_MS + PROPINA_ESPERA_MS);
+  });
+});
+
+describe('recetario de la abuela', () => {
+  const conRecetas = (recipes: number, recetario: Record<string, number> = {}): State => ({
+    ...newState(T0),
+    recipes,
+    recetario,
+  });
+
+  it('el catálogo tiene ids únicos, un cupón por efecto y niveles de costo creciente', () => {
+    expect(new Set(RECETARIO.map((r) => r.id)).size).toBe(RECETARIO.length);
+    expect(new Set(RECETARIO.map((r) => r.efecto)).size).toBe(RECETARIO.length);
+    for (const r of RECETARIO) {
+      expect(r.niveles.length).toBeGreaterThan(0);
+      for (let i = 1; i < r.niveles.length; i++) expect(r.niveles[i]!.costo).toBeGreaterThan(r.niveles[i - 1]!.costo);
+    }
+    expect(RECETARIO.flatMap((r) => r.niveles).reduce((a, n) => a + n.costo, 0)).toBe(88);
+  });
+
+  it('las gastadas se derivan del recetario y solo las activas suben el ingreso', () => {
+    expect(recetasGastadas(conRecetas(10))).toBe(0);
+    expect(recetasGastadas(conRecetas(10, { canasta: 2, guardadito: 1 }))).toBe(1 + 2 + 1);
+    expect(recetasActivas(conRecetas(10, { canasta: 2, guardadito: 1 }))).toBe(6);
+    expect(revenuePerCycle(conRecetas(10, { canasta: 2, guardadito: 1 }), 'elotes')).toBeCloseTo(1.12);
+    // Un recetario que cuesta más que las recetas (semilla a mano) no regala bono.
+    expect(recetasActivas(conRecetas(1, { caldo: 1 }))).toBe(0);
+    expect(revenuePerCycle(conRecetas(1, { caldo: 1 }), 'elotes')).toBeCloseTo(2); // ×2 del caldo, +0 % de recetas
+  });
+
+  it('cocinar: solo con recetas activas suficientes, nivel a nivel, y al tope ya no hay siguiente', () => {
+    const s = conRecetas(3);
+    expect(siguienteNivel(s, 'canasta')).toEqual({ costo: 1, valor: 25 });
+    expect(canBuyRecetario(s, 'caldo')).toBe(false);
+    expect(buyRecetario(s, 'caldo')).toBe(s);
+    const n1 = buyRecetario(s, 'canasta');
+    expect(nivelRecetario(n1, 'canasta')).toBe(1);
+    expect(recetasActivas(n1)).toBe(2);
+    const n2 = buyRecetario(n1, 'canasta');
+    expect(nivelRecetario(n2, 'canasta')).toBe(2);
+    expect(recetasActivas(n2)).toBe(0);
+    expect(canBuyRecetario(n2, 'canasta')).toBe(false);
+    const tope = buyRecetario(conRecetas(6, { canasta: 2 }), 'canasta');
+    expect(nivelRecetario(tope, 'canasta')).toBe(3);
+    expect(siguienteNivel(tope, 'canasta')).toBeNull();
+    const rico = { ...tope, recipes: 99 };
+    expect(buyRecetario(rico, 'canasta')).toBe(rico);
+    expect(() => getRecetario('nada')).toThrow();
+  });
+
+  it('olla sube el tope de ausencia; sin cupón sigue en 8 h', () => {
+    const managed = { ...hireManager(withMoney(elotes.manager.cost), 'elotes'), lastSeen: T0 };
+    expect(offlineCapMs(managed)).toBe(OFFLINE_CAP_MS);
+    expect(applyOffline(managed, T0 + 10 * 3_600_000).elapsedMs).toBe(OFFLINE_CAP_MS);
+    const conOlla = { ...managed, recipes: 2, recetario: { olla: 1 } };
+    expect(offlineCapMs(conOlla)).toBe(12 * 3_600_000);
+    expect(applyOffline(conOlla, T0 + 10 * 3_600_000).elapsedMs).toBe(10 * 3_600_000);
+    expect(offlineCapMs({ ...conOlla, recetario: { olla: 2 } })).toBe(24 * 3_600_000);
+  });
+
+  it('cafecito alarga la propina y el tope de la cuenta regresiva lo cubre', () => {
+    const base = hireManager(withMoney(elotes.manager.cost + 1_000), 'elotes');
+    expect(propinaDuracionMs(base)).toBe(PROPINA_MS);
+    expect(darPropina(base, 'elotes').businesses.elotes?.propinaMs).toBe(PROPINA_TOTAL_MS);
+    const conCafe = { ...base, recipes: 1, recetario: { cafecito: 1 } };
+    expect(propinaDuracionMs(conCafe)).toBe(45_000);
+    expect(darPropina(conCafe, 'elotes').businesses.elotes?.propinaMs).toBe(45_000 + PROPINA_ESPERA_MS);
+    expect(PROPINA_TOTAL_MAX_MS).toBe(90_000 + PROPINA_ESPERA_MS);
+    expect(PROPINA_TOTAL_MAX_MS).toBeGreaterThanOrEqual(PROPINA_TOTAL_MS);
+  });
+
+  it('molcajete: los empleados nuevos arrancan con antigüedad', () => {
+    const s = { ...withMoney(elotes.manager.cost), recipes: 2, recetario: { molcajete: 1 } };
+    expect(antiguedadInicialMs(newState(T0))).toBe(0);
+    expect(antiguedadInicialMs(s)).toBe(ANTIGUEDAD_MS[0]);
+    const b = hireManager(s, 'elotes').businesses.elotes!;
+    expect(b.trabajadoMs).toBe(ANTIGUEDAD_MS[0]);
+    expect(estrellas(b)).toBe(1);
+  });
+
+  it('caldo multiplica todas las ventas y sobrevive la herencia; la herencia conserva el recetario y arranca con él', () => {
+    const earned = RECIPE_DIVISOR * 25 ** 2; // 25 recetas ganadas en total
+    const s: State = {
+      ...withMoney(earned),
+      lifetimeEarned: earned,
+      runEarned: earned,
+      recipes: 20,
+      recetario: { canasta: 1, guardadito: 1, caldo: 1 },
+    };
+    expect(recetarioMultiplier(s)).toBe(2);
+    expect(revenuePerCycle(s, 'elotes')).toBeCloseTo(2 * (1 + 0.02 * (20 - 17)));
+    const p = prestige(s, T0 + 1);
+    expect(p.recetario).toEqual(s.recetario);
+    expect(p.recipes).toBe(25 - 20 + 20); // 25 ganadas en total − 20 que ya tenía = 5 nuevas
+    expect(p.money).toBe(500);
+    expect(p.businesses.elotes?.count).toBe(25);
+    expect(p.businesses.elotes?.manager).toBe(false);
+    expect(recetarioMultiplier(p)).toBe(2);
+    expect(newState(T0).recetario).toEqual({});
+  });
+
+  it('canasta y guardadito se notan al cocinar: suben hasta el valor, nunca bajan, y parten el progreso como buy', () => {
+    const pobre = startCycle({ ...conRecetas(3), businesses: { ...newState(T0).businesses } }, 'elotes');
+    pobre.businesses.elotes = { ...pobre.businesses.elotes!, count: 10, progressMs: 400 };
+    const con25 = buyRecetario(pobre, 'canasta');
+    expect(con25.businesses.elotes?.count).toBe(25);
+    expect(con25.businesses.elotes?.progressMs).toBe(200); // cruzó el hito 25
+    expect(con25.businesses.elotes?.running).toBe(true);
+    expect(buyRecetario(con25, 'guardadito').money).toBe(500);
+    const rico = { ...conRecetas(3), money: 1e6 };
+    rico.businesses.elotes = { ...rico.businesses.elotes!, count: 300 };
+    const sigueRico = buyRecetario(buyRecetario(rico, 'canasta'), 'guardadito');
+    expect(sigueRico.businesses.elotes?.count).toBe(300);
+    expect(sigueRico.money).toBe(1e6);
+  });
+
+  it('heredarVale: al menos HERENCIA_MIN pendientes y al menos la mitad de las activas', () => {
+    const con = (pendientes: number, activas: number): State => ({
+      ...newState(T0),
+      recipes: activas,
+      lifetimeEarned: RECIPE_DIVISOR * (pendientes + activas) ** 2,
+    });
+    expect(HERENCIA_MIN).toBe(5);
+    expect(heredarVale(con(4, 0))).toBe(false);
+    expect(heredarVale(con(5, 0))).toBe(true);
+    expect(heredarVale(con(20, 60))).toBe(false);
+    expect(heredarVale(con(30, 60))).toBe(true);
+    expect(heredarVale(con(5, 9))).toBe(true);
+    expect(heredarVale(con(5, 11))).toBe(false);
   });
 });

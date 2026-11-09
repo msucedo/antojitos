@@ -11,8 +11,12 @@ import {
   hireManager,
   hitosCruzados,
   milestonesReached,
-  pendingRecipes,
   prestige,
+  buyRecetario,
+  getRecetario,
+  heredarVale,
+  propinaDuracionMs,
+  recetasActivas,
   revenuePerCycle,
   startCycle,
   type BuyMode,
@@ -30,17 +34,16 @@ import {
   ESTRELLA_BONO,
   fraseDe,
   LOGRO_BONO,
-  PROPINA_MS,
   PROPINA_MULT,
   type BusinessDef,
 } from './data';
 import { createAudio, loadPrefs, savePrefs, type Sound } from './audio';
-import { desbloquear, nuevos, verLogros } from './logros';
+import { albumCompleto, desbloquear, nuevos, verLogros } from './logros';
 import { cobrar, diaSiguiente, estadoRacha, regalo } from './racha';
 import { claveDia } from './fecha';
 import { backup, exportCrudo, exportSave, importSave, load, save, type KV } from './save';
-import { createUI, showLocked, type UI } from './ui';
-import { formatMoney, recetas } from './format';
+import { createUI, showLocked, textoNivel, type UI } from './ui';
+import { formatDuration, formatMoney, recetas } from './format';
 
 const AUTOSAVE_MS = 5_000;
 const BACKUP_MS = 60_000;
@@ -138,7 +141,7 @@ function start(root: HTMLElement): void {
       audio.play('upgrade');
       ui.tipped(id);
       ui.announce(
-        `Propina de ${formatMoney(costo)} a ${getDef(id).manager.name}: vende ×${PROPINA_MULT} durante ${PROPINA_MS / 1000} s.`,
+        `Propina de ${formatMoney(costo)} a ${getDef(id).manager.name}: vende ×${PROPINA_MULT} durante ${formatDuration(propinaDuracionMs(state))}.`,
       );
     },
     onUpgrade: (id) => {
@@ -153,6 +156,19 @@ function start(root: HTMLElement): void {
         ui.cheloSays(kind);
         ui.announce(`Compraste ${name}. ${CHELO.says[kind]}`);
       }
+    },
+    onRecetario: (id) => {
+      const next = buyRecetario(state, id);
+      if (next === state) return;
+      set(next);
+      persist();
+      audio.play('upgrade');
+      ui.confirm('recetario', id);
+      ui.cheloSays('recetario');
+      const def = getRecetario(id);
+      ui.announce(
+        `Cocinaste ${def.name}: ${textoNivel(def, next.recetario[id] ?? 1)}. Te quedan ${recetas(recetasActivas(next))} para cocinar.`,
+      );
     },
     onToggleSound: () => {
       const on = !audio.prefs().sound;
@@ -188,7 +204,7 @@ function start(root: HTMLElement): void {
       audio.play('prestige');
       ui.celebrate();
       ui.cheloSays('prestige');
-      ui.announce(`Heredaste. Ahora tienes ${recetas(next.recipes)}. ${CHELO.says.prestige}`);
+      ui.announce(`Heredaste. Tienes ${recetas(recetasActivas(next))} para cocinar. ${CHELO.says.prestige}`);
     },
     onImport: (text) => {
       if (soloLectura) return 'bloqueado'; // no se guardaría: al recargar volvería la partida más nueva
@@ -208,15 +224,17 @@ function start(root: HTMLElement): void {
       // Lo cobrado se calcula aquí (estado del clic); null si hoy ya se cobró (doble clic, dos botones).
       const r = cobrar(state, Date.now(), mostradoEn);
       if (!r) return;
-      const habiaPendientes = pendingRecipes(state) > 0;
+      const valia = heredarVale(state);
       set(r.state);
       persist(); // cerrar antes del autosave no debe perder el regalo
-      // El dinero del regalo puede cruzar el umbral de receta: mismo ta-dá que en catchUp.
-      if (!habiaPendientes && pendingRecipes(state) > 0) audio.play('heir');
+      // El dinero del regalo puede cruzar el umbral en que heredar vale la pena: mismo ta-dá que en catchUp.
+      if (!valia && heredarVale(state)) audio.play('heir');
       if (r.regalo.tipo === 'receta') {
         audio.play('heir');
         ui.fiesta();
-        ui.announce(`Día ${r.dia} de racha: receta de la abuela de regalo. Ahora tienes ${recetas(r.state.recipes)}.`);
+        ui.announce(
+          `Día ${r.dia} de racha: receta de la abuela de regalo. Tienes ${recetas(recetasActivas(r.state))} para cocinar.`,
+        );
       } else {
         audio.play('welcome');
         ui.announce(`Día ${r.dia} de racha: recibiste ${formatMoney(r.regalo.monto)}.`);
@@ -309,8 +327,8 @@ function start(root: HTMLElement): void {
       ui.announce(textos.join(' '));
       audio.play('milestone');
     }
-    // Primera receta disponible en esta partida: un guardado que ya la traía no suena al cargar.
-    if (pendingRecipes(before) === 0 && pendingRecipes(state) > 0) audio.play('heir');
+    // Heredar empieza a valer la pena (HERENCIA_MIN pendientes): un guardado que ya lo traía no suena al cargar.
+    if (!heredarVale(before) && heredarVale(state)) audio.play('heir');
   };
   catchUp(true);
 
@@ -330,7 +348,8 @@ function start(root: HTMLElement): void {
     ui.logros(n, logrosSilencio);
     if (!logrosSilencio) {
       audio.play('logro');
-      if (primero) ui.cheloSays('logro');
+      if (albumCompleto(state)) ui.cheloSays('album');
+      else if (primero) ui.cheloSays('logro');
     }
     const pct = Math.round(n.length * LOGRO_BONO * 100);
     const nombres = n.map((l) => l.nombre);

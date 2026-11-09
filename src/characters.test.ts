@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { PORTRAITS } from './characters';
-import { BUSINESSES, CHELO, fraseDe, MILESTONES, type ManagerDef } from './data';
-import { bubbleVisible } from './ui';
+import { BUSINESSES, CHELO, fraseDe, MILESTONES, OFFLINE_CAP_MS, RECETARIO, type ManagerDef } from './data';
+import { formatDuration } from './format';
+import { bubbleVisible, textoNivel } from './ui';
 
 const MAX_LEN = 70;
 const PICTOGRAM = /\p{Extended_Pictographic}/u;
@@ -22,7 +23,7 @@ describe('personajes', () => {
 
   it('las frases son cortas, sin pictogramas y sin tratamiento de género', () => {
     const lines = [...managers.flatMap(frases), ...Object.values(CHELO.says)];
-    expect(lines.length).toBe(BUSINESSES.length * (3 + MILESTONES.length) + 8);
+    expect(lines.length).toBe(BUSINESSES.length * (3 + MILESTONES.length) + 10);
     for (const line of lines) {
       expect(line.trim().length).toBeGreaterThan(0);
       expect(line.length).toBeLessThanOrEqual(MAX_LEN);
@@ -96,6 +97,16 @@ describe('retratos raster', () => {
     expect(at(20) & 0x10).toBeTruthy();
     expect(1 + (at(24) | (at(25) << 8) | (at(26) << 16))).toBe(240);
     expect(1 + (at(27) | (at(28) << 8) | (at(29) << 16))).toBe(240);
+  });
+});
+
+describe('cupones del recetario', () => {
+  it('la Olla dice qué se cobra al volver, y Chelo dice el tope base en la pregunta del empleado', () => {
+    const olla = RECETARIO.find((d) => d.id === 'olla')!;
+    expect(textoNivel(olla, 1)).toBe('Al volver cobras hasta 12 h de ventas');
+    expect(textoNivel(olla, 2)).toBe('Al volver cobras hasta 24 h de ventas');
+    const empleado = CHELO.faq.find((f) => f.q === '¿Qué hace un empleado?');
+    expect(empleado && 'a' in empleado && empleado.a).toContain(`hasta ${formatDuration(OFFLINE_CAP_MS)}`);
   });
 });
 

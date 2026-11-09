@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { RACHA_MIN_POR_DIA } from './data';
+import { RACHA_MIN_POR_DIA, RECIPE_DIVISOR } from './data';
 import { claveDia, diaVecino } from './fecha';
 import { firstHireReady, heredadas, hireManager, newState, pendingRecipes, prestige, type State } from './game';
 import { getLogro, nuevos } from './logros';
@@ -144,7 +144,7 @@ describe('cobrar', () => {
   it('racha rota vuelve al día 1; la herencia conserva racha y recetas de regalo', () => {
     const r = cobrar(conRacha(9, '2026-11-01'), HOY);
     expect(r?.dia).toBe(1);
-    const s = { ...r!.state, lifetimeEarned: 4e12, recetasRegalo: 1, recipes: 1 };
+    const s = { ...r!.state, lifetimeEarned: 4 * RECIPE_DIVISOR, recetasRegalo: 1, recipes: 1 };
     expect(pendingRecipes(s)).toBe(2); // 2 ganadas + 1 regalo − 1 que tiene
     const p = prestige(s, HOY);
     expect(p.racha).toEqual(s.racha);

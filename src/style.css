@@ -653,6 +653,69 @@ p {
   display: none;
 }
 
+/* Herencia: recetario y Heredar. Misma mecánica: cuerpo al diálogo en móvil, panel en web. */
+.herencia {
+  display: none;
+}
+
+.herencia-resumen {
+  margin: 0 0 10px;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+/* Niveles del cupón: un punto por nivel, lleno al comprarlo (aria-label dice "Nivel 1 de 3"). */
+.receta-nivel {
+  display: flex;
+  gap: 5px;
+  justify-content: center;
+}
+
+.receta-nivel .punto {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--velo-tinta);
+}
+
+.receta-nivel .punto.lleno {
+  background: var(--primary);
+}
+
+/* Heredar al pie del cuerpo; en el panel web se pega abajo (ver @media). */
+.herencia-heredar {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 2px solid var(--border);
+}
+
+.herencia-heredar p {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.herencia .btn.heir {
+  width: 100%;
+}
+
+/* Álbum completo: letrero sobre las estampillas. El sello pide --papel, que solo existe en las islas. */
+.album-completo {
+  --papel: var(--card);
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  margin: 0 0 10px;
+  padding: 8px;
+  text-align: center;
+}
+
+.album-completo p {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
 .hist-vacio {
   margin: 0;
   color: var(--muted);
@@ -2011,8 +2074,23 @@ p {
   .personajes,
   .guia,
   .album,
-  .historial {
+  .historial,
+  .herencia {
     display: block;
+  }
+
+  /* Seis cupones en dos columnas (~700 px) no caben en 620: Heredar se pega al borde inferior del
+     scroll y compensa el padding del panel (12px 16px) para cubrirlo de lado a lado. */
+  .herencia.panel {
+    padding-bottom: 0; /* el bloque pegajoso pone su propio padding; sin franja debajo */
+  }
+
+  .herencia-heredar {
+    position: sticky;
+    bottom: 0;
+    margin: 12px -16px 0;
+    padding: 10px 16px 12px;
+    background: var(--grano), var(--card);
   }
 
   .up-list {

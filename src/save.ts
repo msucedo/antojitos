@@ -1,10 +1,10 @@
-import { BUSINESSES, RECIPE_DIVISOR, UPGRADES, type BusinessDef } from './data';
+import { BUSINESSES, RECETARIO, UPGRADES, type BusinessDef } from './data';
 import {
   cicloMs,
   emptyBiz,
   emptyStats,
   newState,
-  PROPINA_TOTAL_MS,
+  PROPINA_TOTAL_MAX_MS,
   SAVE_VERSION,
   TRABAJADO_TOPE_MS,
   type BizState,
@@ -30,19 +30,21 @@ const isObj = (v: unknown): v is Raw => typeof v === 'object' && v !== null && !
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v) && v >= 0;
 const isInt = (v: unknown): v is number => isNum(v) && Number.isInteger(v);
 
-/** Migraciones en cadena: MIGRATIONS[n] convierte un guardado v(n) en v(n+1). */
-/** Divisor de recetas con el que se escribieron los guardados v1. */
+/** Divisores de recetas con los que se escribieron los guardados v1 y v2–v5 (razón congelada). */
 const V1_RECIPE_DIVISOR = 3e10;
+const V2_RECIPE_DIVISOR = 1e12;
 
+/** Migraciones en cadena: MIGRATIONS[n] convierte un guardado v(n) en v(n+1). */
 const MIGRATIONS: Record<number, (o: Raw) => Raw> = {
-  // v2: mejoras, y el divisor de recetas pasó de 3e10 a RECIPE_DIVISOR. Se reescala
-  // lifetimeEarned (solo define recetas) para que recipesFor dé lo mismo que en v1.
+  // v2: mejoras, y el divisor de recetas pasó de 3e10 a 1e12. Se reescala lifetimeEarned (solo
+  // define recetas) para que recipesFor diera lo mismo que en v1. La razón queda fija: el divisor
+  // volvió a cambiar en v6 y ese salto es un regalo igual para todas las versiones.
   1: (o) => ({
     ...o,
     version: 2,
     upgrades: [],
     lifetimeEarned: isNum(o.lifetimeEarned)
-      ? Math.min(o.lifetimeEarned * (RECIPE_DIVISOR / V1_RECIPE_DIVISOR), Number.MAX_VALUE)
+      ? Math.min(o.lifetimeEarned * (V2_RECIPE_DIVISOR / V1_RECIPE_DIVISOR), Number.MAX_VALUE)
       : o.lifetimeEarned,
   }),
   // v3: propina y antigüedad de los empleados. Empiezan en 0; nada más cambia. Un negocio que no es
@@ -61,6 +63,9 @@ const MIGRATIONS: Record<number, (o: Raw) => Raw> = {
   // v5: racha diaria y recetas de regalo. No añade campos: los faltantes los rellena validate (y
   // una semilla v3/v4 que ya traiga `racha` no se pisa); load/importSave inician la racha hoy.
   4: (o) => ({ ...o, version: 5 }),
+  // v6: recetario de la abuela (`recetario: {}`, lo rellena validate) y divisor de recetas 1e12 → 4e10
+  // sin reescalar lo ganado: las recetas pendientes saltan, a propósito.
+  5: (o) => ({ ...o, version: 6 }),
 };
 
 const DIA_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -116,6 +121,28 @@ function parseLogros(raw: unknown): string[] | null {
   return out;
 }
 
+/**
+ * Recetario: id conocido → nivel entero recortado al tope. Un id desconocido con nivel entero se
+ * descarta (un cupón retirado del catálogo no cuesta la partida y sus recetas vuelven solas); la forma
+ * sí se valida: cualquier valor que no sea entero, también bajo un id desconocido, rechaza el guardado,
+ * como un campo de tipo incorrecto. Faltante o null vale vacío; no objeto se rechaza.
+ */
+function parseRecetario(raw: unknown): Record<string, number> | null {
+  if (raw === undefined || raw === null) return {};
+  if (!isObj(raw)) return null;
+  const out: Record<string, number> = {};
+  for (const def of RECETARIO) {
+    if (!Object.hasOwn(raw, def.id)) continue;
+    const nivel = raw[def.id];
+    if (!isInt(nivel)) return null;
+    if (nivel > 0) out[def.id] = Math.min(nivel, def.niveles.length);
+  }
+  for (const [id, nivel] of Object.entries(raw)) {
+    if (!RECETARIO.some((d) => d.id === id) && !isInt(nivel)) return null;
+  }
+  return out;
+}
+
 function migrate(o: Raw): Raw | null {
   let cur = o;
   let v = cur.version;
@@ -145,7 +172,7 @@ function parseBiz(raw: unknown, def: BusinessDef): BizState | null {
     progressMs: Math.min(progressMs, cicloMs(def, count)), // ciclo efectivo: con hitos es más corto
     running: running && count > 0,
     manager,
-    propinaMs: manager ? Math.min(propina, PROPINA_TOTAL_MS) : 0,
+    propinaMs: manager ? Math.min(propina, PROPINA_TOTAL_MAX_MS) : 0,
     trabajadoMs: manager ? Math.min(trabajado, TRABAJADO_TOPE_MS) : 0,
   };
 }
@@ -159,7 +186,8 @@ export function validate(input: unknown): State | null {
   const upgrades = parseUpgrades(o.upgrades);
   const stats = parseStats(o.stats);
   const logros = parseLogros(o.logros);
-  if (!upgrades || !stats || !logros) return null;
+  const recetario = parseRecetario(o.recetario);
+  if (!upgrades || !stats || !logros || !recetario) return null;
   if (!isNum(money) || !isNum(runEarned) || !isNum(lifetimeEarned) || !isInt(recipes) || !isNum(lastSeen)) return null;
   const vistos = o.logrosVistos ?? 0; // faltante o null (Infinity tras JSON) vale 0, como en stats
   if (!isInt(vistos)) return null;
@@ -186,6 +214,7 @@ export function validate(input: unknown): State | null {
     logrosVistos: Math.min(vistos, logros.length), // fuera de rango se recorta, como el resto
     racha: parseRacha(o.racha),
     recetasRegalo: Math.min(regaladas, recipes), // no puede haber más regaladas que recetas
+    recetario,
   };
 }
 
