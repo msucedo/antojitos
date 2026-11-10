@@ -118,6 +118,13 @@
     <path d="M20.7 3.3L27.3 3.3L27.7 9L32 10.7L36.3 7L41 11.7L37.3 16L39 20.3L44.7 20.7L44.7 27.3L39 27.7L37.3 32L41 36.3L36.3 41L32 37.3L27.7 39L27.3 44.7L20.7 44.7L20.3 39L16 37.3L11.7 41L7 36.3L10.7 32L9 27.7L3.3 27.3L3.3 20.7L9 20.3L10.7 16L7 11.7L11.7 7L16 10.7L20.3 9zM24 17a7 7 0 1 0 0 14a7 7 0 1 0 0-14z" fill="currentColor" fill-rule="evenodd" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
   </symbol>
 
+  <!-- Ranking: copa en silueta currentColor para el header (24 px), como ajustes e historial-sil. -->
+  <symbol id="trofeo-sil" viewBox="0 0 48 48">
+    <path d="M13 5h22v10c0 6.5-4.5 11.5-9 13v5h6v4H16v-4h6v-5c-4.5-1.5-9-6.5-9-13z" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M13 10H8v4c0 4 2 7 6 8.5M35 10h5v4c0 4-2 7-6 8.5" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+    <rect x="14" y="38" width="20" height="5" rx="1.5" fill="currentColor" stroke="currentColor" stroke-width="2"/>
+  </symbol>
+
   <symbol id="personajes" viewBox="0 0 48 48">
     <path d="M18 4l6 10 6-10" fill="none" stroke="#1F7FC2" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
     <rect x="20" y="12" width="8" height="5" rx="1.5" fill="#C8C8C8" stroke="#1B2A3A" stroke-width="2.5"/>

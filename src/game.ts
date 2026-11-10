@@ -23,7 +23,7 @@ import {
 } from './data';
 import { claveDia } from './fecha';
 
-export const SAVE_VERSION = 6;
+export const SAVE_VERSION = 7;
 
 export interface BizState {
   count: number;
@@ -115,6 +115,15 @@ export interface State {
   recetasRegalo: number;
   /** Recetario de la abuela: id del cupón → nivel comprado (ausente = 0). Sobrevive la herencia. */
   recetario: Record<string, number>;
+  /** Identidad en el ranking mundial; null si no participa. Sobrevive la herencia y viaja en el respaldo. */
+  ranking: Ranking | null;
+}
+
+/** Jugador del ranking: `id` UUID v4 público, `secreto` de 32 hex que autoriza sus envíos, y su apodo. */
+export interface Ranking {
+  id: string;
+  secreto: string;
+  apodo: string;
 }
 
 export interface Racha {
@@ -157,6 +166,7 @@ export function newState(now: number): State {
     racha: { dias: 0, ultimoDia: claveDia(now) },
     recetasRegalo: 0,
     recetario: {},
+    ranking: null,
   };
 }
 
@@ -552,6 +562,20 @@ export function incomePerSecond(state: State): number {
   return total;
 }
 
+/**
+ * Cota superior del dinero por segundo que puede entrar: cada negocio abierto vende a lo más una
+ * vuelta por vuelta (con empleado o a mano) y la propina multiplica por PROPINA_MULT. La usa el
+ * servidor del ranking para juzgar si un salto de dinero es posible en el tiempo transcurrido.
+ */
+export function tasaMaxima(state: State): number {
+  let total = 0;
+  for (const def of BUSINESSES) {
+    const b = biz(state, def.id);
+    if (b.count > 0) total += (revenuePerCycle(state, def.id) / cicloMs(def, b.count)) * 1000 * PROPINA_MULT;
+  }
+  return total;
+}
+
 export function recipesFor(lifetimeEarned: number): number {
   return Math.floor(Math.sqrt(Math.max(lifetimeEarned, 0) / RECIPE_DIVISOR));
 }
@@ -641,6 +665,11 @@ export function antiguedadInicialMs(state: State): number {
   return valorRecetario(state, 'antiguedad-inicial', 0);
 }
 
+/** Dinero con el que arranca la partida (`guardadito`); 0 sin cupón. Lo único que sube `money` sin tocar `lifetimeEarned`. */
+export function arranqueDinero(state: State): number {
+  return valorRecetario(state, 'arranque-dinero', 0);
+}
+
 /** Multiplicador global de ventas del recetario (`caldo`). */
 export function recetarioMultiplier(state: State): number {
   return valorRecetario(state, 'ventas', 1);
@@ -656,7 +685,7 @@ function arranque(state: State): State {
   const b = biz(state, id);
   const count = Math.max(b.count, valorRecetario(state, 'arranque-elotes', 0));
   const crossed = hitosVelocidad(getDef(id), count) - hitosVelocidad(getDef(id), b.count);
-  const money = Math.max(state.money, valorRecetario(state, 'arranque-dinero', 0));
+  const money = Math.max(state.money, arranqueDinero(state));
   return withBiz({ ...state, money }, id, { count, progressMs: b.progressMs / 2 ** crossed });
 }
 
@@ -711,5 +740,6 @@ export function prestige(state: State, now: number): State {
     racha: state.racha,
     recetasRegalo: state.recetasRegalo,
     recetario: state.recetario,
+    ranking: state.ranking,
   });
 }

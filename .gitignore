@@ -1,18 +1,21 @@
 # Dependencias
 node_modules/
 
-# Build
+# Build y cachés de herramientas
 dist/
 dev-dist/
 *.tsbuildinfo
+.eslintcache
+coverage/
 
 # Logs
 *.log
 npm-debug.log*
 
-# Entorno / secretos
+# Entorno / secretos (.env.local lo genera `vercel env pull`; solo se versiona el ejemplo)
 .env
 .env.*
+*.local
 !.env.example
 
 # Vercel
@@ -23,14 +26,19 @@ docs/refs/
 
 # Editor / SO
 .DS_Store
+Thumbs.db
 .vscode/*
 !.vscode/extensions.json
 .idea/
+
+# Claude Code: ajustes locales de cada quien
+.claude/settings.local.json
 
 # Reportes de Lighthouse
 *.report.html
 *.report.json
 
-# Playwright MCP (capturas y snapshots)
+# Playwright: MCP (capturas y snapshots), verificación visual y resultados de e2e
 .playwright-mcp/
 capturas/
+test-results/

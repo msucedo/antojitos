@@ -70,6 +70,8 @@ import {
   recetasActivas,
   recetasGastadas,
   siguienteNivel,
+  tasaMaxima,
+  arranqueDinero,
   type State,
 } from './game';
 
@@ -522,7 +524,8 @@ describe('desborde', () => {
     s = tick(s, 1_000);
     expect(Number.isFinite(s.lifetimeEarned)).toBe(true);
     expect(Number.isFinite(s.money)).toBe(true);
-    expect(JSON.stringify(s)).not.toContain('null');
+    // Ningún número se volvió Infinity (JSON lo escribe como null); `ranking: null` es legítimo y se aparta.
+    expect(JSON.stringify({ ...s, ranking: undefined })).not.toContain('null');
   });
 });
 
@@ -853,5 +856,36 @@ describe('recetario de la abuela', () => {
     expect(heredarVale(con(30, 60))).toBe(true);
     expect(heredarVale(con(5, 9))).toBe(true);
     expect(heredarVale(con(5, 11))).toBe(false);
+  });
+});
+
+describe('ranking: identidad en el estado', () => {
+  const ranking = { id: '6f1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d', secreto: 'a'.repeat(32), apodo: 'Beto' };
+
+  it('una partida nueva no participa', () => {
+    expect(newState(T0).ranking).toBeNull();
+  });
+
+  it('la herencia conserva la identidad del ranking', () => {
+    const earned = RECIPE_DIVISOR * 4;
+    const s = { ...withMoney(earned), lifetimeEarned: earned, runEarned: earned, ranking };
+    expect(prestige(s, T0 + 1).ranking).toEqual(ranking);
+  });
+});
+
+describe('ranking: cotas de plausibilidad', () => {
+  it('tasaMaxima cuenta todo negocio abierto, con o sin empleado, con la propina activa', () => {
+    const s = buy(withMoney(1e6), 'elotes', 10); // sin empleado: a mano sigue vendiendo
+    expect(incomePerSecond(s)).toBe(0);
+    expect(tasaMaxima(s)).toBeCloseTo((revenuePerCycle(s, 'elotes') / cicloMs(elotes, 11)) * 1000 * PROPINA_MULT);
+    const con = hireManager(s, 'elotes');
+    expect(tasaMaxima(con)).toBeGreaterThanOrEqual(incomePerSecond(con));
+    expect(tasaMaxima(con)).toBeCloseTo(incomePerSecond(con) * PROPINA_MULT);
+    expect(tasaMaxima(newState(T0))).toBeGreaterThan(0); // el primer elote siempre está abierto
+  });
+
+  it('arranqueDinero es el Guardadito del nivel cocinado, 0 sin cupón', () => {
+    expect(arranqueDinero(newState(T0))).toBe(0);
+    expect(arranqueDinero({ ...newState(T0), recetario: { guardadito: 2 } })).toBe(10_000);
   });
 });

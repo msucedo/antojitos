@@ -44,9 +44,23 @@ import { claveDia } from './fecha';
 import { backup, exportCrudo, exportSave, importSave, load, save, type KV } from './save';
 import { createUI, showLocked, textoNivel, type UI } from './ui';
 import { formatDuration, formatMoney, recetas } from './format';
+import {
+  crearIdentidad,
+  cuerpoEnvio,
+  debeEnviar,
+  parsearEnvio,
+  parsearTop,
+  RUTA_RANKING,
+  type ErrorEnvio,
+  type Puesto,
+  type UltimoEnvio,
+} from './ranking';
 
 const AUTOSAVE_MS = 5_000;
 const BACKUP_MS = 60_000;
+/** Cada cuánto se revisa si toca enviar al ranking (la regla de los 60 s está en `debeEnviar`). */
+const RANKING_TICK_MS = 10_000;
+const ERRORES_ENVIO: readonly ErrorEnvio[] = ['save', 'apodo', 'secreto', 'salto', 'limite', 'baneado', 'red'];
 const TEXT_MS = 100;
 const LOCK_RETRIES = 10;
 const LOCK_RETRY_MS = 200;
@@ -103,6 +117,43 @@ function start(root: HTMLElement): void {
     if (!save(kv, state) && !warnedNoSave) {
       warnedNoSave = true;
       ui.showNoSave();
+    }
+  };
+
+  // Ranking mundial: último puesto que devolvió el servidor y último envío (hora y dinero enviado).
+  let puesto: Puesto | null = null;
+  let ultimoEnvio: UltimoEnvio | null = null;
+  /**
+   * POST del guardado completo al servidor; con `keepalive` al ocultar la pestaña. Nunca lanza.
+   * Un 429 (`limite`) no es error: el siguiente tick lo reintenta.
+   */
+  const enviarRanking = async (keepalive = false): Promise<'ok' | ErrorEnvio> => {
+    if (!state.ranking || soloLectura) return 'save';
+    const body = cuerpoEnvio(state);
+    if (!body) return 'save';
+    ultimoEnvio = { en: Date.now(), money: state.money, apodo: state.ranking.apodo };
+    try {
+      const res = await fetch(RUTA_RANKING, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body,
+        keepalive,
+      });
+      const json: unknown = await res.json().catch(() => null);
+      if (res.ok) {
+        const p = parsearEnvio(json);
+        if (!p) return 'red';
+        puesto = p;
+        dirty = true;
+        return 'ok';
+      }
+      const error =
+        typeof json === 'object' && json !== null && 'error' in json && typeof json.error === 'string'
+          ? json.error
+          : '';
+      return ERRORES_ENVIO.find((e) => e === error) ?? 'red';
+    } catch {
+      return 'red';
     }
   };
 
@@ -242,6 +293,26 @@ function start(root: HTMLElement): void {
     },
     // Solo lectura: se exporta el guardado más nuevo tal cual (sin validar), no la partida vacía en memoria.
     getExport: () => (loaded.crudo !== null ? exportCrudo(loaded.crudo) : exportSave(state)),
+    onRankingVer: async (fresco) => {
+      // Si participa y aún no hay puesto en esta sesión (o ya toca), un envío para que el diálogo lo muestre.
+      if (state.ranking && (puesto === null || debeEnviar(ultimoEnvio, state, Date.now()))) void enviarRanking();
+      try {
+        // `fresco` salta la caché de la CDN (30 s) tras unirse: la URL con query es otra entrada.
+        const res = await fetch(fresco ? `${RUTA_RANKING}?t=${Date.now()}` : RUTA_RANKING);
+        if (!res.ok) return 'error';
+        return parsearTop(await res.json()) ?? 'error';
+      } catch {
+        return 'error';
+      }
+    },
+    onRankingApodo: (apodo) => {
+      if (soloLectura) return Promise.resolve('save');
+      const ranking = state.ranking ? { ...state.ranking, apodo } : crearIdentidad(apodo, crypto);
+      set({ ...state, ranking });
+      persist();
+      return enviarRanking();
+    },
+    getRankingPuesto: () => puesto,
   });
 
   /** Aplica una acción; si cambió el estado, da feedback visual y sonoro (`sound` si difiere del tipo). */
@@ -389,17 +460,30 @@ function start(root: HTMLElement): void {
 
   setInterval(persist, AUTOSAVE_MS);
   setInterval(respaldar, BACKUP_MS);
+  // Ranking: cada minuto si cambió el dinero y la pestaña está visible; al ocultarse, un último envío.
+  setInterval(() => {
+    if (document.visibilityState === 'visible' && state.ranking && debeEnviar(ultimoEnvio, state, Date.now())) {
+      void enviarRanking();
+    }
+  }, RANKING_TICK_MS);
+  const enviarAlSalir = () => {
+    if (state.ranking && ultimoEnvio !== null && ultimoEnvio.money !== state.money) void enviarRanking(true);
+  };
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'hidden') {
       catchUp(false);
       persist();
+      enviarAlSalir();
       audio.setVisible(false);
     } else {
       audio.setVisible(true);
       catchUp(true);
     }
   });
-  window.addEventListener('pagehide', persist);
+  window.addEventListener('pagehide', () => {
+    persist();
+    enviarAlSalir();
+  });
 
   void navigator.storage?.persist?.().catch(() => undefined);
 

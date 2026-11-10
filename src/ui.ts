@@ -60,6 +60,8 @@ import { albumCompleto, LOGROS, type LogroDef } from './logros';
 import { diaDeSemana, estadoRacha, type Regalo } from './racha';
 import { aparecer, coin, completar, confetti, deslizar, flip, pop, pulse, stamp, tilt } from './fx';
 import { crearHistorial, formatHora, HISTORIAL_MAX } from './historial';
+import { normalizarApodo, APODO_MAX } from './apodo';
+import type { ErrorEnvio, Puesto, Top } from './ranking';
 
 export interface Handlers {
   onStart(id: string): void;
@@ -83,6 +85,12 @@ export interface Handlers {
   /** false: código inválido; 'bloqueado': solo lectura (guardado de una versión más nueva). */
   onImport(text: string): boolean | 'bloqueado';
   getExport(): string;
+  /** Top 100 del ranking mundial (y, si participa, dispara un envío si toca). `'error'` sin red. `fresco` salta la caché. */
+  onRankingVer(fresco?: boolean): Promise<Top | 'error'>;
+  /** Unirse o cambiar de apodo: crea la identidad si falta, guarda y envía. El apodo ya viene limpio. */
+  onRankingApodo(apodo: string): Promise<'ok' | ErrorEnvio>;
+  /** Último puesto que devolvió el servidor en esta sesión, o null. */
+  getRankingPuesto(): Puesto | null;
 }
 
 type Props = Partial<{
@@ -533,6 +541,14 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
   const histBtn = h('button', { class: 'icon-btn', type: 'button', label: 'Historial', onclick: openHistorial }, [
     icon('historial-sil'),
   ]);
+  // Ranking mundial: primero del grupo en móvil; en web queda solo él, absoluto en la esquina superior derecha.
+  const rankingBadge = h('span', { class: 'lat-badge', hidden: true });
+  rankingBadge.setAttribute('aria-hidden', 'true');
+  const rankingBtn = h(
+    'button',
+    { class: 'icon-btn ranking-btn', type: 'button', label: 'Ranking mundial', onclick: openRanking },
+    [icon('trofeo-sil'), rankingBadge],
+  );
 
   // Menú lateral (web): copias de los controles del header y la barra; render() las sincroniza.
   // Ocho discos: Historial, Chelo, Mejoras, Empleados, Álbum, Cantidad, Herencia y Ajustes.
@@ -1154,7 +1170,7 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
   root.replaceChildren(
     lateral,
     h('header', { class: 'top' }, [
-      h('div', { class: 'title-row' }, [appTitle, h('div', {}, [histBtn, charsBtn, ajustesBtn])]),
+      h('div', { class: 'title-row' }, [appTitle, h('div', {}, [rankingBtn, histBtn, charsBtn, ajustesBtn])]),
       h('div', { class: 'money-row' }, [money, rate, recipes]),
       picado,
     ]),
@@ -1301,6 +1317,7 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
     albumDialogTitle?.closest('dialog')?.close();
     histDialogTitle?.closest('dialog')?.close();
     heirDialogTitle?.closest('dialog')?.close();
+    rankingDialogTitle?.closest('dialog')?.close();
   });
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape' || !activePanel || document.querySelector('dialog[open]')) return;
@@ -1391,7 +1408,7 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
       h('div', { class: 'ajustes-fila' }, [ajSound, ajMusic]),
       h('h3', { text: 'Respaldo' }),
       h('p', {
-        text: 'Guarda este código en un lugar seguro. Si borras los datos del navegador, con él recuperas tu partida.',
+        text: 'Guarda este código en un lugar seguro. Si borras los datos del navegador, con él recuperas tu partida. No lo compartas: incluye tu identidad del ranking.',
       }),
       code,
       copy,
@@ -1401,6 +1418,174 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
       load,
       msg,
     ]);
+  }
+
+  let rankingDialogTitle: HTMLElement | null = null;
+
+  /** Texto para el jugador según lo que contestó el servidor al unirse o cambiar de apodo. */
+  function textoEnvio(r: 'ok' | ErrorEnvio, apodo: string): string {
+    switch (r) {
+      case 'ok':
+        return `Ya estás en el ranking como ${apodo}.`;
+      case 'limite':
+        return 'Apodo guardado. Tu puesto se actualiza en un momento.';
+      case 'red':
+        return 'Sin conexión. Tu apodo quedó guardado y se enviará cuando haya red.';
+      case 'apodo':
+        return 'Ese apodo no se puede usar.';
+      case 'salto':
+        return 'El servidor no aceptó tu cifra todavía. Se reintenta solo.';
+      case 'secreto':
+        return 'Tu identidad del ranking no coincide con la registrada.';
+      case 'baneado':
+        return 'Este jugador fue retirado del ranking.';
+      case 'save':
+        return 'Ahora no se puede participar desde esta partida.';
+    }
+  }
+
+  /**
+   * Diálogo Ranking: tu tarjeta arriba (puesto, o el formulario de apodo), el Top 100 debajo y el
+   * total al pie. Los nodos se crean una vez y se actualizan en sitio: refrescar no borra lo que el
+   * jugador escribe ni le quita el foco. Los apodos ajenos se pintan con textContent: nunca HTML.
+   */
+  function openRanking(): void {
+    const tuTexto = h('p', { class: 'ranking-tu' });
+    const input = h('input', { class: 'apodo' });
+    input.type = 'text';
+    input.maxLength = APODO_MAX;
+    input.autocomplete = 'off';
+    input.setAttribute('aria-label', 'Apodo');
+    input.placeholder = 'Tu apodo';
+    const aviso = h('p', { class: 'ranking-aviso' });
+    aviso.setAttribute('aria-live', 'polite');
+    const enviar = h('button', { class: 'btn primary', type: 'button', text: 'Participar' });
+    const form = h('div', { class: 'ranking-form' }, [input, enviar]);
+    const cambiar = h('button', {
+      class: 'btn',
+      type: 'button',
+      text: 'Cambiar apodo',
+      onclick: () => {
+        setHidden(form, !form.hidden);
+        if (!form.hidden) input.focus();
+      },
+    });
+    const tu = h('div', { class: 'ranking-yo' }, [tuTexto, cambiar, form, aviso]);
+    const estado = h('p', { class: 'ranking-estado', text: 'Buscando el ranking…' });
+    estado.setAttribute('role', 'status');
+    const lista = h('ol', { class: 'ranking-lista', hidden: true });
+    const pie = h('p', { class: 'ranking-pie', hidden: true });
+    const refrescar = h('button', { class: 'btn', type: 'button', text: 'Actualizar', onclick: () => cargar(false) });
+    const d = dialog('Ranking', [tu, estado, lista, pie], [refrescar]);
+    const h2 = d.querySelector('h2');
+    if (h2) {
+      h2.tabIndex = -1;
+      h2.focus({ preventScroll: true });
+      d.scrollTop = 0;
+    }
+    rankingDialogTitle = h2;
+    d.addEventListener('close', () => {
+      rankingDialogTitle = null;
+    });
+
+    let top: Top | null = null;
+    // Con identidad el formulario va plegado hasta "Cambiar apodo"; sin ella, siempre a la vista.
+    let identidadPintada: string | null | undefined;
+
+    enviar.addEventListener('click', () => {
+      const limpio = normalizarApodo(input.value);
+      if (!limpio) {
+        setText(aviso, `De 3 a ${APODO_MAX} letras o números, sin groserías.`);
+        return;
+      }
+      setDisabled(enviar, true);
+      void handlers.onRankingApodo(limpio).then((r) => {
+        setDisabled(enviar, false);
+        const texto = textoEnvio(r, limpio);
+        live.textContent = texto; // al aria-live, no al Historial: es un ajuste, no un evento
+        setText(aviso, r === 'ok' ? '' : texto);
+        if (r === 'ok' || r === 'limite' || r === 'red') {
+          identidadPintada = undefined; // la identidad cambió: replegar el formulario
+          pintarTu();
+          handlers.onSound('upgrade');
+          if (r === 'ok') cargar(true); // el Top cacheado no trae tu fila: pedirlo fresco
+        }
+      });
+    });
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        enviar.click();
+      }
+    });
+
+    function pintarTu(): void {
+      const ranking = last?.ranking ?? null;
+      const puesto = handlers.getRankingPuesto();
+      const cifra = last ? formatMoney(last.money) : '';
+      setText(
+        tuTexto,
+        !ranking
+          ? 'Compite con tu efectivo actual. Elige un apodo:'
+          : puesto
+            ? `Tú, ${ranking.apodo}: puesto ${formatNumber(puesto.pos)} de ${formatNumber(puesto.total)} · ${cifra}`
+            : `Tú, ${ranking.apodo}: tu puesto llega en un momento · ${cifra}`,
+      );
+      setHidden(cambiar, ranking === null);
+      setText(enviar, ranking ? 'Guardar apodo' : 'Participar');
+      const clave = ranking?.id ?? null;
+      if (identidadPintada !== clave) {
+        identidadPintada = clave;
+        setHidden(form, ranking !== null);
+        if (ranking) input.value = ranking.apodo;
+      }
+    }
+
+    function pintarLista(): void {
+      if (!top) return;
+      const ranking = last?.ranking ?? null;
+      const puesto = ranking ? handlers.getRankingPuesto() : null;
+      lista.replaceChildren(
+        ...top.top.map((f) => {
+          // Por puesto y apodo: el Top puede venir de la caché (30 s) y el puesto, fresco del envío.
+          const yo = puesto !== null && puesto.pos === f.pos && ranking?.apodo === f.apodo;
+          const li = h('li', { class: yo ? 'yo' : '' }, [
+            h('span', { class: 'ranking-pos', text: String(f.pos) }),
+            h('span', { class: 'ranking-apodo', text: f.apodo }),
+            h('span', { class: 'ranking-money', text: formatMoney(f.money) }),
+          ]);
+          if (yo) li.prepend(h('span', { class: 'sr-only', text: 'Tú: ' }));
+          return li;
+        }),
+      );
+      setHidden(lista, top.top.length === 0);
+      setText(
+        pie,
+        top.total === 0
+          ? 'Nadie participa todavía. Sé el primero.'
+          : `${formatNumber(top.total)} ${top.total === 1 ? 'jugador' : 'jugadores'} en el ranking.`,
+      );
+      setHidden(pie, false);
+      setHidden(estado, true);
+    }
+
+    function cargar(fresco: boolean): void {
+      setHidden(estado, false);
+      setText(estado, 'Buscando el ranking…');
+      void handlers.onRankingVer(fresco).then((r) => {
+        if (!d.open) return;
+        if (r === 'error') {
+          setText(estado, 'Sin conexión. Intenta más tarde.');
+          return;
+        }
+        top = r;
+        pintarTu();
+        pintarLista();
+      });
+    }
+
+    pintarTu();
+    cargar(false);
   }
 
   function renderHerencia(s: State): void {
@@ -1694,6 +1879,12 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
       const activas = recetasActivas(s);
       setHidden(recipes, s.recipes === 0);
       setText(recipesText, `${recetas(activas)} (+${formatNumber(Math.round(activas * RECIPE_BONUS * 100))}%)`);
+
+      // Ranking: el puesto conocido en el badge del trofeo (solo si participa); el aria-label lo dice.
+      const puesto = s.ranking ? handlers.getRankingPuesto() : null;
+      setHidden(rankingBadge, puesto === null);
+      if (puesto) setText(rankingBadge, puesto.pos > 999 ? '#999+' : `#${puesto.pos}`);
+      setAttr(rankingBtn, 'aria-label', puesto ? `Ranking mundial: puesto ${puesto.pos}` : 'Ranking mundial');
 
       for (const [btn, ic, canal, onName, offName] of audioBtns) {
         const on = audio[canal];

@@ -449,7 +449,7 @@ describe('v6: recetario', () => {
     delete v5.recetario;
     const { state, source } = load(memory({ [SAVE_KEY]: JSON.stringify(v5) }), T0);
     expect(source).toBe('save');
-    expect(state.version).toBe(6);
+    expect(state.version).toBe(SAVE_VERSION);
     expect(state.recetario).toEqual({});
     // Sin reescalar lo ganado: el salto de recetas pendientes es el regalo de la curva nueva.
     expect(validate({ ...v5, lifetimeEarned: 1e12 })?.lifetimeEarned).toBe(1e12);
@@ -488,5 +488,43 @@ describe('v6: recetario', () => {
     const code = exportSave(tope);
     expect(code.length).toBeLessThan(MAX_IMPORT_CHARS);
     expect(importSave(code, T0)?.recetario).toEqual(tope.recetario);
+  });
+});
+
+describe('v7: ranking', () => {
+  const ranking = {
+    id: '6f1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d',
+    secreto: '0123456789abcdef0123456789abcdef',
+    apodo: 'Beto',
+  };
+
+  it('migra v6 → v7 sin ranking; una semilla sin el campo también', () => {
+    const v6: Record<string, unknown> = { ...newState(T0), version: 6 };
+    delete v6.ranking;
+    const { state, source } = load(memory({ [SAVE_KEY]: JSON.stringify(v6) }), T0);
+    expect(source).toBe('save');
+    expect(state.version).toBe(SAVE_VERSION);
+    expect(state.ranking).toBeNull();
+  });
+
+  it('validate conserva una identidad bien formada y descarta la mal formada sin perder la partida', () => {
+    const base = newState(T0);
+    expect(validate({ ...base, ranking })?.ranking).toEqual(ranking);
+    expect(validate({ ...base, ranking: null })?.ranking).toBeNull();
+    expect(validate({ ...base, ranking: { ...ranking, id: 'no-es-uuid' } })?.ranking).toBeNull();
+    expect(validate({ ...base, ranking: { ...ranking, secreto: 'corto' } })?.ranking).toBeNull();
+    expect(validate({ ...base, ranking: { ...ranking, secreto: 'G'.repeat(32) } })?.ranking).toBeNull();
+    expect(validate({ ...base, ranking: 'texto' })?.ranking).toBeNull();
+    expect(validate({ ...base, ranking: { ...ranking, apodo: 7 } })?.ranking).toBeNull();
+  });
+
+  it('un apodo que ya no pasa las reglas no borra id ni secreto', () => {
+    const feo = { ...ranking, apodo: 'x' };
+    expect(validate({ ...newState(T0), ranking: feo })?.ranking).toEqual(feo);
+  });
+
+  it('export / import arrastra la identidad', () => {
+    const s = { ...played(), ranking };
+    expect(importSave(exportSave(s), T0)?.ranking).toEqual(ranking);
   });
 });

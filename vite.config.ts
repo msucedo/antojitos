@@ -17,6 +17,8 @@ export default defineConfig({
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,webp,woff2,webmanifest}'],
         cleanupOutdatedCaches: true,
+        // Las funciones de /api nunca caen al index.html del fallback (solo navegaciones; por si acaso).
+        navigateFallbackDenylist: [/^\/api\//],
         // Controlar la página desde la primera visita: si no, una actualización que llega
         // en esa misma sesión activa el SW nuevo pero el botón "Recargar" nunca recarga.
         clientsClaim: true,

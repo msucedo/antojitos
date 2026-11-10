@@ -394,11 +394,107 @@ p {
   border-radius: 12px;
 }
 
-/* Tres iconos en el header móvil (Historial, Empleados y Ajustes): caben a 44 px con el logo en 390 px. */
+/* Cuatro iconos en el header móvil (Ranking, Historial, Empleados y Ajustes): 4 × 44 sin hueco entre ellos
+ * (el área táctil ya es el botón) caben con el logo en 390 px; a 360 el nombre sigue en dos líneas. */
 /* El grupo de iconos no se encoge ni se parte: el que cede es el nombre, que ya va en dos líneas. */
 .title-row > div {
   display: flex;
   flex: none;
+}
+
+/* ---------- Ranking mundial ---------- */
+.ranking-yo {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 2px solid var(--border);
+  border-radius: 12px;
+  background: var(--track);
+}
+
+.ranking-tu {
+  font-weight: 700;
+}
+
+.ranking-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ranking-form .apodo {
+  flex: 1 1 140px;
+  min-width: 0;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 2px solid var(--border);
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--text);
+  font: inherit;
+  cursor: text;
+}
+
+.ranking-aviso:empty {
+  display: none;
+}
+
+.ranking-aviso,
+.ranking-estado,
+.ranking-pie {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.ranking-lista {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.ranking-lista li {
+  display: grid;
+  grid-template-columns: 2.5em minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 8px;
+  padding: 6px 8px;
+  border-bottom: 1.5px dashed var(--marco);
+  font-size: 0.95rem;
+}
+
+.ranking-lista li:last-child {
+  border-bottom: 0;
+}
+
+.ranking-pos {
+  color: var(--muted);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.ranking-apodo {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ranking-money {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Tu fila: como el badge, elote con tinta. */
+.ranking-lista li.yo {
+  background: var(--corn);
+  color: var(--on-corn);
+  border: 2px solid var(--ink);
+  border-radius: 8px;
+}
+
+.ranking-lista li.yo .ranking-pos {
+  color: var(--on-corn);
 }
 
 /* ---------- Layout: una columna en móvil, dos en web ---------- */
@@ -2027,16 +2123,24 @@ p {
     white-space: nowrap;
   }
 
-  /* Los controles del header y el botón de heredar viven en el lateral. */
-  /* Recetas en la esquina superior derecha del header (.top es sticky: posiciona); en móvil siguen en la fila del dinero. */
+  /* Los controles del header y el botón de heredar viven en el lateral, salvo el trofeo del Ranking. */
+  /* Trofeo en la esquina superior derecha del header (.top es sticky: posiciona) y las recetas a su
+   * izquierda; en móvil siguen en el grupo de iconos y en la fila del dinero. Nada entra al flujo: el
+   * header sigue midiendo lo mismo (--side-top). */
   .recipes {
     position: absolute;
     top: 8px;
-    right: 0;
+    right: 52px;
   }
 
-  .title-row > div {
+  .title-row > div > .icon-btn:not(.ranking-btn) {
     display: none;
+  }
+
+  .ranking-btn {
+    position: absolute;
+    top: 8px;
+    right: 0;
   }
 
   /*

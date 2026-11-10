@@ -30,6 +30,42 @@ const vercel = JSON.parse(fs.readFileSync(path.join(RAIZ, 'vercel.json'), 'utf8'
 let server;
 let browser;
 
+/**
+ * /api/ranking de mentira (la función real corre en Vercel y se prueba con vitest): guarda apodo y
+ * dinero por id y ordena. `envios` cuenta los POST que llegaron, para comprobar que algo NO se envió.
+ */
+const ranking = new Map();
+const envios = [];
+function apiRanking(req, res) {
+  res.setHeader('Content-Type', 'application/json');
+  const responder = (status, body) => {
+    res.statusCode = status;
+    res.end(JSON.stringify(body));
+  };
+  const top = () =>
+    [...ranking.entries()]
+      .sort((a, b) => b[1].money - a[1].money)
+      .map(([id, j], i) => ({ id, pos: i + 1, apodo: j.apodo, money: j.money }));
+  if (req.method === 'GET') {
+    return responder(200, { top: top().map(({ pos, apodo, money }) => ({ pos, apodo, money })), total: ranking.size });
+  }
+  if (req.method !== 'POST') return responder(405, { error: 'metodo' });
+  let cuerpo = '';
+  req.on('data', (c) => (cuerpo += c));
+  req.on('end', () => {
+    envios.push(cuerpo);
+    try {
+      const state = JSON.parse(JSON.parse(cuerpo).save);
+      const { id, apodo } = state.ranking;
+      if (typeof apodo !== 'string' || apodo.trim().length < 3) return responder(400, { error: 'apodo' });
+      ranking.set(id, { apodo: apodo.trim(), money: state.money });
+      responder(200, { pos: top().find((f) => f.id === id).pos, total: ranking.size });
+    } catch {
+      responder(400, { error: 'save' });
+    }
+  });
+}
+
 /** Servidor estático mínimo: headers de vercel.json por ruta y fallback a index.html. */
 function servir(req, res) {
   let ruta;
@@ -42,6 +78,7 @@ function servir(req, res) {
   for (const regla of vercel.headers) {
     if (new RegExp(`^${regla.source}$`).test(ruta)) for (const h of regla.headers) res.setHeader(h.key, h.value);
   }
+  if (ruta.startsWith('/api/ranking')) return apiRanking(req, res);
   let archivo = path.resolve(DIST, `.${ruta === '/' ? '/index.html' : ruta}`);
   // Nada fuera de dist/ (../), y lo desconocido cae al index como en Vercel.
   if (!archivo.startsWith(DIST + path.sep) || !fs.existsSync(archivo) || fs.statSync(archivo).isDirectory()) {
@@ -654,5 +691,81 @@ test('segunda pestaña: queda bloqueada', async () => {
 test('service worker: se registra y controla la página', async () => {
   const { context, page } = await abrir({ sw: true });
   await page.waitForFunction(() => navigator.serviceWorker?.controller !== null, null, { timeout: 10_000 });
+  await context.close();
+});
+
+test('ranking (web): unirse con apodo, fila propia y badge; al recargar sigue participando', async () => {
+  ranking.clear();
+  const semilla = partida({ money: 5_000, lifetimeEarned: 5_000, runEarned: 5_000 }, { elotes: { count: 1 } });
+  const { context, page, errores } = await abrir({ semilla });
+  await sinPaneles(page);
+  const trofeo = page.locator('button.ranking-btn');
+  assert.equal(await trofeo.getAttribute('aria-label'), 'Ranking mundial');
+  await trofeo.click();
+  const dlg = page.locator('dialog[open]');
+  await dlg.waitFor();
+  assert.equal(await dlg.locator('h2').textContent(), 'Ranking');
+  await dlg.locator('.ranking-pie').waitFor();
+  assert.match(await dlg.locator('.ranking-pie').textContent(), /Nadie participa/);
+  await dlg.locator('input.apodo').fill('  Doña  Prueba ');
+  await dlg.locator('button', { hasText: 'Participar' }).click();
+  await dlg.locator('.ranking-lista li.yo').waitFor();
+  assert.match(await dlg.locator('li.yo').textContent(), /Doña Prueba.*\$5,000/);
+  assert.match(await dlg.locator('.ranking-tu').textContent(), /puesto 1 de 1/);
+  await page.waitForFunction(() => document.querySelector('.ranking-btn .lat-badge')?.textContent === '#1');
+  assert.equal(await trofeo.getAttribute('aria-label'), 'Ranking mundial: puesto 1');
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(300);
+  // La identidad viaja en el guardado: tras recargar, el diálogo dispara el envío y vuelve el puesto.
+  await page.reload({ waitUntil: 'networkidle' });
+  await page.waitForSelector('#app .card');
+  await sinPaneles(page);
+  await page.locator('button.ranking-btn').click();
+  await page.locator('dialog[open] .ranking-lista li.yo').waitFor();
+  assert.match(await page.locator('dialog[open] .ranking-tu').textContent(), /Doña Prueba: puesto 1 de 1/);
+  assert.equal(ranking.size, 1);
+  assert.deepEqual(errores, []);
+  await context.close();
+});
+
+test('ranking: un apodo inválido no sale a la red', async () => {
+  ranking.clear();
+  envios.length = 0;
+  const { context, page, errores } = await abrir();
+  await sinPaneles(page);
+  await page.locator('button.ranking-btn').click();
+  const dlg = page.locator('dialog[open]');
+  await dlg.locator('.ranking-pie').waitFor();
+  await dlg.locator('input.apodo').fill('x');
+  await dlg.locator('button', { hasText: 'Participar' }).click();
+  assert.match(await dlg.locator('.ranking-aviso').textContent(), /De 3 a 16 letras/);
+  await dlg.locator('input.apodo').fill('Pinche Tramposo');
+  await dlg.locator('button', { hasText: 'Participar' }).click();
+  assert.match(await dlg.locator('.ranking-aviso').textContent(), /sin groserías/);
+  assert.equal(envios.length, 0);
+  assert.equal(await dlg.locator('.ranking-lista li').count(), 0);
+  assert.deepEqual(errores, []);
+  await context.close();
+});
+
+test('ranking (móvil): sin red el diálogo avisa y el juego sigue', async () => {
+  const { context, page, errores } = await abrir({ movil: true });
+  await page.route('**/api/ranking*', (ruta) => ruta.abort());
+  await sinPaneles(page);
+  await page.locator('button.ranking-btn:visible').tap();
+  const dlg = page.locator('dialog[open]');
+  await dlg.waitFor();
+  await page.waitForFunction(
+    () => document.querySelector('dialog[open] .ranking-estado')?.textContent === 'Sin conexión. Intenta más tarde.',
+  );
+  assert.equal(await dlg.locator('input.apodo').count(), 1); // aun sin red se puede elegir apodo (queda guardado)
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(300);
+  assert.equal(await dinero(page), '$0');
+  // El fetch abortado lo anota Chrome ("Failed to load resource"), no el juego; nada más debe aparecer.
+  assert.deepEqual(
+    errores.filter((e) => !e.includes('net::ERR_FAILED')),
+    [],
+  );
   await context.close();
 });

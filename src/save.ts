@@ -9,6 +9,7 @@ import {
   TRABAJADO_TOPE_MS,
   type BizState,
   type Racha,
+  type Ranking,
   type State,
   type Stats,
 } from './game';
@@ -66,7 +67,26 @@ const MIGRATIONS: Record<number, (o: Raw) => Raw> = {
   // v6: recetario de la abuela (`recetario: {}`, lo rellena validate) y divisor de recetas 1e12 → 4e10
   // sin reescalar lo ganado: las recetas pendientes saltan, a propósito.
   5: (o) => ({ ...o, version: 6 }),
+  // v7: identidad del ranking mundial (`ranking: null`, lo rellena validate). No añade campos.
+  6: (o) => ({ ...o, version: 7 }),
 };
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const SECRETO_RE = /^[0-9a-f]{32}$/i;
+
+/**
+ * Identidad del ranking: faltante, null o mal formada vale null (no participa; no cuesta la partida).
+ * El apodo se conserva tal cual si es string: si las reglas cambian, el diálogo pide otro, pero el
+ * jugador no pierde su id ni su secreto.
+ */
+function parseRanking(raw: unknown): Ranking | null {
+  if (!isObj(raw)) return null;
+  const { id, secreto, apodo } = raw;
+  if (typeof id !== 'string' || !UUID_RE.test(id)) return null;
+  if (typeof secreto !== 'string' || !SECRETO_RE.test(secreto)) return null;
+  if (typeof apodo !== 'string') return null;
+  return { id, secreto, apodo };
+}
 
 const DIA_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -215,6 +235,7 @@ export function validate(input: unknown): State | null {
     racha: parseRacha(o.racha),
     recetasRegalo: Math.min(regaladas, recipes), // no puede haber más regaladas que recetas
     recetario,
+    ranking: parseRanking(o.ranking),
   };
 }
 

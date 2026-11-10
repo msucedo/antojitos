@@ -25,6 +25,7 @@ export const ICON_NAMES = [
   'logo',
   'historial',
   'historial-sil',
+  'trofeo-sil',
 ] as const;
 
 export type IconName = (typeof ICON_NAMES)[number];
