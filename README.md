@@ -4,6 +4,8 @@ Juego idle de antojitos mexicanos: empiezas con un carrito de elotes y terminas 
 
 Juego propio: nombre, arte, textos y números. Sin anuncios, sin cuentas, sin rastreo.
 
+![Imperio de Antojitos en web, tema oscuro: los ocho negocios como estampillas, el dinero en rótulo y el menú lateral](docs/antojitos_1.png)
+
 ## Cómo se juega
 
 - Toca el plato para vender a mano; compra más unidades para ganar más por vuelta.
@@ -21,7 +23,7 @@ Juego propio: nombre, arte, textos y números. Sin anuncios, sin cuentas, sin ra
 - Vitest para pruebas unitarias; `node:test` + `playwright-core` (Chrome del sistema) para las de punta a punta.
 - Vercel para servir el juego y `api/ranking.ts` (Vercel Function) con Upstash Redis para el ranking. El juego no depende del servidor: sin red todo sigue funcionando salvo el ranking.
 - Node 22 (`.nvmrc`).
-                                                                                                                                            
+
 ## Estructura
 
 ```
@@ -50,7 +52,6 @@ public/                 Manifest, iconos, fuente Rye (OFL), robots.txt
 ## Guardado y compatibilidad
 
 La partida vive en `localStorage` (`antojitos.save` con respaldo en `antojitos.bak`) y se puede exportar como código desde Ajustes. El guardado es entrada no confiable: se valida y se migra en cadena (hoy versión 7). Regla de deploy: nunca publicar un build con una versión de guardado menor que la ya publicada; un cliente viejo con un guardado más nuevo juega en solo lectura hasta recargar. El código de respaldo incluye la identidad del ranking: no se comparte.
-
 
 ## Licencia
 
