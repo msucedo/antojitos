@@ -350,3 +350,14 @@ El user probó el deploy en Brave iOS. Plan revisado por un revisor independient
 - [x] Lighthouse móvil 100/100/100/100. Revisor independiente del código (3 importantes, aplicados): `atras.ts` guarda la profundidad en cada entrada y lleva un solo `go` a la vez (adelante ya no cierra un diálogo, recarga vuelve a la base, un aviso encima se cierra con el de abajo); el test de Cerrar ahora hace scroll de verdad (390×500); fuera el CSS de la franja de mejoras. Al verificar apareció un bucle infinito en `popstate` (el `close` del `<dialog>` llega en otra tarea): corregido y cubierto por los tests con `close` asíncrono.
 - [x] 299 unit, e2e 41/41.
 - [ ] El user prueba en Brave iOS tras el deploy y commitea.
+
+## Móvil: scroll bloqueado, barra de seis discos, sin recarga al jalar, hundido al tocar (2026-11-17)
+
+Pedidos del user tras commitear los arreglos móviles. Plan revisado dos veces por revisores independientes. Ver DESIGN.md "Barra inferior móvil", "Zoom y toques" y "Diálogo".
+
+- [x] Con una ventana abierta solo hace scroll la ventana (`html.con-modal`, puesta y quitada en `dialog()`, con diálogos apilados).
+- [x] Barra: Historial, Chelo, Mejoras, Empleados, Álbum y Cantidad (orden del escritorio, iconos ilustrados; Cantidad solo icono); header con Ranking y Ajustes; fuera las siluetas `gente` e `historial-sil`.
+- [x] Sin recarga al jalar (`overscroll-behavior-y: none`); hundido al tocar (`translate` + sin sombra, también en iOS).
+- [x] e2e 45/45 (nuevos: barra a 390/360/320, scroll bloqueado (falla sin la regla), ventanas apiladas, hundido); 299 unit.
+- [x] Revisor independiente del código (sin bloqueantes; aplicados: docs y comentarios viejos, `con-barra` para que el layout web no salte con barras clásicas, badges de la barra sin recibir toques, disco hundido en el e2e). Por verificar en el aparato: jalar para recargar en Brave iOS y el teclado dentro de un diálogo.
+- [ ] El user prueba en Brave iOS y commitea.

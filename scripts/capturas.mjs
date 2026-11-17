@@ -31,7 +31,7 @@ const ASIENTO_MS = 300;
 
 const VISTAS = {
   movil: { width: 390, height: 844 },
-  movil360: { width: 360, height: 780 }, // Android estrecho: el header con cuatro iconos y el nombre en dos líneas
+  movil360: { width: 360, height: 780 }, // Android estrecho: la barra de seis discos y el nombre en dos líneas
   web: { width: 1280, height: 800 },
   webcorta: { width: 1366, height: 620 }, // ventana baja de PLAN.md: lateral compacto
 };

@@ -268,7 +268,7 @@ test('móvil: Empleados abre en diálogo y la lista vuelve al cerrarlo', async (
   const semilla = partida({ money: 100, lifetimeEarned: 100, runEarned: 100 }, { elotes: { count: 1 } });
   const { context, page, errores } = await abrir({ semilla, movil: true });
   await sinPaneles(page);
-  await page.locator('button[aria-label^="Empleados"]:visible').first().tap();
+  await page.locator('.bottom button[aria-label^="Empleados"]').tap();
   const dlg = page.locator('dialog[open]');
   await dlg.waitFor();
   assert.equal(await dlg.locator('.char-card').count(), 8);
@@ -304,11 +304,11 @@ test('historial (web): el disco abre el panel y al contratar aparece la entrada 
   await context.close();
 });
 
-test('móvil: Historial abre en diálogo desde el header y el cuerpo vuelve al cerrarlo', async () => {
+test('móvil: Historial abre en diálogo desde la barra y el cuerpo vuelve al cerrarlo', async () => {
   const semilla = partida({ money: 100, lifetimeEarned: 100, runEarned: 100 }, { elotes: { count: 1 } });
   const { context, page, errores } = await abrir({ semilla, movil: true });
   await sinPaneles(page);
-  await page.locator('button[aria-label="Historial"]:visible').tap();
+  await page.locator('.bottom button[aria-label="Historial"]').tap();
   const dlg = page.locator('dialog[open]');
   await dlg.waitFor();
   assert.equal(await dlg.locator('h2').textContent(), 'Historial');
@@ -891,6 +891,141 @@ test('móvil: el Álbum mide lo mismo en Logros y en Libreta y las pestañas sig
   await page.waitForTimeout(400);
   const enLibreta = await papel.boundingBox();
   assert.deepEqual(enLibreta, enLogros);
+  assert.deepEqual(errores, []);
+  await context.close();
+});
+
+test('móvil: barra de seis discos en el orden del escritorio; arriba solo Ranking y Ajustes', async () => {
+  // $1,000 con un elote: alcanza para contratar a su empleado ($500) → badge de Empleados.
+  const semilla = partida({ money: 1000, lifetimeEarned: 1000, runEarned: 1000 }, { elotes: { count: 1 } });
+  const { context, page, errores } = await abrir({ semilla, movil: true });
+  await sinPaneles(page);
+  const arriba = await page
+    .locator('.title-row button')
+    .evaluateAll((bs) => bs.map((b) => b.getAttribute('aria-label')));
+  assert.deepEqual(arriba, ['Ranking mundial', 'Ajustes']);
+  const fila = page.locator('.bottom-row > button');
+  const nombres = await fila.evaluateAll((bs) => bs.map((b) => b.getAttribute('aria-label') ?? ''));
+  const orden = ['Historial', 'Doña Chelo', 'Mejoras', 'Empleados', 'Álbum', 'Cantidad a comprar'];
+  assert.equal(nombres.length, orden.length);
+  orden.forEach((o, i) => assert.ok(nombres[i]?.startsWith(o), `${nombres[i]} en el lugar de ${o}`));
+  const empleados = page.locator('.bottom button[aria-label^="Empleados"]');
+  await page.waitForFunction(
+    () =>
+      document.querySelector('.bottom button[aria-label^="Empleados"]')?.getAttribute('aria-label') ===
+      'Empleados: 1 por contratar',
+    null,
+    { timeout: 2000 },
+  );
+  assert.equal(await empleados.locator('.lat-badge').textContent(), '1');
+  // Los discos también se hunden al presionarlos.
+  const hist = page.locator('.bottom button[aria-label="Historial"]');
+  const c = await hist.boundingBox();
+  await page.mouse.move(c.x + c.width / 2, c.y + c.height / 2);
+  await page.mouse.down();
+  assert.equal(await hist.evaluate((b) => getComputedStyle(b).translate), '0px 2px');
+  await page.mouse.up();
+  await page.keyboard.press('Escape'); // el clic abrió el Historial
+  await page.waitForTimeout(200);
+  // Cabe a 390, 360 y 320: el último disco dentro del margen de 16 px y al menos 4 px entre discos.
+  for (const ancho of [390, 360, 320]) {
+    await page.setViewportSize({ width: ancho, height: 700 });
+    const cajas = await fila.evaluateAll((bs) => bs.map((b) => b.getBoundingClientRect().toJSON()));
+    assert.ok(cajas.at(-1).right <= ancho - 16, `a ${ancho} px el último disco se sale`);
+    for (let i = 1; i < cajas.length; i++)
+      assert.ok(cajas[i].left - cajas[i - 1].right >= 4, `a ${ancho} px los discos ${i - 1} y ${i} se pegan`);
+  }
+  assert.deepEqual(errores, []);
+  await context.close();
+});
+
+test('móvil: con una ventana abierta solo hace scroll la ventana, no la página de abajo', async () => {
+  const { context, page, errores } = await abrir({ semilla: conMejoras(), movil: true });
+  await sinPaneles(page);
+  await page.setViewportSize({ width: 390, height: 500 });
+  await page.evaluate(() => window.scrollTo(0, 200));
+  const y0 = await page.evaluate(() => window.scrollY);
+  assert.ok(y0 > 0); // la página sí tiene scroll: la prueba no es en vacío
+  await page.locator('.title-row button[aria-label="Ajustes"]').tap();
+  const dlg = page.locator('dialog[open]');
+  await dlg.waitFor();
+  const rueda = async (x, y) => {
+    await page.mouse.move(x, y);
+    await page.mouse.wheel(0, 400);
+    await page.waitForTimeout(150);
+  };
+  await rueda(3, 250); // fondo oscuro, fuera del papel
+  assert.equal(await page.evaluate(() => window.scrollY), y0);
+  const titulo = await dlg.locator('h2').boundingBox();
+  await rueda(titulo.x + 10, titulo.y + titulo.height / 2); // cabecera
+  assert.equal(await page.evaluate(() => window.scrollY), y0);
+  const cuerpo = await dlg.locator('.modal-body').boundingBox();
+  await rueda(cuerpo.x + cuerpo.width / 2, cuerpo.y + 15); // la ventana sí se desplaza (arriba: no en el textarea, que tiene su scroll)
+  assert.ok((await dlg.locator('.modal-body').evaluate((c) => c.scrollTop)) > 0);
+  assert.equal(await page.evaluate(() => window.scrollY), y0);
+  await dlg.getByRole('button', { name: 'Cerrar' }).tap();
+  await page.waitForTimeout(200);
+  assert.equal(await page.evaluate(() => window.scrollY), y0); // la página quedó donde estaba
+  await rueda(195, 300);
+  assert.notEqual(await page.evaluate(() => window.scrollY), y0); // y vuelve a desplazarse
+  assert.deepEqual(errores, []);
+  await context.close();
+});
+
+test('móvil: el bloqueo sigue con ventanas apiladas y se suelta al cerrar la última', async () => {
+  const { context, page, errores } = await abrir({ semilla: conLogros(), movil: true });
+  await sinPaneles(page);
+  const bloqueado = () => page.evaluate(() => document.documentElement.classList.contains('con-modal'));
+  assert.equal(await bloqueado(), false);
+  await page.locator('.album-btn').tap();
+  await page.getByRole('button', { name: 'Ver Primer elote' }).tap();
+  assert.equal(await page.locator('dialog[open]').count(), 2);
+  assert.equal(await bloqueado(), true);
+  await page.keyboard.press('Escape'); // cierra la vitrina; el Álbum sigue
+  await page.waitForTimeout(200);
+  assert.equal(await bloqueado(), true);
+  await page.evaluate(() => history.back()); // cierra el Álbum
+  await page.waitForTimeout(300);
+  assert.equal(await page.locator('dialog[open]').count(), 0);
+  assert.equal(await bloqueado(), false);
+  // Cruzar a web cierra el diálogo del Álbum y suelta el bloqueo.
+  await page.locator('.album-btn').tap();
+  assert.equal(await bloqueado(), true);
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.waitForTimeout(300);
+  assert.equal(await bloqueado(), false);
+  assert.deepEqual(errores, []);
+  await context.close();
+});
+
+test('hundido al tocar y sin recarga al jalar', async () => {
+  // $100: alcanza un elote ($31) y no un agua ($322): un Comprar habilitado y otro deshabilitado.
+  const semilla = partida(
+    { version: 6, money: 100, lifetimeEarned: 100, runEarned: 100 },
+    { elotes: { count: 30 }, aguas: { count: 12 } },
+  );
+  const { context, page, errores } = await abrir({ semilla });
+  await sinPaneles(page);
+  const raiz = await page.evaluate(() => getComputedStyle(document.documentElement).overscrollBehaviorY);
+  assert.equal(raiz, 'none');
+  const estilo = (loc) =>
+    loc.evaluate((b) => ({ translate: getComputedStyle(b).translate, sombra: getComputedStyle(b).boxShadow }));
+  const comprar = page.locator('.card:not([hidden]) .btn.primary:not(:disabled)').first();
+  const caja = await comprar.boundingBox();
+  const suelto = await estilo(comprar);
+  await page.mouse.move(caja.x + caja.width / 2, caja.y + caja.height / 2);
+  await page.mouse.down();
+  assert.deepEqual(await estilo(comprar), { translate: '0px 2px', sombra: 'none' });
+  await page.mouse.up();
+  assert.deepEqual(await estilo(comprar), suelto);
+  // Deshabilitado no se hunde.
+  const cerrado = page.locator('.card:not([hidden]) .btn.primary:disabled').first();
+  const cajaCerrado = await cerrado.boundingBox();
+  const antes = await estilo(cerrado);
+  await page.mouse.move(cajaCerrado.x + cajaCerrado.width / 2, cajaCerrado.y + cajaCerrado.height / 2);
+  await page.mouse.down();
+  assert.deepEqual(await estilo(cerrado), antes);
+  await page.mouse.up();
   assert.deepEqual(errores, []);
   await context.close();
 });

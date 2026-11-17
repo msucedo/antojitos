@@ -159,6 +159,17 @@ html {
   background: var(--bg);
   cursor: var(--cursor);
   touch-action: pan-x pan-y;
+  overscroll-behavior-y: none; /* jalar hacia abajo no recarga la página (Chrome Android, WebKit ≥ 16) */
+}
+
+/* Con una ventana abierta solo hace scroll la ventana: <dialog> no bloquea el de la página (ui.ts dialog()). */
+html.con-modal {
+  overflow: hidden;
+}
+
+/* Barras de scroll clásicas (Windows) y página que desborda: el hueco se queda y el layout no salta. */
+html.con-modal.con-barra {
+  scrollbar-gutter: stable;
 }
 
 /* Controles nativos: mano si se pueden usar; los campos de texto conservan su cursor. */
@@ -320,7 +331,7 @@ p {
 /*
  * Logo: corona y banderín de 40 px más el nombre en Rye en dos líneas ("Imperio de" / "Antojitos":
  * el salto va en el texto, pre-line; min-content lo partía en tres). A 390 px la fila sigue en 44 px
- * (dos líneas ≈ 36) junto a los tres iconos; el dinero sigue siendo el héroe.
+ * (dos líneas ≈ 36) junto a los dos iconos del header; el dinero sigue siendo el héroe.
  */
 .title-row h1 {
   display: flex;
@@ -387,7 +398,7 @@ p {
 }
 
 .icon-btn {
-  position: relative; /* ancla del badge de Personajes */
+  position: relative; /* ancla del badge de Ranking */
   min-width: 44px;
   min-height: 44px;
   display: inline-grid;
@@ -399,8 +410,8 @@ p {
   border-radius: 12px;
 }
 
-/* Cuatro iconos en el header móvil (Ranking, Historial, Empleados y Ajustes): 4 × 44 sin hueco entre ellos
- * (el área táctil ya es el botón) caben con el logo en 390 px; a 360 el nombre sigue en dos líneas. */
+/* Dos iconos en el header móvil (Ranking y Ajustes; lo demás va en la barra inferior), 44 px sin hueco
+ * entre ellos (el área táctil ya es el botón). */
 /* El grupo de iconos no se encoge ni se parte: el que cede es el nombre, que ya va en dos líneas. */
 .title-row > div {
   display: flex;
@@ -674,7 +685,7 @@ p {
   border: 2px solid var(--ink);
 }
 
-/* Botón de Chelo en la barra inferior móvil: mismo disco matasellos que el lateral. */
+/* Discos de la barra inferior móvil (Historial, Chelo, Mejoras, Empleados, Álbum, Cantidad): matasellos del lateral. */
 .guia-btn {
   position: relative;
   width: 44px;
@@ -1208,9 +1219,8 @@ dialog .estampilla:not(.bloqueada) .up-icon {
   height: 16px;
 }
 
-/* Álbum y Mejoras en la barra inferior móvil: mismo disco que Chelo, con icono y badge. */
-.album-btn .icon,
-.up-btn .icon {
+/* Discos de la barra inferior móvil (Historial, Mejoras, Empleados, Álbum, Cantidad): icono ilustrado del lateral. */
+.guia-btn > .icon {
   width: 28px;
   height: 28px;
 }
@@ -1881,6 +1891,23 @@ dialog .estampilla:not(.bloqueada) .up-icon {
   color: var(--text);
 }
 
+/*
+ * Hundido al tocar: el matasellos baja 2 px y pierde la sombra mientras se presiona. Sin transición (sin
+ * repintar papel enmascarado por frame); translate no choca con los transform de fx.ts (pulse, flip) ni
+ * con el translateY del hover. iOS solo aplica :active con un oyente táctil (ui.ts). El plato de vender
+ * tiene su propio :active.
+ */
+.btn:not(:disabled):not([aria-disabled='true']):active,
+.guia-btn:not(:disabled):active,
+.lat-btn:not(:disabled):active .lat-disc {
+  translate: 0 2px;
+  box-shadow: none;
+}
+
+.icon-btn:active {
+  translate: 0 2px;
+}
+
 /* ---------- Barra inferior (zona del pulgar) ---------- */
 .bottom {
   position: fixed;
@@ -1917,24 +1944,25 @@ dialog .estampilla:not(.bloqueada) .up-icon {
   color: var(--on-primary);
 }
 
-/* Chelo, Álbum y Mejoras en discos y la Cantidad en píldora, misma fila: la barra no crece. */
+/*
+ * Seis discos de 44 en el orden del lateral; el hueco se reparte (≈ 5 px a 320, 13 a 360). width: 100%
+ * porque .bottom-inner es grid y con margin auto la fila se encogería a sus discos; tope de 360 para que
+ * en tabletas no se desparramen.
+ */
 .bottom-row {
   display: flex;
-  gap: 8px;
+  justify-content: space-between;
   align-items: center;
+  width: 100%;
+  max-width: 360px;
+  margin-inline: auto;
 }
 
-/* Cantidad: la moneda del lateral (una, varias o pilas) y "×1"; cada toque cicla ×1 → ×10 → Máx. */
-.modo-btn {
-  flex: 1;
-  min-width: 0;
-  background: var(--card);
-  font-size: 1rem;
-}
-
-.modo-btn .icon {
-  width: 28px;
-  height: 28px;
+/* El badge sobresale 10 px a la derecha: encima del disco siguiente (que si no lo taparía) y sin
+   recibir toques, que abrirían el disco anterior. */
+.bottom-row .lat-badge {
+  z-index: 1;
+  pointer-events: none;
 }
 
 /* ---------- Diálogos y avisos ---------- */

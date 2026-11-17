@@ -10,7 +10,6 @@ export const ICON_NAMES = [
   'pilas',
   'caja',
   'personajes',
-  'gente',
   'bocina',
   'bocina-off',
   'nota',
@@ -24,7 +23,6 @@ export const ICON_NAMES = [
   'album',
   'logo',
   'historial',
-  'historial-sil',
   'trofeo-sil',
 ] as const;
 

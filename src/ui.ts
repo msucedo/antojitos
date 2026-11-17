@@ -458,12 +458,15 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
   // Sin zoom con pellizco en iOS: WebKit no siempre respeta touch-action para pellizcar (style.css, html).
   for (const tipo of ['gesturestart', 'gesturechange'])
     document.addEventListener(tipo, (e) => e.preventDefault(), { passive: false });
+  // iOS solo aplica :active (el hundido al tocar, style.css) si hay un oyente táctil; pasivo: no frena el scroll.
+  document.addEventListener('touchstart', () => {}, { passive: true });
 
   /**
    * Diálogo modal (DESIGN.md "Diálogos"): cabecera con el título y "Cerrar" arriba a la derecha (siempre a
    * la vista), cuerpo con scroll propio y, si hay, las acciones abajo. El foco inicial es el primer control
    * en orden (Cerrar) salvo que el llamador marque otro con `autofocus` o enfoque el h2.
    */
+  const raiz = document.documentElement;
   function dialog(title: string, body: Node[], actions: HTMLButtonElement[] = [], clase = ''): HTMLDialogElement {
     // dialog: sombra y marco exterior; .modal-paper: la estampilla con la máscara perforada.
     const d = h('dialog', { class: clase ? `modal ${clase}` : 'modal' });
@@ -481,11 +484,18 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
     d.setAttribute('aria-label', title);
     d.addEventListener('close', () => {
       d.remove();
+      // Con diálogos apilados (vitrina sobre el Álbum) el bloqueo sigue hasta cerrar el último.
+      raiz.classList.toggle('con-modal', document.querySelector('dialog.modal[open]') !== null);
       handlers.onSound('dialogClose');
     });
     document.body.append(d);
-    // <dialog> nativo: atrapa el foco, inerte el fondo y cierra con Esc.
+    // <dialog> nativo: atrapa el foco, inerte el fondo y cierra con Esc; no bloquea el scroll de la
+    // página: con-modal lo bloquea (style.css), así solo se desplaza la ventana.
     d.showModal();
+    // Con barras de scroll clásicas, reservar su hueco (con-barra) evita que el layout salte al quitarla.
+    if (!raiz.classList.contains('con-modal'))
+      raiz.classList.toggle('con-barra', raiz.scrollHeight > raiz.clientHeight);
+    raiz.classList.add('con-modal');
     atras.abierto(d);
     handlers.onSound('dialogOpen');
     return d;
@@ -553,16 +563,16 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
     [ajSound, ajSoundIc, 'sound', 'bocina', 'bocina-off'],
     [ajMusic, ajMusicIc, 'music', 'nota', 'nota-off'],
   ];
-  // Personajes en móvil: icono en el header que abre la lista en un diálogo.
+  // Empleados en móvil: disco de la barra inferior, con el icono del lateral, que abre la lista en un diálogo.
   const charsBadge = h('span', { class: 'lat-badge', hidden: true });
   charsBadge.setAttribute('aria-hidden', 'true');
-  const charsBtn = h('button', { class: 'icon-btn', type: 'button', label: 'Empleados', onclick: openChars }, [
-    icon('gente'),
+  const charsBtn = h('button', { class: 'guia-btn', type: 'button', label: 'Empleados', onclick: openChars }, [
+    icon('personajes'),
     charsBadge,
   ]);
-  // Historial en móvil: silueta en el header (como gente y ajustes) que abre la lista en un diálogo.
-  const histBtn = h('button', { class: 'icon-btn', type: 'button', label: 'Historial', onclick: openHistorial }, [
-    icon('historial-sil'),
+  // Historial en móvil: disco de la barra inferior, con el icono del lateral, que abre la lista en un diálogo.
+  const histBtn = h('button', { class: 'guia-btn', type: 'button', label: 'Historial', onclick: openHistorial }, [
+    icon('historial'),
   ]);
   // Ranking mundial: primero del grupo en móvil; en web queda solo él, absoluto en la esquina superior derecha.
   const rankingBadge = h('span', { class: 'lat-badge', hidden: true });
@@ -634,13 +644,13 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
     latAjustes.btn,
   ]);
 
-  // Cantidad en la barra móvil: la misma moneda que el disco del lateral, en píldora; cicla igual.
+  // Cantidad en la barra móvil: disco con la misma moneda que el lateral (solo icono; el modo va en el
+  // aria-label); cicla igual.
   const modoIc = icon(modeIcon(currentMode));
-  const modoTexto = h('span', { text: modeLabel(currentMode) });
   const modoBtn = h(
     'button',
-    { class: 'btn modo-btn', type: 'button', onclick: () => handlers.onMode(nextMode(currentMode)) },
-    [modoIc, modoTexto],
+    { class: 'guia-btn modo-btn', type: 'button', onclick: () => handlers.onMode(nextMode(currentMode)) },
+    [modoIc],
   );
   modoBtn.setAttribute('aria-label', `Cantidad a comprar: ${modeLabel(currentMode)}`);
 
@@ -1240,7 +1250,7 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
   const herencia = h('section', { class: 'herencia panel' }, [herenciaTitle, herenciaBody]);
   herencia.setAttribute('aria-labelledby', 'herencia-title');
   herencia.id = 'herencia';
-  // Móvil: botón en la barra inferior, junto a Chelo, que abre el Álbum en un diálogo.
+  // Móvil: disco de la barra inferior, entre Empleados y Cantidad, que abre el Álbum en un diálogo.
   const albumBadge = h('span', { class: 'lat-badge', hidden: true });
   albumBadge.setAttribute('aria-hidden', 'true');
   const albumBtn = h('button', { class: 'guia-btn album-btn', type: 'button', label: 'Álbum', onclick: openAlbum }, [
@@ -1266,7 +1276,7 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
   root.replaceChildren(
     lateral,
     h('header', { class: 'top' }, [
-      h('div', { class: 'title-row' }, [appTitle, h('div', {}, [rankingBtn, histBtn, charsBtn, ajustesBtn])]),
+      h('div', { class: 'title-row' }, [appTitle, h('div', {}, [rankingBtn, ajustesBtn])]),
       h('div', { class: 'money-row' }, [money, rate, recipes]),
       picado,
     ]),
@@ -1287,7 +1297,8 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
     ]),
     h('footer', { class: 'bottom' }, [
       h('div', { class: 'bottom-inner' }, [
-        h('div', { class: 'bottom-row' }, [guiaBtn, albumBtn, upBtn, modoBtn]),
+        // Mismo orden que el lateral de escritorio.
+        h('div', { class: 'bottom-row' }, [histBtn, guiaBtn, upBtn, charsBtn, albumBtn, modoBtn]),
         prestigeBtn,
       ]),
     ]),
@@ -2032,7 +2043,6 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
         latModo.btn.setAttribute('aria-label', `Cantidad a comprar: ${modeLabel(mode)}`);
         flip(latModo.disc);
         setIcon(modoIc, modeIcon(mode));
-        setText(modoTexto, modeLabel(mode));
         modoBtn.setAttribute('aria-label', `Cantidad a comprar: ${modeLabel(mode)}`);
         flip(modoIc);
       }
