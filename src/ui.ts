@@ -1547,7 +1547,7 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
       const puesto = ranking ? handlers.getRankingPuesto() : null;
       lista.replaceChildren(
         ...top.top.map((f) => {
-          // Por puesto y apodo: el Top puede venir de la caché (30 s) y el puesto, fresco del envío.
+          // Por puesto y apodo: el Top puede venir de la caché (10 s) y el puesto, fresco del envío.
           const yo = puesto !== null && puesto.pos === f.pos && ranking?.apodo === f.apodo;
           const li = h('li', { class: yo ? 'yo' : '' }, [
             h('span', { class: 'ranking-pos', text: String(f.pos) }),
@@ -1563,17 +1563,20 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
         pie,
         top.total === 0
           ? 'Nadie participa todavía. Sé el primero.'
-          : `${formatNumber(top.total)} ${top.total === 1 ? 'jugador' : 'jugadores'} en el ranking.`,
+          : `${formatNumber(top.total)} ${top.total === 1 ? 'jugador' : 'jugadores'} en el ranking. Actualizado a las ${formatHora(Date.now())}; las cifras llegan cada minuto.`,
       );
       setHidden(pie, false);
       setHidden(estado, true);
     }
 
+    // Solo cuenta la respuesta del último pedido: una más lenta (p. ej. de la caché) no pisa a una fresca.
+    let pedido = 0;
     function cargar(fresco: boolean): void {
+      const n = ++pedido;
       setHidden(estado, false);
       setText(estado, 'Buscando el ranking…');
       void handlers.onRankingVer(fresco).then((r) => {
-        if (!d.open) return;
+        if (!d.open || n !== pedido) return;
         if (r === 'error') {
           setText(estado, 'Sin conexión. Intenta más tarde.');
           return;
@@ -1581,6 +1584,7 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
         top = r;
         pintarTu();
         pintarLista();
+        live.textContent = 'Ranking actualizado.';
       });
     }
 

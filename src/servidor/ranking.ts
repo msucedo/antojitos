@@ -83,7 +83,8 @@ const kJugador = (id: string) => `jugador:${id}`;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 const SIN_CACHE = { 'Cache-Control': 'no-store' };
-const CACHE_TOP = { 'Cache-Control': 'public, s-maxage=30, stale-while-revalidate=60' };
+// Sin stale-while-revalidate: con él, quien pulsa Actualizar recibía la copia vieja (hasta 90 s).
+const CACHE_TOP = { 'Cache-Control': 'public, s-maxage=10' };
 
 const responder = (status: number, body: unknown, headers: Record<string, string> = SIN_CACHE): Respuesta => ({
   status,

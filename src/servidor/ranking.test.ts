@@ -122,11 +122,11 @@ async function envia(redis: RedisFalso, state: State, ip?: string): Promise<Resp
 }
 
 describe('GET /api/ranking', () => {
-  it('vacío: lista vacía, total 0, cacheable 30 s', async () => {
+  it('vacío: lista vacía, total 0, cacheable 10 s sin stale', async () => {
     const r = await manejar(get(), new RedisFalso(), sinAdmin, T0);
     expect(r.status).toBe(200);
     expect(r.body).toEqual({ top: [], total: 0 });
-    expect(r.headers['Cache-Control']).toBe('public, s-maxage=30, stale-while-revalidate=60');
+    expect(r.headers['Cache-Control']).toBe('public, s-maxage=10');
   });
 
   it('top ordenado por dinero con posición y apodo; pocos comandos', async () => {

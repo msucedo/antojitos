@@ -294,11 +294,15 @@ function start(root: HTMLElement): void {
     // Solo lectura: se exporta el guardado más nuevo tal cual (sin validar), no la partida vacía en memoria.
     getExport: () => (loaded.crudo !== null ? exportCrudo(loaded.crudo) : exportSave(state)),
     onRankingVer: async (fresco) => {
-      // Si participa y aún no hay puesto en esta sesión (o ya toca), un envío para que el diálogo lo muestre.
-      if (state.ranking && (puesto === null || debeEnviar(ultimoEnvio, state, Date.now()))) void enviarRanking();
+      // Si participa y aún no hay puesto en esta sesión (o ya toca), primero el envío: así el Top trae tu cifra.
+      // Si salió, el Top se pide fresco; lo acotan `debeEnviar` (60 s) y el límite del servidor (30 s).
+      const enviado =
+        state.ranking && (puesto === null || debeEnviar(ultimoEnvio, state, Date.now()))
+          ? (await enviarRanking()) === 'ok'
+          : false;
       try {
-        // `fresco` salta la caché de la CDN (30 s) tras unirse: la URL con query es otra entrada.
-        const res = await fetch(fresco ? `${RUTA_RANKING}?t=${Date.now()}` : RUTA_RANKING);
+        // La URL con query es otra entrada de la CDN (10 s): salta la caché tras unirse o tras tu envío.
+        const res = await fetch(fresco || enviado ? `${RUTA_RANKING}?t=${Date.now()}` : RUTA_RANKING);
         if (!res.ok) return 'error';
         return parsearTop(await res.json()) ?? 'error';
       } catch {
