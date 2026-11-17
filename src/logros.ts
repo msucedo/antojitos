@@ -1,5 +1,5 @@
-import { BUSINESSES, UPGRADES, type Arte } from './data';
-import { estrellas, heredadas, type State } from './game';
+import { BUSINESSES, UPGRADES, type Arte } from './data.js';
+import { estrellas, heredadas, type State } from './game.js';
 
 /** Arte de la estampilla: un plato, un retrato o un símbolo del sprite (nada nuevo que ilustrar). */
 export type LogroIcono = Arte;

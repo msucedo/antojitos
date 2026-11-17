@@ -1,6 +1,6 @@
-import { BUSINESSES, RACHA_MIN_POR_DIA, RACHA_SEMANA } from './data';
-import { claveDia, diaVecino } from './fecha';
-import { capAdd, cicloMs, getDef, revenuePerCycle, ventasPorSegundo, type State } from './game';
+import { BUSINESSES, RACHA_MIN_POR_DIA, RACHA_SEMANA } from './data.js';
+import { claveDia, diaVecino } from './fecha.js';
+import { capAdd, cicloMs, getDef, revenuePerCycle, ventasPorSegundo, type State } from './game.js';
 
 /** Regalo del día: dinero (días 1–6 de cada semana de racha) o una receta (día 7, 14, 21…). */
 export type Regalo = { tipo: 'dinero'; monto: number } | { tipo: 'receta' };

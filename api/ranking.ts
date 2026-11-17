@@ -1,7 +1,9 @@
 // Vercel Function (runtime Node, firma Web estándar) del ranking mundial. Solo adapta: la lógica
 // está en src/servidor/ranking.ts y la prueba vitest con un Redis en memoria.
+// Node ESM sin bundler: todo import relativo que alcanza esta función lleva `.js` (lo exige
+// tsconfig.api.json en build/check; sin eso Vercel responde 500 ERR_MODULE_NOT_FOUND).
 import { Redis } from '@upstash/redis';
-import { manejar, type Peticion, type RedisMin } from '../src/servidor/ranking';
+import { manejar, type Peticion, type RedisMin } from '../src/servidor/ranking.js';
 
 function redis(): RedisMin {
   const url = process.env.KV_REST_API_URL ?? process.env.UPSTASH_REDIS_REST_URL;

@@ -1,4 +1,4 @@
-import { BUSINESSES, RECETARIO, UPGRADES, type BusinessDef } from './data';
+import { BUSINESSES, RECETARIO, UPGRADES, type BusinessDef } from './data.js';
 import {
   cicloMs,
   emptyBiz,
@@ -12,9 +12,9 @@ import {
   type Ranking,
   type State,
   type Stats,
-} from './game';
-import { LOGRO_IDS } from './logros';
-import { iniciarRacha } from './racha';
+} from './game.js';
+import { LOGRO_IDS } from './logros.js';
+import { iniciarRacha } from './racha.js';
 
 export const SAVE_KEY = 'antojitos.save';
 export const BACKUP_KEY = 'antojitos.bak';

@@ -1,0 +1,10 @@
+{
+  // Las Vercel Functions de api/ corren en Node ESM sin bundler: todo import relativo que alcanzan
+  // necesita extensión `.js`. NodeNext hace que tsc lo exija (TS2835) antes de publicar.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext"
+  },
+  "include": ["api"]
+}

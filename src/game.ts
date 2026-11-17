@@ -20,8 +20,8 @@ import {
   type RecetarioEfecto,
   type RecetarioNivel,
   type UpgradeDef,
-} from './data';
-import { claveDia } from './fecha';
+} from './data.js';
+import { claveDia } from './fecha.js';
 
 export const SAVE_VERSION = 7;
 

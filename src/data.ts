@@ -1,6 +1,6 @@
-import type { CharacterId } from './characters';
-import type { IconName } from './icons';
-import type { PlatoId } from './platos';
+import type { CharacterId } from './characters.js';
+import type { IconName } from './icons.js';
+import type { PlatoId } from './platos.js';
 
 export type ManagerEvent = 'hire' | 'milestone' | 'upgrade' | 'estrella';
 export type CheloEvent =

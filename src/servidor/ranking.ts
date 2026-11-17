@@ -10,10 +10,10 @@
  *   rl:ip:<ip>     STR   30 envíos por minuto por IP (INCR + EXPIRE)
  */
 import { createHash, timingSafeEqual } from 'node:crypto';
-import { normalizarApodo } from '../apodo';
-import { RACHA_MIN_POR_DIA, RACHA_SEMANA } from '../data';
-import { arranqueDinero, tasaMaxima, type State } from '../game';
-import { MAX_IMPORT_CHARS, validate } from '../save';
+import { normalizarApodo } from '../apodo.js';
+import { RACHA_MIN_POR_DIA, RACHA_SEMANA } from '../data.js';
+import { arranqueDinero, tasaMaxima, type State } from '../game.js';
+import { MAX_IMPORT_CHARS, validate } from '../save.js';
 
 export interface RedisMin {
   zadd(key: string, sm: { score: number; member: string }): Promise<unknown>;
