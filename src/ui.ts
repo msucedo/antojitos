@@ -157,10 +157,10 @@ function latBtn(
 const ORDINALES = ['primero', 'segundo', 'tercero', 'cuarto', 'quinto', 'sexto', 'séptimo'] as const;
 
 /** Arte de una estampilla o cupón: plato, retrato o símbolo del sprite, al tamaño del cupón. */
-function arte(icono: Arte): Element {
-  if ('plato' in icono) return plato(icono.plato, 'icon up-icon');
-  if ('retrato' in icono) return portrait(icono.retrato, 'icon up-icon', true, '44px');
-  return icon(icono.sprite, 'icon up-icon sticker');
+function arte(icono: Arte, clase = 'icon up-icon', sizes = '44px'): Element {
+  if ('plato' in icono) return plato(icono.plato, clase);
+  if ('retrato' in icono) return portrait(icono.retrato, clase, true, sizes);
+  return icon(icono.sprite, `${clase} sticker`);
 }
 
 /** Filas de la Libreta (Álbum): etiqueta y valor desde el estado. Solo lectura. */
@@ -913,11 +913,14 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
     estado: HTMLElement;
     /** Marcador "Nuevo": lo que se anima al caer un logro a la vista (la tarjeta enmascarada se vería borrosa con scale). */
     nuevo: HTMLElement;
+    /** Abre la vitrina 3D; solo existe a la vista con el logro conseguido. */
+    ver: HTMLButtonElement;
     lograda: boolean;
   }
   const resaltadas = new Set<string>(); // ids marcados "Nuevo" (antes de las estampillas: setEstado ya los consulta)
   function setEstado(e: Estampilla, lograda: boolean): void {
     e.lograda = lograda;
+    e.ver.hidden = !lograda;
     e.root.classList.toggle('bloqueada', !lograda);
     if (lograda)
       e.estado.replaceChildren(document.createTextNode(e.def.logrado)); // qué se logró, no el +2 % repetido
@@ -931,19 +934,79 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
   }
   const estampillas: Estampilla[] = LOGROS.map((def) => {
     const estado = h('p', { class: 'up-effect' });
+    estado.id = `logro-${def.id}-txt`;
     const nombre = h('h3', { class: 'up-name', text: def.nombre });
     // Sello de goma "Bloqueado" en diagonal sobre la estampilla, como el de "Contratado" (solo con .bloqueada).
     const sello = h('span', { class: 'sello-bloqueado' }, [h('span', { class: 'sello-goma', text: 'Bloqueado' })]);
     sello.setAttribute('aria-hidden', 'true'); // el sr-only de la pista ya lo dice
     const card = h('div', { class: 'up-card estampilla-card' }, [arte(def.icono), nombre, estado, sello]);
+    // Botón que cubre la estampilla entera (fuera de la máscara); el lector oye nombre y texto logrado.
+    const ver = h('button', {
+      class: 'estampilla-ver',
+      type: 'button',
+      label: `Ver ${def.nombre}`,
+      onclick: () => abrirVitrina(def, ver),
+    });
+    ver.setAttribute('aria-describedby', estado.id);
     const nuevo = h('span', { class: 'nuevo', text: 'Nuevo' });
     nuevo.setAttribute('aria-hidden', 'true'); // el sr-only del nombre ya lo dice
-    // El marcador va después de la tarjeta enmascarada: el orden del árbol lo pinta encima.
-    const root = h('li', { class: 'up-slot estampilla' }, [card, nuevo]);
-    const e: Estampilla = { def, root, card, nombre, estado, nuevo, lograda: true };
+    // El marcador va después de la tarjeta enmascarada y del botón: el orden del árbol lo pinta encima.
+    const root = h('li', { class: 'up-slot estampilla' }, [card, ver, nuevo]);
+    const e: Estampilla = { def, root, card, nombre, estado, nuevo, ver, lograda: true };
     setEstado(e, false);
     return e;
   });
+
+  // Vitrina 3D (DESIGN.md "Vitrina 3D"): el arte del logro en una ficha que gira. three viaja en un chunk
+  // aparte que solo se pide aquí; sin WebGL2 o sin el chunk se queda el arte 2D grande.
+  let vitrinaDialog: HTMLDialogElement | null = null;
+  function abrirVitrina(def: LogroDef, btn: HTMLButtonElement): void {
+    if (vitrinaDialog) return;
+    const canvas = h('canvas');
+    const figura = h('div', { class: 'vitrina' }, [arte(def.icono, 'vitrina-2d', '220px'), canvas]);
+    figura.setAttribute('aria-hidden', 'true'); // decorativa: nombre y texto los dan el título y el párrafo
+    const texto = h('p', { class: 'vitrina-texto', text: def.logrado });
+    texto.id = 'vitrina-texto';
+    const d = dialog(def.nombre, [figura, texto]);
+    d.setAttribute('aria-describedby', texto.id); // showModal enfoca "Cerrar": sin esto el texto no se oye
+    vitrinaDialog = d;
+    albumBody.classList.add('vitrina-abierta'); // el giro de papel de la cuadrícula, en pausa bajo el modal
+    let vitrina: { destroy(): void } | null = null;
+    const vivo = () => d.isConnected;
+    // Contexto que no llegó a montarse (cierre durante la carga, chunk o textura que fallan): se suelta a mano,
+    // o se acumulan hasta el tope del navegador (16 en Chrome, menos en iOS).
+    const soltar = () => gl?.getExtension('WEBGL_lose_context')?.loseContext();
+    d.addEventListener('close', () => {
+      vitrinaDialog = null;
+      albumBody.classList.remove('vitrina-abierta');
+      if (vitrina) vitrina.destroy();
+      else soltar();
+      vitrina = null;
+      if (btn.isConnected && !btn.hidden && btn.closest('[hidden]') === null) btn.focus({ preventScroll: true });
+    });
+    // Un solo getContext con los atributos de three: si se sondeara antes, three heredaría otros.
+    const gl = canvas.getContext('webgl2', { alpha: true, antialias: true });
+    if (!gl) {
+      figura.dataset['modo'] = '2d';
+      return;
+    }
+    import('./vitrina')
+      .then(({ montarVitrina }) =>
+        vivo()
+          ? montarVitrina(canvas, gl, def.icono, vivo, () => {
+              figura.dataset['modo'] = '3d';
+            })
+          : null,
+      )
+      .then((v) => {
+        if (v && !vivo()) v.destroy();
+        else vitrina = v;
+      })
+      .catch(() => {
+        soltar();
+        if (vivo()) figura.dataset['modo'] = '2d';
+      });
+  }
 
   // Logros nuevos: se marcan al abrir el Álbum (desde logrosVistos) o al caer con la pestaña Logros
   // a la vista, y se limpian al cerrar. Clase y texto se ponen en el acto, no en render().
@@ -1311,6 +1374,7 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
 
   // Al cruzar los 900 px todo vuelve al estado en línea / cerrado: nada queda a medias.
   mq.addEventListener('change', () => {
+    vitrinaDialog?.close(); // primero: va encima del Álbum (diálogo móvil o panel) y su foco vuelve ahí
     activePanel?.close(false);
     charsDialogTitle?.closest('dialog')?.close();
     guiaDialogTitle?.closest('dialog')?.close();

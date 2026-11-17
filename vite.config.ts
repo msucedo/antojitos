@@ -7,6 +7,8 @@ export default defineConfig({
     // (los navegadores bloquean <use> hacia data: y la CSP solo permite 'self'). Los retratos
     // WebP tampoco: img-src 'self' bloquea data:.
     assetsInlineLimit: (file) => (file.endsWith('.svg') || file.endsWith('.webp') ? false : undefined),
+    // El chunk perezoso de la vitrina 3D (three) mide ~546 KB (136 KB gzip); el de entrada, ~90 KB.
+    chunkSizeWarningLimit: 560,
   },
   plugins: [
     VitePWA({
@@ -16,6 +18,16 @@ export default defineConfig({
       includeAssets: ['favicon.svg', 'icons/apple-touch-icon.png'],
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,webp,woff2,webmanifest}'],
+        // three (vitrina 3D del Álbum) no se precachea: solo lo descarga quien abre una vitrina, y queda
+        // en caché desde entonces. Sin red la primera vez, la vitrina se queda con el arte 2D.
+        globIgnores: ['**/assets/vitrina-*.js'],
+        runtimeCaching: [
+          {
+            urlPattern: ({ url }) => /^\/assets\/vitrina-[\w-]+\.js$/.test(url.pathname),
+            handler: 'CacheFirst',
+            options: { cacheName: 'vitrina', expiration: { maxEntries: 2 } },
+          },
+        ],
         cleanupOutdatedCaches: true,
         // Las funciones de /api nunca caen al index.html del fallback (solo navegaciones; por si acaso).
         navigateFallbackDenylist: [/^\/api\//],

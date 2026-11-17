@@ -142,12 +142,13 @@ function partida(extra = {}, negocios = {}) {
  * Página nueva con errores de consola y violaciones de CSP recogidos. `semilla` se escribe en
  * localStorage antes de que corra el juego (con lastSeen actual si no trae uno).
  */
-async function abrir({ semilla, crudo, movil = false, sw = false } = {}) {
+async function abrir({ semilla, crudo, movil = false, sw = false, quieto = false } = {}) {
   const context = await browser.newContext({
     viewport: movil ? { width: 390, height: 844 } : { width: 1280, height: 800 },
     hasTouch: movil,
     isMobile: movil,
     serviceWorkers: sw ? 'allow' : 'block',
+    reducedMotion: quieto ? 'reduce' : 'no-preference',
   });
   if (semilla || crudo !== undefined) {
     await context.addInitScript(
@@ -668,6 +669,195 @@ test('álbum completo: con todos los logros sale el letrero', async () => {
   assert.match(await otra.page.locator('.album-completo').textContent(), /Álbum completo.*quedó completo/);
   assert.deepEqual(otra.errores, []);
   await otra.context.close();
+});
+
+/** Partida con tres logros: un plato (venta), un símbolo del sprite (clics-100) y un retrato (empleado). */
+const conLogros = () =>
+  partida(
+    { version: 6, lifetimeEarned: 1, logros: ['venta', 'clics-100', 'empleado'], logrosVistos: 3 },
+    { elotes: { count: 1 } },
+  );
+
+test('vitrina 3D (web): plato, sprite y retrato giran en WebGL; Esc cierra y el foco vuelve a la estampilla', async () => {
+  const { context, page, errores } = await abrir({ semilla: conLogros() });
+  await sinPaneles(page);
+  await page.locator('.lateral button[aria-label^="Álbum"]').click();
+  await page.waitForTimeout(400);
+  // Las bloqueadas no tienen botón a la vista.
+  assert.equal(await page.locator('#album .estampilla-ver:not([hidden])').count(), 3);
+  for (const nombre of ['Primer elote', 'Mano caliente', 'Primer empleado']) {
+    const ver = page.getByRole('button', { name: `Ver ${nombre}` });
+    await ver.click();
+    const dlg = page.locator('dialog[open]');
+    assert.equal(await dlg.locator('h2').textContent(), nombre);
+    await dlg.locator('.vitrina[data-modo="3d"]').waitFor({ timeout: 5000 });
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(300);
+    assert.equal(await page.locator('dialog[open]').count(), 0);
+    assert.equal(await ver.evaluate((b) => b === document.activeElement), true);
+    // El panel del Álbum sigue abierto (Esc cerró solo la vitrina).
+    assert.equal(await page.locator('#album.open').count(), 1);
+  }
+  assert.deepEqual(errores, []);
+  await context.close();
+});
+
+test('vitrina 3D: abrir y cerrar 20 veces seguidas, también antes de que cargue, sin errores', async () => {
+  const { context, page, errores } = await abrir({ semilla: conLogros() });
+  // Cada contexto webgl2 que se crea, para comprobar al final que todos se soltaron.
+  await page.evaluate(() => {
+    const original = HTMLCanvasElement.prototype.getContext;
+    window.__contextos = [];
+    HTMLCanvasElement.prototype.getContext = function (tipo, ...resto) {
+      const ctx = original.call(this, tipo, ...resto);
+      if (tipo === 'webgl2' && ctx) window.__contextos.push(ctx);
+      return ctx;
+    };
+  });
+  await sinPaneles(page);
+  await page.locator('.lateral button[aria-label^="Álbum"]').click();
+  await page.waitForTimeout(400);
+  const ver = page.getByRole('button', { name: 'Ver Mano caliente' });
+  for (let i = 0; i < 20; i++) {
+    await ver.click();
+    // La mitad se cierra en el acto (chunk o textura a medio cargar); la otra, ya girando.
+    if (i % 2) await page.locator('.vitrina[data-modo="3d"]').waitFor({ timeout: 5000 });
+    await page.keyboard.press('Escape');
+    await page.locator('dialog[open]').waitFor({ state: 'detached' });
+  }
+  await page.waitForTimeout(500); // que terminen las cargas pendientes de los cierres rápidos
+  assert.equal(await page.locator('dialog, .vitrina').count(), 0);
+  // Ninguno queda vivo, tampoco los de cierres antes de montar (Chrome tope 16: se notaría al desalojar).
+  const vivos = await page.evaluate(() => window.__contextos.filter((c) => !c.isContextLost()).length);
+  assert.equal(await page.evaluate(() => window.__contextos.length), 20);
+  assert.equal(vivos, 0);
+  assert.deepEqual(errores, []);
+  await context.close();
+});
+
+test('vitrina sin el chunk de three: se queda el arte 2D, sin errores', async () => {
+  const { context, page, errores } = await abrir({ semilla: conLogros() });
+  await page.route(/\/assets\/vitrina-[\w-]+\.js$/, (r) => r.abort());
+  await sinPaneles(page);
+  await page.locator('.lateral button[aria-label^="Álbum"]').click();
+  await page.waitForTimeout(400);
+  await page.getByRole('button', { name: 'Ver Primer elote' }).click();
+  const vitrina = page.locator('dialog[open] .vitrina[data-modo="2d"]');
+  await vitrina.waitFor({ timeout: 5000 });
+  assert.equal(await vitrina.locator('.vitrina-2d').isVisible(), true);
+  // El aborto del chunk sale como error de red en la consola: es lo que se prueba, no un fallo del juego.
+  assert.deepEqual(
+    errores.filter((e) => !/ERR_FAILED|Failed to fetch dynamically imported module/.test(e)),
+    [],
+  );
+  await context.close();
+});
+
+test('móvil: la vitrina se apila sobre el diálogo del Álbum y al cerrarla el Álbum sigue abierto', async () => {
+  const { context, page, errores } = await abrir({ semilla: conLogros(), movil: true });
+  await sinPaneles(page);
+  await page.locator('.album-btn').tap();
+  await page.locator('dialog[open]').waitFor();
+  await page.getByRole('button', { name: 'Ver Primer elote' }).tap();
+  await page.locator('.vitrina[data-modo="3d"]').waitFor({ timeout: 5000 });
+  assert.equal(await page.locator('dialog[open]').count(), 2);
+  await page.locator('dialog[open] .vitrina').locator('..').getByRole('button', { name: 'Cerrar' }).tap();
+  await page.waitForTimeout(300);
+  assert.equal(await page.locator('dialog[open]').count(), 1);
+  assert.equal(await page.locator('dialog[open] .estampilla').count(), 26);
+  // Cruzar a web cierra todo, la vitrina incluida.
+  await page.getByRole('button', { name: 'Ver Primer elote' }).tap();
+  await page.locator('.vitrina').waitFor();
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.waitForTimeout(400);
+  assert.equal(await page.locator('dialog[open]').count(), 0);
+  assert.deepEqual(errores, []);
+  await context.close();
+});
+
+/** Animaciones del icono de cada estampilla: { lograda, n, estados } en el orden del catálogo. */
+const giros = (page, raiz) =>
+  page.evaluate(
+    (sel) =>
+      [...document.querySelectorAll(`${sel} .estampilla`)].map((li) => {
+        const anims = li.querySelector('.up-icon').getAnimations();
+        return {
+          lograda: !li.classList.contains('bloqueada'),
+          n: anims.length,
+          estados: anims.map((a) => a.playState),
+        };
+      }),
+    raiz,
+  );
+
+test('giro de papel (web): giran solo las logradas, con el Álbum en Logros; en pausa bajo la vitrina', async () => {
+  // A 1.5 s de "Una hora": cae con el Álbum ya abierto y debe empezar a girar.
+  const semilla = conLogros();
+  semilla.stats = { jugadoMs: 3_600_000 - 1500 };
+  const { context, page, errores } = await abrir({ semilla });
+  await sinPaneles(page);
+  const cerrado = await giros(page, '#album');
+  assert.equal(cerrado.length, 26);
+  assert.ok(cerrado.every((g) => g.n === 0)); // panel cerrado: nada anima
+  // "Una hora" aún no cae: así se prueba que un logro que cae con el Álbum abierto empieza a girar.
+  assert.equal(cerrado.filter((g) => g.lograda).length, 3);
+  await page.locator('.lateral button[aria-label^="Álbum"]').click();
+  await page.waitForFunction(() => document.querySelectorAll('#album .estampilla:not(.bloqueada)').length === 4, null, {
+    timeout: 4000,
+  });
+  const abiertos = await giros(page, '#album');
+  assert.equal(abiertos.filter((g) => g.lograda).length, 4);
+  for (const g of abiertos) assert.equal(g.n, g.lograda ? 2 : 0); // giro + brinco; el logro nuevo incluido
+  // Bajo la vitrina, en pausa; al cerrarla vuelven a correr.
+  await page.getByRole('button', { name: 'Ver Primer elote' }).click();
+  await page.locator('dialog[open] .vitrina').waitFor();
+  assert.ok(
+    (await giros(page, '#album')).filter((g) => g.lograda).every((g) => g.estados.every((e) => e === 'paused')),
+  );
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(300);
+  assert.ok(
+    (await giros(page, '#album')).filter((g) => g.lograda).every((g) => g.estados.every((e) => e === 'running')),
+  );
+  // Libreta: el tabpanel de Logros queda display: none y nada anima.
+  await page.getByRole('tab', { name: 'Libreta' }).click();
+  assert.ok((await giros(page, '#album')).every((g) => g.n === 0));
+  await page.getByRole('tab', { name: 'Logros' }).click();
+  assert.equal((await giros(page, '#album')).filter((g) => g.n === 2).length, 4);
+  // Cerrar el Álbum: se detiene.
+  await page.locator('.lateral button[aria-label^="Álbum"]').click();
+  await page.waitForTimeout(300);
+  assert.ok((await giros(page, '#album')).every((g) => g.n === 0));
+  assert.deepEqual(errores, []);
+  await context.close();
+});
+
+test('giro de papel (móvil): gira en el diálogo del Álbum y se detiene al cerrarlo', async () => {
+  const { context, page, errores } = await abrir({ semilla: conLogros(), movil: true });
+  await sinPaneles(page);
+  await page.locator('.album-btn').tap();
+  await page.locator('dialog[open]').waitFor();
+  const enDialogo = await giros(page, 'dialog[open]');
+  assert.equal(enDialogo.length, 26);
+  assert.equal(enDialogo.filter((g) => g.lograda).length, 3);
+  for (const g of enDialogo) assert.equal(g.n, g.lograda ? 2 : 0);
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(300);
+  assert.ok((await giros(page, '#album')).every((g) => g.n === 0));
+  assert.deepEqual(errores, []);
+  await context.close();
+});
+
+test('giro de papel con reduced motion: nada gira', async () => {
+  const { context, page, errores } = await abrir({ semilla: conLogros(), quieto: true });
+  await sinPaneles(page);
+  await page.locator('.lateral button[aria-label^="Álbum"]').click();
+  await page.locator('#album.open').waitFor();
+  const quietos = await giros(page, '#album');
+  assert.equal(quietos.filter((g) => g.lograda).length, 3);
+  assert.ok(quietos.every((g) => g.n === 0));
+  assert.deepEqual(errores, []);
+  await context.close();
 });
 
 test('guardado corrupto: aviso y copia ilegible conservada', async () => {

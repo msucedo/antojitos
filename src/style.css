@@ -893,6 +893,85 @@ p {
   margin-bottom: 0;
 }
 
+/*
+ * Giro de papel (DESIGN.md "Álbum"): el icono de cada estampilla lograda da vueltas como un recorte de
+ * papel, plano y sin canto; por detrás se ve en espejo (backface visible, el valor por defecto). Un
+ * brinco por media vuelta: sube de canto y cae de frente o de espaldas. Duraciones y desfases por
+ * nth-child (3 × 5 = 15 combinaciones, vecinos siempre distintos) para que no giren al unísono.
+ * Solo con el Álbum a la vista (panel abierto o diálogo móvil; Libreta es display: none); en pausa
+ * bajo la vitrina; reduced motion lo apaga con la regla global. El giro va en `transform` del icono y el
+ * brinco en `translate`; el translateY del hover va en la tarjeta, sin choque. Sin will-change: la
+ * animación de transform ya da capa propia.
+ */
+.album.open .estampilla:not(.bloqueada) .up-icon,
+dialog .estampilla:not(.bloqueada) .up-icon {
+  animation:
+    papel-giro var(--giro-dur) linear var(--giro-desfase) infinite,
+    papel-brinco calc(var(--giro-dur) / 2) var(--giro-desfase) infinite;
+  animation-play-state: var(--giro-estado, running); /* tras el atajo, que lo devolvería a running */
+}
+
+.estampilla:nth-child(3n + 1) {
+  --giro-dur: 4.6s;
+}
+
+.estampilla:nth-child(3n + 2) {
+  --giro-dur: 5.2s;
+}
+
+.estampilla:nth-child(3n) {
+  --giro-dur: 5.8s;
+}
+
+.estampilla:nth-child(5n + 1) {
+  --giro-desfase: 0s;
+}
+
+.estampilla:nth-child(5n + 2) {
+  --giro-desfase: -1.1s;
+}
+
+.estampilla:nth-child(5n + 3) {
+  --giro-desfase: -2.3s;
+}
+
+.estampilla:nth-child(5n + 4) {
+  --giro-desfase: -3.4s;
+}
+
+.estampilla:nth-child(5n) {
+  --giro-desfase: -4.5s;
+}
+
+.album-body.vitrina-abierta {
+  --giro-estado: paused;
+}
+
+/* perspective() en el propio icono: el punto de fuga es su centro, sin depender del padding de la tarjeta. */
+@keyframes papel-giro {
+  from {
+    transform: perspective(320px) rotateY(0deg);
+  }
+  to {
+    transform: perspective(320px) rotateY(360deg);
+  }
+}
+
+/* Rebote, no flotar: sube frenando y cae acelerando. */
+@keyframes papel-brinco {
+  0% {
+    translate: 0 0;
+    animation-timing-function: ease-out;
+  }
+  50% {
+    translate: 0 -3px;
+    animation-timing-function: ease-in;
+  }
+  100% {
+    translate: 0 0;
+  }
+}
+
 .estampilla-card .up-name {
   font-size: 0.78rem;
   overflow-wrap: anywhere;
@@ -990,6 +1069,68 @@ p {
 
 .estampilla.nueva .nuevo {
   display: block;
+}
+
+/*
+ * Botón "Ver" de una estampilla lograda: cubre la estampilla entera, transparente y fuera de la máscara
+ * (el anillo de foco no se recorta). Sin z-index: "Nuevo" va después en el árbol y pinta encima.
+ */
+.estampilla-ver {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  cursor: var(--cursor-mano);
+}
+
+.estampilla-ver[hidden] {
+  display: none;
+}
+
+.up-slot:has(.estampilla-ver:focus-visible) .up-card {
+  transform: translateY(-3px);
+}
+
+/* Vitrina 3D: ficha que gira (canvas) sobre el arte 2D, que se ve mientras carga y si no hay WebGL2. */
+.vitrina {
+  display: grid;
+  place-items: center;
+  justify-self: center;
+  width: 220px;
+  height: 220px;
+}
+
+.vitrina > * {
+  grid-area: 1 / 1;
+}
+
+.vitrina-2d {
+  width: 160px;
+  height: 160px;
+}
+
+.vitrina canvas {
+  width: 220px;
+  height: 220px;
+  visibility: hidden;
+  touch-action: none; /* el diálogo tiene overflow: auto: sin esto, arrastrar la ficha hace scroll */
+  cursor: var(--cursor-mano);
+}
+
+.vitrina[data-modo='3d'] canvas {
+  visibility: visible;
+}
+
+.vitrina[data-modo='3d'] .vitrina-2d {
+  visibility: hidden;
+}
+
+.vitrina-texto {
+  margin: 0;
+  text-align: center;
 }
 
 .libreta {

@@ -11,7 +11,7 @@ const CONFETTI_COLORS = ['fx-pink', 'fx-corn', 'fx-nopal'] as const;
 let activeCoins = 0;
 let confettiActive = false;
 
-function reducedMotion(): boolean {
+export function reducedMotion(): boolean {
   return window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
 }
 

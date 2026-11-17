@@ -62,11 +62,12 @@ Fórmulas estándar del género (Kongregate, "The Math of Idle Games"); constant
 
 - DOM: solo `textContent`/`createElement`; nada de `innerHTML` con datos, `eval` ni scripts inline. Las barras usan `el.style.transform`.
 - `vercel.json`:
-  - `Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; frame-ancestors 'none'`
+  - `Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'none'; frame-ancestors 'none'`
   - `X-Content-Type-Options: nosniff`
   - `Referrer-Policy: no-referrer`
   - `Permissions-Policy: camera=(), microphone=(), geolocation=()`
   - `Cache-Control`: `no-cache` para `sw.js` e `index.html`; immutable para `assets/*`.
+- `img-src blob:` solo para la vitrina 3D del Álbum: rasteriza un símbolo del sprite (SVG propio) a textura. Solo nuestro código crea blobs; nada externo.
 - Sin terceros (CDN, fuentes, analytics); cero PII.
 
 ## UI y accesibilidad
@@ -309,3 +310,30 @@ Rediseño de lo de dentro de las tarjetas de negocio (`li.card`) a partir de las
 - [ ] Deploy (lo hace el user): `npx vercel login` y `npx vercel link`; en el dashboard Storage → Marketplace → Upstash Redis (plan gratis, región `us-east-1`/`iad1`; anotar el límite real de comandos: con 20 jugadores activos una hora al día son ≈ 9 000/día) conectado al proyecto (inyecta `KV_REST_API_URL`/`KV_REST_API_TOKEN`); opcional `npx vercel env add ADMIN_TOKEN production`; `npx vercel env pull .env.local`; `npx vercel --prod`; `curl -I https://<dominio>/` (headers) y `curl https://<dominio>/api/ranking`. Recomendado: repo en GitHub conectado al proyecto para deploys por push.
 - [x] Revisión independiente del código (1 bloqueante y 5 importantes, aplicados): con `automaticDeserialization: false` Upstash devuelve `HGETALL`/`HMGET` como listas planas aunque sus tipos prometan objetos (ningún jugador habría entrado: 403 en el alta); `RedisMin` declara la forma cruda, el adaptador la afirma y el Redis falso de los tests la imita. `DELETE` deja baneado; la fila propia se marca por puesto **y** apodo y tras unirse el Top se pide con `?t=` para saltar la caché de la CDN; el diálogo crea sus nodos una vez (refrescar no borra lo escrito ni el aviso); `mismoHash` exige hex antes de `timingSafeEqual`.
 - [ ] Commit del user.
+
+## Vitrina 3D del Álbum con three.js (2026-11-16)
+
+**Objetivo:** primer uso aislado de three.js, perezoso y decorativo. Decisiones del user: tocar una estampilla lograda abre una vitrina; ficha con canto que gira; `blob:` en `img-src` para los símbolos del sprite. Ver DESIGN.md "Vitrina 3D".
+
+- [x] `three` 0.187.0 (runtime) y `@types/three` 0.187.0 (dev), versiones exactas. Solo `src/vitrina.ts` lo importa y `ui.ts` lo carga con `import()` (lo comprueba `cara.test.ts`).
+- [x] Chunk `vitrina-*.js` 546 KB (136 KB gzip), fuera del precache (`globIgnores` + `runtimeCaching` CacheFirst); `chunkSizeWarningLimit: 560`. Entrada 88.9 → 89.9 KB; precache 587 → 589 KiB.
+- [x] CSP `img-src 'self' blob:` (vercel.json; e2e la hereda).
+- [x] Verificación: unitarias de `simboloSvg` (los símbolos de los logros: tamaño, sin `<use>` ni `currentColor`) y de dónde se importa three; e2e +4 (33/33); 291 unitarias; capturas `--vitrina`; medición de rendimiento en DESIGN.md.
+- [x] Revisión independiente del plan (17 puntos, aplicados) y del código (1 bloqueante y 1 fuga, aplicados): el arte salía girado 90° (UV de la tapa tras `rotateX`; ahora `rotateZ` y prueba de UV) y los contextos WebGL de vitrinas cerradas antes de montar no se soltaban (25 cierres rápidos dejaban 16 vivos; ahora `WEBGL_lose_context` y e2e que cuenta contextos). También `aria-describedby` en el diálogo. Ambas pruebas nuevas fallan sin su arreglo.
+- [ ] Prueba manual en Safari iOS (textura desde blob sin canvas tainted).
+- [ ] Commit del user.
+
+## Giro de papel en el Álbum (2026-11-17)
+
+**Objetivo:** los iconos de las estampillas logradas giran todos a la vez, desfasados, como recorte de papel con el reverso en espejo. Decisiones del user: CSS 3D (no three), giro constante lento con rebote ligero, la vitrina 3D se queda igual por ahora. Ver DESIGN.md "Giro de papel".
+
+- [x] CSS: `papel-giro` + `papel-brinco`, `perspective` en `.estampilla-card`, desfase por `nth-child`, pausa bajo la vitrina (`--giro-estado`). Única línea de JS: la clase `vitrina-abierta` en `abrirVitrina`.
+- [x] Capturas `--album` deterministas (giro congelado y `album-pico-*`); `--album` ya no falla en `movil360` (`esperarAlbum` solo reconocía `movil`).
+- [x] Revisión independiente del plan (11 puntos, aplicados: `perspective-origin`, congelar capturas, pausa bajo la vitrina, desfase solo CSS, sin `will-change`, rebote con timing por keyframe).
+- [x] Verificación: e2e +3 (36/36); rendimiento en DESIGN (sin repintado).
+- [x] Revisión independiente del código (sin bloqueantes; aplicados): perspectiva dentro del giro (`perspective(320px) rotateY`, el `perspective-origin` de la tarjeta dependía de un padding que `.up-card` pisa), `--album` sin semilla usa una con tres logros (si no, nada giraba), y los e2e afirman 26 estampillas y 3 logradas antes de comprobar (no pasan en vacío; el logro por tiempo cae con el Álbum ya abierto). Aceptado: al cerrar el panel web los iconos vuelven a 0° durante su salida de 250 ms.
+- [ ] Commit del user.
+
+## Nitidez del giro de papel (2026-11-17, descartado)
+
+El giro continuo se ve un poco suave: el compositor remuestrea el bitmap de 44 px y casi nunca queda alineado al píxel. Se probó un volteo con pausa (reposos exactos en identidad y `scaleX(-1)`, iguales al icono estático a DPR 1 y 2; volteos de 0.35 s y de 1 s) y supersampling 2× (solo ayudaba en DPR 1 y ablandaba la sombra del `.sticker`). El user prefirió el giro constante de antes: se restauró tal cual. Ver DESIGN.md "Giro de papel".
