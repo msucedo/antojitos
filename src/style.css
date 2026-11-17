@@ -151,9 +151,14 @@
   display: none !important;
 }
 
+/*
+ * Sin zoom (pedido del user, 2026-11-17): pan-x pan-y quita el doble toque y el pellizco sin
+ * user-scalable=no, que Lighthouse marca como fallo de accesibilidad. iOS además: gesturestart en ui.ts.
+ */
 html {
   background: var(--bg);
   cursor: var(--cursor);
+  touch-action: pan-x pan-y;
 }
 
 /* Controles nativos: mano si se pueden usar; los campos de texto conservan su cursor. */
@@ -423,6 +428,7 @@ p {
 }
 
 .ranking-form .apodo {
+  font-size: 1rem; /* iOS hace zoom al enfocar campos de menos de 16 px */
   flex: 1 1 140px;
   min-width: 0;
   min-height: 44px;
@@ -734,8 +740,9 @@ p {
   margin-bottom: 8px;
 }
 
-/* min-width: 0, si no los cupones de ancho fijo ensanchan la sección y la página. */
+/* Mejoras: como Personajes, en móvil la sección solo guarda la lista (se abre en un diálogo desde la barra). */
 .upgrades {
+  display: none;
   min-width: 0;
 }
 
@@ -1116,7 +1123,7 @@ dialog .estampilla:not(.bloqueada) .up-icon {
   width: 220px;
   height: 220px;
   visibility: hidden;
-  touch-action: none; /* el diálogo tiene overflow: auto: sin esto, arrastrar la ficha hace scroll */
+  touch-action: none; /* el cuerpo del diálogo hace scroll: sin esto, arrastrar la ficha lo desplaza */
   cursor: var(--cursor-mano);
 }
 
@@ -1201,26 +1208,28 @@ dialog .estampilla:not(.bloqueada) .up-icon {
   height: 16px;
 }
 
-/* Botón del Álbum en la barra inferior móvil: mismo disco que Chelo, con icono y badge de logros nuevos. */
-.album-btn .icon {
+/* Álbum y Mejoras en la barra inferior móvil: mismo disco que Chelo, con icono y badge. */
+.album-btn .icon,
+.up-btn .icon {
   width: 28px;
   height: 28px;
 }
 
-.up-list {
-  list-style: none;
-  margin: 0 -16px;
-  padding: 0 16px 4px;
-  display: flex;
-  gap: 10px;
-  overflow-x: auto;
-  scroll-snap-type: x mandatory;
-  scroll-padding: 0 16px;
-  scrollbar-width: none;
+/* Mejoras sin nada que ofrecer: como el disco del lateral, atenuado y con borde punteado (no solo color). */
+.guia-btn:disabled {
+  opacity: 0.5;
+  border-style: dashed;
+  box-shadow: none;
+  cursor: var(--cursor);
 }
 
-.up-list::-webkit-scrollbar {
-  display: none;
+.up-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); /* diálogo móvil; en web, dos columnas */
+  gap: 10px;
 }
 
 /*
@@ -1231,8 +1240,6 @@ dialog .estampilla:not(.bloqueada) .up-icon {
 .up-slot {
   position: relative;
   isolation: isolate;
-  flex: 0 0 156px;
-  scroll-snap-align: start;
 }
 
 /*
@@ -1421,20 +1428,6 @@ dialog .estampilla:not(.bloqueada) .up-icon {
   border-color: var(--muted);
 }
 
-/* La lista dentro del diálogo móvil: rejilla, sin el scroll horizontal ni los márgenes negativos. */
-.modal .up-list {
-  margin: 0;
-  padding: 0;
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-  overflow: visible;
-  scroll-snap-type: none;
-}
-
-.modal .up-slot {
-  flex: none;
-}
-
 /* ---------- Negocios ---------- */
 .list {
   list-style: none;
@@ -1448,6 +1441,10 @@ dialog .estampilla:not(.bloqueada) .up-icon {
   position: relative;
   isolation: isolate;
   padding-top: calc(var(--letrero-h) / 2); /* hueco para la mitad del letrero que sobresale */
+  /* Toques rápidos no seleccionan texto ni abren el menú de iOS (vender a ritmo seleccionaba). */
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
 }
 
 /*
@@ -1920,47 +1917,32 @@ dialog .estampilla:not(.bloqueada) .up-icon {
   color: var(--on-primary);
 }
 
-/* Chelo a la izquierda del segmentado, misma fila: la barra no crece. */
+/* Chelo, Álbum y Mejoras en discos y la Cantidad en píldora, misma fila: la barra no crece. */
 .bottom-row {
   display: flex;
   gap: 8px;
   align-items: center;
 }
 
-.bottom-row .segmented {
+/* Cantidad: la moneda del lateral (una, varias o pilas) y "×1"; cada toque cicla ×1 → ×10 → Máx. */
+.modo-btn {
   flex: 1;
+  min-width: 0;
+  background: var(--card);
+  font-size: 1rem;
 }
 
-.segmented {
-  display: flex;
-  border-radius: 999px;
-  overflow: hidden;
-  border: 2px solid var(--border);
-  box-shadow: var(--sombra-btn);
-}
-
-.seg {
-  flex: 1;
-  min-height: 44px;
-  border: 0;
-  background: transparent;
-  color: var(--text);
-  font: inherit;
-  font-weight: 700;
-  cursor: var(--cursor-mano);
-}
-
-.seg[aria-pressed='true'] {
-  background: var(--primary);
-  color: var(--on-primary);
+.modo-btn .icon {
+  width: 28px;
+  height: 28px;
 }
 
 /* ---------- Diálogos y avisos ---------- */
 /*
  * Diálogo: estampilla del tema (no de la isla). El dialog pone la sombra; .modal-paper, la máscara.
  * Conserva el position: fixed del top layer (con relative el diálogo se centraría en el documento,
- * no en la pantalla). La sombra cabe en los 3 px de padding inferior: el dialog tiene overflow auto
- * y un pseudo-elemento que sobresalga crearía scroll.
+ * no en la pantalla). La sombra cabe en los 3 px de padding inferior: el dialog tiene overflow hidden
+ * y un pseudo-elemento que sobresalga quedaría recortado.
  */
 .modal {
   isolation: isolate;
@@ -1969,14 +1951,24 @@ dialog .estampilla:not(.bloqueada) .up-icon {
   padding: 0 0 3px;
   background: transparent;
   color: var(--text);
+  overflow: hidden; /* el scroll va en .modal-body: cabecera y acciones siempre a la vista */
 }
 
 .modal::before {
   inset: 3px 0 0;
 }
 
+/*
+ * Papel en columna: cabecera (título + Cerrar), cuerpo con scroll y acciones. Su alto máximo es el del
+ * diálogo modal (el navegador deja 1em + 3px por lado) menos los 3 px de la sombra. Sin sticky: dentro de
+ * un elemento con mask Safari lo pinta mal.
+ */
 .modal-paper {
-  display: grid;
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 2em - 9px);
+  max-height: calc(100dvh - 2em - 9px);
+  box-sizing: border-box;
   gap: 12px;
   padding: 20px;
   border-radius: 4px;
@@ -1991,6 +1983,64 @@ dialog .estampilla:not(.bloqueada) .up-icon {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+/* Título a la izquierda y Cerrar arriba a la derecha (fuera del h2: no cambia el nombre del encabezado). */
+.modal-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 8px;
+}
+
+.modal-head h2 {
+  min-height: 44px; /* centrado con Cerrar en una línea; con dos, crece */
+}
+
+.modal-body {
+  touch-action: pan-x pan-y; /* el contenedor con scroll corta la herencia de html: sin zoom aquí tampoco */
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  /* Aire para anillos de foco, sombras y el "Nuevo" de las estampillas, que el scroll recortaría. */
+  margin: -6px;
+  padding: 6px;
+}
+
+/*
+ * Álbum en el diálogo móvil: alto fijo (Logros y Libreta miden distinto y el diálogo saltaba al cambiar) y
+ * pestañas arriba; solo el contenido de la pestaña hace scroll.
+ */
+.album-dlg .modal-paper {
+  height: calc(100vh - 2em - 9px);
+  height: calc(100dvh - 2em - 9px);
+}
+
+.album-dlg .modal-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  overflow: hidden;
+}
+
+.album-dlg .album-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.album-dlg [role='tabpanel'] {
+  touch-action: pan-x pan-y;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  margin: 0 -6px;
+  padding: 6px;
 }
 
 .flag {
@@ -2026,8 +2076,8 @@ dialog .estampilla:not(.bloqueada) .up-icon {
   background: var(--bg);
   color: var(--text);
   font:
-    0.8rem ui-monospace,
-    monospace;
+    1rem ui-monospace,
+    monospace; /* iOS hace zoom al enfocar campos de menos de 16 px */
   padding: 8px;
   word-break: break-all;
 }
@@ -2130,7 +2180,6 @@ dialog .estampilla:not(.bloqueada) .up-icon {
     filter: brightness(1.08);
   }
 
-  .seg:not([aria-pressed='true']):hover,
   .icon-btn:hover {
     background: var(--track);
   }
@@ -2317,6 +2366,7 @@ dialog .estampilla:not(.bloqueada) .up-icon {
   }
 
   .personajes,
+  .upgrades,
   .guia,
   .album,
   .historial,
@@ -2339,11 +2389,7 @@ dialog .estampilla:not(.bloqueada) .up-icon {
   }
 
   .up-list {
-    margin: 0;
-    padding: 0;
-    display: grid;
     grid-template-columns: 1fr 1fr;
-    overflow: visible;
   }
 
   .up-slot {

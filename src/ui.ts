@@ -1,3 +1,4 @@
+import { crearAtras } from './atras';
 import type { Sound } from './audio';
 import { plato, type RasterId } from './platos';
 import {
@@ -32,7 +33,6 @@ import {
   heredarVale,
   hireableIds,
   incomePerSecond,
-  MODES,
   nextMilestone,
   nextMode,
   nextUpgrades,
@@ -451,15 +451,31 @@ function papelPicado(): SVGSVGElement {
 }
 
 export function createUI(root: HTMLElement, handlers: Handlers): UI {
-  function dialog(title: string, body: Node[], actions: HTMLButtonElement[] = []): HTMLDialogElement {
+  // Atrás del navegador cierra el último diálogo que abrió el jugador (ver atras.ts). Sin la API de
+  // activación (navegadores viejos) se asume gesto: solo Chrome salta entradas sin él, y Chrome la tiene.
+  const atras = crearAtras(history, () => navigator.userActivation?.isActive ?? true);
+  window.addEventListener('popstate', (e) => atras.popstate(e.state));
+  // Sin zoom con pellizco en iOS: WebKit no siempre respeta touch-action para pellizcar (style.css, html).
+  for (const tipo of ['gesturestart', 'gesturechange'])
+    document.addEventListener(tipo, (e) => e.preventDefault(), { passive: false });
+
+  /**
+   * Diálogo modal (DESIGN.md "Diálogos"): cabecera con el título y "Cerrar" arriba a la derecha (siempre a
+   * la vista), cuerpo con scroll propio y, si hay, las acciones abajo. El foco inicial es el primer control
+   * en orden (Cerrar) salvo que el llamador marque otro con `autofocus` o enfoque el h2.
+   */
+  function dialog(title: string, body: Node[], actions: HTMLButtonElement[] = [], clase = ''): HTMLDialogElement {
     // dialog: sombra y marco exterior; .modal-paper: la estampilla con la máscara perforada.
-    const d = h('dialog', { class: 'modal' });
-    const close = h('button', { class: 'btn', type: 'button', text: 'Cerrar', onclick: () => d.close() });
+    const d = h('dialog', { class: clase ? `modal ${clase}` : 'modal' });
+    const close = h('button', { class: 'btn modal-cerrar', type: 'button', text: 'Cerrar', onclick: () => d.close() });
     d.append(
       h('div', { class: 'modal-paper' }, [
-        h('h2', {}, [icon('banderin', 'icon flag sticker'), h('span', { text: title })]),
-        ...body,
-        h('div', { class: 'actions' }, [...actions, close]),
+        h('div', { class: 'modal-head' }, [
+          h('h2', {}, [icon('banderin', 'icon flag sticker'), h('span', { text: title })]),
+          close,
+        ]),
+        h('div', { class: 'modal-body' }, body),
+        ...(actions.length > 0 ? [h('div', { class: 'actions' }, actions)] : []),
       ]),
     );
     d.setAttribute('aria-label', title);
@@ -470,9 +486,13 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
     document.body.append(d);
     // <dialog> nativo: atrapa el foco, inerte el fondo y cierra con Esc.
     d.showModal();
+    atras.abierto(d);
     handlers.onSound('dialogOpen');
     return d;
   }
+
+  /** Cuerpo con scroll del diálogo (para volver arriba al abrir). */
+  const cuerpoDe = (d: HTMLDialogElement): HTMLElement | null => d.querySelector('.modal-body');
 
   /**
    * Mueve `body` a un diálogo modal y enfoca su h2: sin eso showModal enfoca "Cerrar" (o el primer
@@ -485,14 +505,16 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
     body: HTMLElement,
     anchor: HTMLElement,
     onClose: () => void,
+    clase = '',
   ): HTMLElement | null {
-    const d = dialog(title, [body]);
+    const d = dialog(title, [body], [], clase);
     const h2 = d.querySelector('h2');
     if (h2) {
       h2.tabIndex = -1;
       h2.focus({ preventScroll: true });
-      d.scrollTop = 0;
     }
+    const cuerpo = cuerpoDe(d);
+    if (cuerpo) cuerpo.scrollTop = 0;
     d.addEventListener('close', () => {
       anchor.after(body);
       onClose();
@@ -526,6 +548,7 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
     h('span', { text: 'Música' }),
   ]);
   /** [botón, icono, canal, icono encendido, icono apagado]: sincronizados en render(). */
+  ajSound.autofocus = true; // Ajustes abre con el foco en Sonido, no en Cerrar
   const audioBtns: [Element, SVGSVGElement, 'sound' | 'music', IconName, IconName][] = [
     [ajSound, ajSoundIc, 'sound', 'bocina', 'bocina-off'],
     [ajMusic, ajMusicIc, 'music', 'nota', 'nota-off'],
@@ -582,7 +605,7 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
   });
   const latHeirBadge = h('span', { class: 'lat-badge', hidden: true });
   latHeir.disc.append(latHeirBadge);
-  // Cantidad: un solo botón que cicla ×1 → ×10 → Máx; render() lo sincroniza con el segmentado móvil.
+  // Cantidad: un solo botón que cicla ×1 → ×10 → Máx; render() lo sincroniza con la píldora móvil.
   let currentMode: BuyMode = 1; // mismo arranque que `mode` en main.ts: el primer render no hace flip
   const latModo = latBtn(modeLabel(currentMode), modeIcon(currentMode), () => handlers.onMode(nextMode(currentMode)));
   latModo.btn.setAttribute('aria-label', `Cantidad a comprar: ${modeLabel(currentMode)}`);
@@ -611,16 +634,15 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
     latAjustes.btn,
   ]);
 
-  const modeButtons = MODES.map((m) => {
-    const b = h('button', { class: 'seg', type: 'button', text: modeLabel(m), onclick: () => handlers.onMode(m) });
-    return { m, b };
-  });
-  const segmented = h(
-    'div',
-    { class: 'segmented', label: 'Cantidad a comprar' },
-    modeButtons.map((x) => x.b),
+  // Cantidad en la barra móvil: la misma moneda que el disco del lateral, en píldora; cicla igual.
+  const modoIc = icon(modeIcon(currentMode));
+  const modoTexto = h('span', { text: modeLabel(currentMode) });
+  const modoBtn = h(
+    'button',
+    { class: 'btn modo-btn', type: 'button', onclick: () => handlers.onMode(nextMode(currentMode)) },
+    [modoIc, modoTexto],
   );
-  segmented.setAttribute('role', 'group');
+  modoBtn.setAttribute('aria-label', `Cantidad a comprar: ${modeLabel(currentMode)}`);
 
   const live = h('p', { class: 'sr-only' });
   live.setAttribute('aria-live', 'polite');
@@ -825,14 +847,12 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
   const upgradesTitle = h('h2', { class: 'section-title', text: 'Mejoras' });
   upgradesTitle.id = 'upgrades-title';
   upgradesTitle.tabIndex = -1;
-  const upgrades = h('section', { class: 'upgrades panel', hidden: true }, [
-    upgradesTitle,
-    h(
-      'ul',
-      { class: 'up-list' },
-      slots.map((s) => s.root),
-    ),
-  ]);
+  const upList = h(
+    'ul',
+    { class: 'up-list' },
+    slots.map((s) => s.root),
+  );
+  const upgrades = h('section', { class: 'upgrades panel', hidden: true }, [upgradesTitle, upList]);
   upgrades.setAttribute('aria-labelledby', 'upgrades-title');
   upgrades.id = 'upgrades';
 
@@ -968,7 +988,7 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
     const texto = h('p', { class: 'vitrina-texto', text: def.logrado });
     texto.id = 'vitrina-texto';
     const d = dialog(def.nombre, [figura, texto]);
-    d.setAttribute('aria-describedby', texto.id); // showModal enfoca "Cerrar": sin esto el texto no se oye
+    d.setAttribute('aria-describedby', texto.id); // showModal enfoca "Cerrar" (arriba): sin esto el texto no se oye
     vitrinaDialog = d;
     albumBody.classList.add('vitrina-abierta'); // el giro de papel de la cuadrícula, en pausa bajo el modal
     let vitrina: { destroy(): void } | null = null;
@@ -1045,7 +1065,7 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
     { class: 'libreta' },
     libretaFilas.map(({ fila, dd }) => h('div', { class: 'fila' }, [h('dt', { text: fila.label }), dd])),
   );
-  // Pestañas (patrón tablist sobre el segmentado): viajan al diálogo móvil dentro de albumBody.
+  // Pestañas (patrón tablist): viajan al diálogo móvil dentro de albumBody.
   type Tab = 'logros' | 'libreta';
   let tabActiva: Tab = 'logros';
   const tabEls = (
@@ -1131,6 +1151,11 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
     const cambio = tabActiva !== cual;
     tabActiva = cual;
     colocarIndicador();
+    // En el diálogo móvil cada pestaña tiene su scroll: la que entra empieza arriba.
+    if (cambio) {
+      const entra = tabEls.find((t) => t.id === cual)?.panel;
+      if (entra) entra.scrollTop = 0;
+    }
     if (cambio && gesto) {
       handlers.onSound('tab');
       const hacia = tabEls.findIndex((t) => t.id === cual);
@@ -1223,6 +1248,14 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
     albumBadge,
   ]);
 
+  // Móvil: Mejoras en la barra, como el Álbum; badge con las que alcanzan (antes se veían siempre en una franja).
+  const upBadge = h('span', { class: 'lat-badge', hidden: true });
+  upBadge.setAttribute('aria-hidden', 'true');
+  const upBtn = h('button', { class: 'guia-btn up-btn', type: 'button', label: 'Mejoras', onclick: openMejoras }, [
+    icon('upgrade'),
+    upBadge,
+  ]);
+
   // Móvil: abre el panel Herencia (recetario + Heredar) en un diálogo; el Heredar de dentro pide confirmación.
   const prestigeBtn = h('button', { class: 'btn heir', type: 'button', onclick: openHerencia });
   const picado = papelPicado();
@@ -1254,7 +1287,7 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
     ]),
     h('footer', { class: 'bottom' }, [
       h('div', { class: 'bottom-inner' }, [
-        h('div', { class: 'bottom-row' }, [guiaBtn, albumBtn, segmented]),
+        h('div', { class: 'bottom-row' }, [guiaBtn, albumBtn, upBtn, modoBtn]),
         prestigeBtn,
       ]),
     ]),
@@ -1265,7 +1298,7 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
   let last: State | null = null;
 
   // Paneles laterales (web): no modales, las tarjetas siguen vivas detrás; solo uno abierto a la
-  // vez. En móvil las secciones están en línea u ocultas y .open no tiene reglas: solo tocan el estado.
+  // vez. En móvil las secciones están ocultas (su cuerpo viaja a un diálogo) y .open no tiene reglas: solo tocan el estado.
   interface Panel {
     section: HTMLElement;
     toggle(): void;
@@ -1335,6 +1368,15 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
     });
   }
 
+  // Mejoras en móvil: la lista de cupones se mueve al diálogo y vuelve a su sección al cerrar (como Empleados).
+  let upDialogTitle: HTMLElement | null = null;
+  function openMejoras(): void {
+    if (upDialogTitle) return;
+    upDialogTitle = openInDialog('Mejoras', upList, upgradesTitle, () => {
+      upDialogTitle = null;
+    });
+  }
+
   // Personajes en móvil: la misma lista se mueve al diálogo y vuelve a su sección al cerrar.
   // Un solo DOM: render() sigue escribiendo en los mismos nodos mientras está abierto.
   let charsDialogTitle: HTMLElement | null = null;
@@ -1351,10 +1393,17 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
   function openAlbum(): void {
     if (albumDialogTitle) return;
     setTab('logros');
-    albumDialogTitle = openInDialog('Álbum', albumBody, albumTitle, () => {
-      albumDialogTitle = null;
-      limpiarNuevas();
-    });
+    // album-dlg: alto fijo y pestañas arriba; solo el contenido de la pestaña hace scroll (no salta al cambiar).
+    albumDialogTitle = openInDialog(
+      'Álbum',
+      albumBody,
+      albumTitle,
+      () => {
+        albumDialogTitle = null;
+        limpiarNuevas();
+      },
+      'album-dlg',
+    );
     colocarIndicador(true); // ya en el diálogo: hay layout
     marcarNuevas(sinVer()); // tras asignar albumDialogTitle (lo consulta albumAbierto) y del scrollTop = 0 del diálogo
     handlers.onAlbumVisto();
@@ -1377,6 +1426,7 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
     vitrinaDialog?.close(); // primero: va encima del Álbum (diálogo móvil o panel) y su foco vuelve ahí
     activePanel?.close(false);
     charsDialogTitle?.closest('dialog')?.close();
+    upDialogTitle?.closest('dialog')?.close();
     guiaDialogTitle?.closest('dialog')?.close();
     albumDialogTitle?.closest('dialog')?.close();
     histDialogTitle?.closest('dialog')?.close();
@@ -1545,8 +1595,9 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
     if (h2) {
       h2.tabIndex = -1;
       h2.focus({ preventScroll: true });
-      d.scrollTop = 0;
     }
+    const cuerpo = cuerpoDe(d);
+    if (cuerpo) cuerpo.scrollTop = 0;
     rankingDialogTitle = h2;
     d.addEventListener('close', () => {
       rankingDialogTitle = null;
@@ -1718,7 +1769,21 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
     const off = next.length === 0 || s.lifetimeEarned === 0;
     setHidden(upgrades, off);
     setDisabled(latUp.btn, off);
-    if (off) upPanel.close(false);
+    setDisabled(upBtn, off);
+    if (off) {
+      upPanel.close(false);
+      if (upDialogTitle) {
+        const t = upDialogTitle;
+        upDialogTitle = null; // antes del close: refocusAfterUpgrade no debe apuntar a su h2
+        t.closest('dialog')?.close();
+        appTitle.focus({ preventScroll: true }); // el botón Mejoras quedó deshabilitado
+      }
+    }
+    // Badge móvil: cuántas alcanzan ahora; el conteo va al nombre accesible, no al badge.
+    const alcanzan = off ? 0 : next.filter((u) => canBuyUpgrade(s, u.id)).length;
+    setAttr(upBtn, 'aria-label', alcanzan > 0 ? `Mejoras: ${alcanzan} por comprar` : 'Mejoras');
+    setHidden(upBadge, alcanzan === 0);
+    setText(upBadge, String(alcanzan));
     slots.forEach((slot, i) => {
       const u = next[i];
       setHidden(slot.root, !u);
@@ -1960,13 +2025,16 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
         setIcon(ic, on ? onName : offName);
       }
 
-      for (const { m, b } of modeButtons) setPressed(b, m === mode);
       if (mode !== currentMode) {
         currentMode = mode;
         setIcon(latModo.ic, modeIcon(mode));
         setText(latModo.label, modeLabel(mode));
         latModo.btn.setAttribute('aria-label', `Cantidad a comprar: ${modeLabel(mode)}`);
         flip(latModo.disc);
+        setIcon(modoIc, modeIcon(mode));
+        setText(modoTexto, modeLabel(mode));
+        modoBtn.setAttribute('aria-label', `Cantidad a comprar: ${modeLabel(mode)}`);
+        flip(modoIc);
       }
       const now = performance.now();
       renderChelo(s, now);
@@ -1977,7 +2045,8 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
         // El botón comprado ahora muestra otra mejora (o desapareció): el foco va a un
         // lugar estable en vez de perderse o caer sobre una compra que no se pidió.
         refocusAfterUpgrade = false;
-        if (upgrades.hidden) focusLateral(latUp.btn);
+        if (upDialogTitle) upDialogTitle.focus({ preventScroll: true });
+        else if (upgrades.hidden) focusLateral(latUp.btn);
         else upgradesTitle.focus({ preventScroll: true });
       }
       renderPersonajes(s);
@@ -2236,6 +2305,7 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
           handlers.onRacha(mostradoEn);
         },
       });
+      recibir.autofocus = true; // primera acción del diálogo, aunque Cerrar vaya antes en el DOM
       const d = dialog(
         `Día ${dia} de racha`,
         [
@@ -2252,6 +2322,8 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
     },
 
     showNewer(onReload) {
+      const recargar = h('button', { class: 'btn primary', type: 'button', text: 'Recargar', onclick: onReload });
+      recargar.autofocus = true; // primera acción, aunque Cerrar vaya antes en el DOM
       dialog(
         'Partida de una versión más nueva',
         [
@@ -2259,7 +2331,7 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
             text: 'Tu partida se guardó con una versión más nueva del juego. Recarga para actualizar; mientras tanto puedes jugar, pero no se guardará nada. En Ajustes puedes copiar tu partida tal cual por si acaso.',
           }),
         ],
-        [h('button', { class: 'btn primary', type: 'button', text: 'Recargar', onclick: onReload })],
+        [recargar],
       );
     },
 

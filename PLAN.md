@@ -337,3 +337,16 @@ Rediseño de lo de dentro de las tarjetas de negocio (`li.card`) a partir de las
 ## Nitidez del giro de papel (2026-11-17, descartado)
 
 El giro continuo se ve un poco suave: el compositor remuestrea el bitmap de 44 px y casi nunca queda alineado al píxel. Se probó un volteo con pausa (reposos exactos en identidad y `scaleX(-1)`, iguales al icono estático a DPR 1 y 2; volteos de 0.35 s y de 1 s) y supersampling 2× (solo ayudaba en DPR 1 y ablandaba la sombra del `.sticker`). El user prefirió el giro constante de antes: se restauró tal cual. Ver DESIGN.md "Giro de papel".
+
+## Arreglos móviles tras el deploy (2026-11-17)
+
+El user probó el deploy en Brave iOS. Plan revisado por un revisor independiente antes de ejecutar (2 bloqueantes y 7 importantes incorporados). Ver DESIGN.md "Barra inferior móvil", "Zoom y toques", "Diálogo" y "Álbum".
+
+- [x] Barra: Cantidad en píldora con la moneda del lateral (sin segmentado) y disco Mejoras que abre un diálogo con badge; sin franja de mejoras en móvil.
+- [x] Cerrar arriba a la derecha en todos los diálogos (`dialog()`): cabecera, cuerpo con scroll y acciones abajo; foco inicial conservado con `autofocus`.
+- [x] Sin zoom (doble toque, pellizco, enfocar campos); atrás cierra el diálogo abierto por el jugador (`src/atras.ts`, tests). El gesto de borde de iOS no se puede bloquear desde una web.
+- [x] Álbum móvil con alto fijo y pestañas fijas: no salta al cambiar de pestaña.
+- [x] `capturas --mejoras` (diálogo y barra); `--ajustes` y `--herencia` ya reconocen `movil360`.
+- [x] Lighthouse móvil 100/100/100/100. Revisor independiente del código (3 importantes, aplicados): `atras.ts` guarda la profundidad en cada entrada y lleva un solo `go` a la vez (adelante ya no cierra un diálogo, recarga vuelve a la base, un aviso encima se cierra con el de abajo); el test de Cerrar ahora hace scroll de verdad (390×500); fuera el CSS de la franja de mejoras. Al verificar apareció un bucle infinito en `popstate` (el `close` del `<dialog>` llega en otra tarea): corregido y cubierto por los tests con `close` asíncrono.
+- [x] 299 unit, e2e 41/41.
+- [ ] El user prueba en Brave iOS tras el deploy y commitea.

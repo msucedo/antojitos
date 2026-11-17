@@ -241,7 +241,7 @@ function start(root: HTMLElement): void {
       dirty = true;
     },
     onMode: (m) => {
-      if (m === mode) return; // el segmentado móvil repite el toque sobre el modo actual
+      if (m === mode) return; // el mismo modo no suena ni marca cambio
       mode = m;
       dirty = true;
       audio.play(m === 1 ? 'modeX1' : m === 10 ? 'modeX10' : 'modeMax');

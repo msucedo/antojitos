@@ -761,7 +761,10 @@ test('móvil: la vitrina se apila sobre el diálogo del Álbum y al cerrarla el 
   await page.getByRole('button', { name: 'Ver Primer elote' }).tap();
   await page.locator('.vitrina[data-modo="3d"]').waitFor({ timeout: 5000 });
   assert.equal(await page.locator('dialog[open]').count(), 2);
-  await page.locator('dialog[open] .vitrina').locator('..').getByRole('button', { name: 'Cerrar' }).tap();
+  await page
+    .locator('dialog[open]', { has: page.locator('.vitrina') })
+    .getByRole('button', { name: 'Cerrar' })
+    .tap();
   await page.waitForTimeout(300);
   assert.equal(await page.locator('dialog[open]').count(), 1);
   assert.equal(await page.locator('dialog[open] .estampilla').count(), 26);
@@ -771,6 +774,123 @@ test('móvil: la vitrina se apila sobre el diálogo del Álbum y al cerrarla el 
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.waitForTimeout(400);
   assert.equal(await page.locator('dialog[open]').count(), 0);
+  assert.deepEqual(errores, []);
+  await context.close();
+});
+
+const conMejoras = () =>
+  partida(
+    { version: 6, money: 50_000, lifetimeEarned: 60_000, runEarned: 60_000 },
+    { elotes: { count: 30 }, aguas: { count: 12 } },
+  );
+
+test('móvil: Mejoras en diálogo desde la barra (badge, compra) y Cantidad cicla con un botón', async () => {
+  const { context, page, errores } = await abrir({ semilla: conMejoras(), movil: true });
+  await sinPaneles(page);
+  // Sin franja: las mejoras ya no están a la vista sobre las tarjetas.
+  assert.equal(await page.locator('#upgrades').isVisible(), false);
+  const mejoras = page.locator('.bottom .up-btn');
+  assert.equal(await mejoras.getAttribute('aria-label'), 'Mejoras: 1 por comprar');
+  assert.equal(await mejoras.locator('.lat-badge').textContent(), '1');
+  await mejoras.tap();
+  const dlg = page.locator('dialog[open]');
+  assert.equal(await dlg.locator('h2').textContent(), 'Mejoras');
+  await dlg
+    .getByRole('button', { name: /^Comprar / })
+    .first()
+    .tap();
+  await page.waitForTimeout(300);
+  assert.equal(await page.locator('.bottom .up-btn .lat-badge').isVisible(), false);
+  await dlg.getByRole('button', { name: 'Cerrar' }).tap();
+  await page.waitForTimeout(300);
+  assert.equal(await page.locator('dialog[open]').count(), 0);
+  // Cantidad: un solo botón que cicla ×1 → ×10 → Máx → ×1 y lo dice en su nombre.
+  const modo = page.locator('.bottom .modo-btn');
+  for (const m of ['×10', 'Máx', '×1']) {
+    await modo.tap();
+    await page.waitForFunction(
+      (m) => document.querySelector('.bottom .modo-btn')?.getAttribute('aria-label') === `Cantidad a comprar: ${m}`,
+      m,
+      { timeout: 2000 },
+    );
+  }
+  assert.deepEqual(errores, []);
+  await context.close();
+});
+
+test('móvil: sin mejoras que ofrecer, el botón de Mejoras está deshabilitado', async () => {
+  const { context, page, errores } = await abrir({ movil: true });
+  await sinPaneles(page);
+  assert.equal(await page.locator('.bottom .up-btn').isDisabled(), true);
+  assert.deepEqual(errores, []);
+  await context.close();
+});
+
+test('móvil: Cerrar arriba a la derecha y a la vista aunque el diálogo haga scroll', async () => {
+  const { context, page, errores } = await abrir({ movil: true });
+  await sinPaneles(page);
+  await page.setViewportSize({ width: 390, height: 500 }); // ventana baja: el cuerpo de Ajustes no cabe
+  await page.locator('.title-row button[aria-label="Ajustes"]').tap();
+  const dlg = page.locator('dialog[open]');
+  const cuerpo = dlg.locator('.modal-body');
+  // Ajustes abre con el foco en Sonido, como antes de mover Cerrar.
+  assert.equal(await page.evaluate(() => document.activeElement?.textContent), 'Sonido');
+  assert.ok(await cuerpo.evaluate((c) => ((c.scrollTop = c.scrollHeight), c.scrollTop > 0))); // sí hizo scroll
+  const cerrar = dlg.getByRole('button', { name: 'Cerrar' });
+  const caja = await cerrar.boundingBox();
+  const titulo = await dlg.locator('h2').boundingBox();
+  assert.ok(caja && titulo && caja.y < titulo.y + titulo.height && caja.x > titulo.x); // en la fila del título, a la derecha
+  assert.ok(caja.y >= 0 && caja.y + caja.height <= 500);
+  await cerrar.tap();
+  assert.equal(await page.locator('dialog[open]').count(), 0);
+  assert.deepEqual(errores, []);
+  await context.close();
+});
+
+test('móvil: atrás del navegador cierra el diálogo abierto y el juego sigue', async () => {
+  const { context, page, errores } = await abrir({ semilla: conLogros(), movil: true });
+  await sinPaneles(page);
+  const url = page.url();
+  await page.locator('.album-btn').tap();
+  await page.locator('dialog[open]').waitFor();
+  await page.getByRole('button', { name: 'Ver Primer elote' }).tap();
+  assert.equal(await page.locator('dialog[open]').count(), 2);
+  await page.evaluate(() => history.back());
+  await page.waitForTimeout(300);
+  assert.equal(await page.locator('dialog[open]').count(), 1); // la vitrina; el Álbum sigue
+  // Adelante no cierra nada: el historial vuelve solo a la entrada del Álbum.
+  await page.evaluate(() => history.forward());
+  await page.waitForTimeout(300);
+  assert.equal(await page.locator('dialog[open]').count(), 1);
+  assert.deepEqual(await page.evaluate(() => history.state), { antojitosDialogo: 1 });
+  await page.evaluate(() => history.back());
+  await page.waitForTimeout(300);
+  assert.equal(await page.locator('dialog[open]').count(), 0);
+  assert.equal(await page.evaluate(() => history.state), null);
+  assert.equal(page.url(), url);
+  // Cerrar con el botón consume su entrada: atrás no queda "atorado" en entradas viejas.
+  await page.locator('.album-btn').tap();
+  await page.locator('dialog[open]').getByRole('button', { name: 'Cerrar' }).tap();
+  await page.waitForTimeout(300);
+  assert.equal(await page.evaluate(() => history.state), null);
+  assert.equal(page.url(), url);
+  assert.deepEqual(errores, []);
+  await context.close();
+});
+
+test('móvil: el Álbum mide lo mismo en Logros y en Libreta y las pestañas siguen a la vista al bajar', async () => {
+  const { context, page, errores } = await abrir({ semilla: conLogros(), movil: true });
+  await sinPaneles(page);
+  await page.locator('.album-btn').tap();
+  const papel = page.locator('dialog[open] .modal-paper');
+  const enLogros = await papel.boundingBox();
+  await page.locator('#album-panel-logros').evaluate((p) => (p.scrollTop = p.scrollHeight));
+  const tab = await page.getByRole('tab', { name: 'Libreta' }).boundingBox();
+  assert.ok(tab && tab.y > enLogros.y && tab.y < enLogros.y + 140); // arriba, no se fue con el scroll
+  await page.getByRole('tab', { name: 'Libreta' }).tap();
+  await page.waitForTimeout(400);
+  const enLibreta = await papel.boundingBox();
+  assert.deepEqual(enLibreta, enLogros);
   assert.deepEqual(errores, []);
   await context.close();
 });

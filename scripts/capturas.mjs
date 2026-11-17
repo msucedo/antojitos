@@ -1,6 +1,6 @@
 // Capturas de verificación visual (ver DESIGN.md, "Verificación visual").
 //
-//   node scripts/capturas.mjs [--sprite | --album | --vitrina | --ajustes | --herencia | --ranking] [--semilla ruta.json] [--nombre prefijo]
+//   node scripts/capturas.mjs [--sprite | --album | --vitrina | --ajustes | --herencia | --ranking | --mejoras] [--semilla ruta.json] [--nombre prefijo]
 //
 // Arranca Vite en localhost:5174, abre el Chrome del sistema en headless,
 // siembra la partida (si hay semilla) y deja los PNG en capturas/.
@@ -12,6 +12,8 @@
 // Con --herencia: abre Herencia (recetario + Heredar): panel del lateral en web, diálogo desde la barra en móvil.
 // Con --ranking: abre el diálogo Ranking con /api/ranking simulado (ranking-*); con una semilla con `ranking`
 // se ve la tarjeta propia, sin ella el formulario de apodo.
+// Con --mejoras: abre Mejoras (diálogo desde la barra en móvil, panel del lateral en web) y guarda mejoras-*;
+// después, sin el diálogo, la pantalla con la barra (barra-*). Sin semilla usa una con mejoras que alcanzan.
 // --nombre cambia el prefijo "juego" de los PNG.
 
 import { mkdir, readFile } from 'node:fs/promises';
@@ -43,6 +45,7 @@ const { values: flags } = parseArgs({
     ajustes: { type: 'boolean', default: false }, // abre el diálogo de Ajustes
     herencia: { type: 'boolean', default: false }, // abre Herencia (hace falta una semilla con recetas)
     ranking: { type: 'boolean', default: false }, // abre el diálogo Ranking con la API simulada
+    mejoras: { type: 'boolean', default: false }, // abre Mejoras y captura la barra
     semilla: { type: 'string' },
     nombre: { type: 'string' }, // prefijo de los PNG en vez de "juego" (p. ej. --nombre racha7)
   },
@@ -144,9 +147,27 @@ const esperarAjustes = (vista) => async (page) => {
   await esperarJuego(page);
   await page.waitForTimeout(ASIENTO_MS);
   await page.keyboard.press('Escape');
-  if (vista === 'movil') await page.locator('.title-row button[aria-label="Ajustes"]').click();
+  if (vista.startsWith('movil')) await page.locator('.title-row button[aria-label="Ajustes"]').click();
   else await page.locator('.lateral button', { hasText: 'Ajustes' }).click();
   await page.waitForTimeout(400);
+};
+
+/** Abre Mejoras: disco de la barra en móvil, del lateral en web. */
+const esperarMejoras = (vista) => async (page) => {
+  await esperarJuego(page);
+  await page.waitForTimeout(ASIENTO_MS);
+  await page.keyboard.press('Escape');
+  if (vista.startsWith('movil')) await page.locator('.bottom .up-btn').click();
+  else await page.locator('.lateral button', { hasText: 'Mejoras' }).click();
+  await page.waitForTimeout(400);
+};
+
+/** Tras Mejoras: la pantalla sin el diálogo ni el panel, con la barra (badge y Cantidad). */
+const capturarBarra = (vista, tema) => async (page, guardar) => {
+  if (vista.startsWith('movil')) await page.keyboard.press('Escape');
+  else await page.locator('.lateral button', { hasText: 'Mejoras' }).click();
+  await page.waitForTimeout(400);
+  await guardar(`barra-${vista}-${tema}.png`);
 };
 
 /** Como esperarAlbum, pero abre Herencia: botón Heredar de la barra en móvil, disco del lateral en web. */
@@ -154,10 +175,18 @@ const esperarHerencia = (vista) => async (page) => {
   await esperarJuego(page);
   await page.waitForTimeout(ASIENTO_MS);
   await page.keyboard.press('Escape');
-  if (vista === 'movil') await page.locator('.bottom .btn.heir').click();
+  if (vista.startsWith('movil')) await page.locator('.bottom .btn.heir').click();
   else await page.locator('.lateral button[aria-label^="Herencia"]').click();
   await page.waitForTimeout(400);
 };
+
+/** Partida con tres negocios abiertos y dinero para algunas mejoras, para --mejoras sin --semilla. */
+function semillaMejoras() {
+  const base = semillaVitrina();
+  const cuenta = { elotes: 30, aguas: 12, tacos: 5 };
+  for (const [id, b] of Object.entries(base.businesses)) b.count = cuenta[id] ?? 0;
+  return { ...base, money: 5000, lifetimeEarned: 20000, runEarned: 20000 };
+}
 
 /** Partida mínima con tres logros (plato, símbolo y retrato) para --vitrina sin --semilla. */
 function semillaVitrina() {
@@ -316,25 +345,36 @@ function tareas(semilla) {
                     semilla,
                     esperar: esperarHerencia(vista),
                   }
-                : flags.ranking
+                : flags.mejoras
                   ? {
                       viewport,
                       tema,
                       url: `${ORIGEN}/`,
-                      archivo: `ranking-${vista}-${tema}.png`,
+                      archivo: `mejoras-${vista}-${tema}.png`,
                       fullPage: false,
-                      semilla,
-                      esperar: esperarRanking,
+                      semilla: semilla ?? semillaMejoras(),
+                      esperar: esperarMejoras(vista),
+                      despues: capturarBarra(vista, tema),
                     }
-                  : {
-                      viewport,
-                      tema,
-                      url: `${ORIGEN}/`,
-                      archivo: `${flags.nombre ?? 'juego'}-${vista}-${tema}.png`,
-                      fullPage: false,
-                      semilla,
-                      esperar: esperarJuego,
-                    },
+                  : flags.ranking
+                    ? {
+                        viewport,
+                        tema,
+                        url: `${ORIGEN}/`,
+                        archivo: `ranking-${vista}-${tema}.png`,
+                        fullPage: false,
+                        semilla,
+                        esperar: esperarRanking,
+                      }
+                    : {
+                        viewport,
+                        tema,
+                        url: `${ORIGEN}/`,
+                        archivo: `${flags.nombre ?? 'juego'}-${vista}-${tema}.png`,
+                        fullPage: false,
+                        semilla,
+                        esperar: esperarJuego,
+                      },
       );
     }
   }
