@@ -361,3 +361,15 @@ Pedidos del user tras commitear los arreglos móviles. Plan revisado dos veces p
 - [x] e2e 45/45 (nuevos: barra a 390/360/320, scroll bloqueado (falla sin la regla), ventanas apiladas, hundido); 299 unit.
 - [x] Revisor independiente del código (sin bloqueantes; aplicados: docs y comentarios viejos, `con-barra` para que el layout web no salte con barras clásicas, badges de la barra sin recibir toques, disco hundido en el e2e). Por verificar en el aparato: jalar para recargar en Brave iOS y el teclado dentro de un diálogo.
 - [ ] El user prueba en Brave iOS y commitea.
+
+## Fondo animado: papel picado al viento + confeti (2026-11-17)
+
+El user pidió animaciones con three.js en el header. Vio tres prototipos con three (fichas, picado, confeti) y eligió picado + confeti, con el confeti en todo el fondo de la app. Tras la revisión independiente eligió Canvas 2D sin three (mismo resultado, sin 136 KB ni WebGL2) y animación siempre corriendo. Plan revisado dos veces por revisores independientes. Ver DESIGN.md "Fondo animado".
+
+- [x] `src/fondo.ts` (simulación pura + dos canvas) y `fondo.test.ts`; el patrón de fondo pasa de `body` a `html`.
+- [x] Interruptor "Fondo" en Ajustes con iconos `picado`/`picado-off`; preferencia `fondo` (encendida por defecto) en `antojitos.prefs`; `savePrefs` mezcla con lo guardado (el audio ya no pisa el fondo).
+- [x] Pausa con pestaña oculta y con diálogos abiertos; nada con reduced motion ni forced colors; sacudida al heredar.
+- [x] e2e +2 (montaje, pausa, interruptor que persiste; reduced motion); el de Ajustes ahora comprueba Sonido en concreto.
+- [ ] Capturas deterministas con `page.clock`: no aplicado (moverlo cambia el estado del juego en todas las capturas); el confeti varía entre corridas.
+- [ ] Medir con GPU real y en iPhone; Lighthouse móvil.
+- [ ] El user prueba en el teléfono (Brave iOS: costura del header al hacer scroll con momentum) y commitea.

@@ -27,9 +27,15 @@ export type Sound =
   | 'logro'
   | 'tab';
 
-export interface Prefs {
+/** Lo que el audio maneja: sonido y música. */
+export interface AudioPrefs {
   sound: boolean;
   music: boolean;
+}
+
+/** Preferencias del dispositivo: las del audio más el fondo animado (lo maneja ui.ts). */
+export interface Prefs extends AudioPrefs {
+  fondo: boolean;
 }
 
 const PREFS_KEY = 'antojitos.prefs';
@@ -130,27 +136,31 @@ export const SOUNDS: Record<Sound, readonly Note[]> = {
   tip: [{ freq: 1760, at: 0, dur: 0.15, type: 'sine', level: 0.4 }],
 };
 
-/** Preferencias del dispositivo; lo que falte o no sea booleano vale false. */
+/**
+ * Preferencias del dispositivo. Sonido y música valen false salvo un true guardado; el fondo animado
+ * vale true salvo un false guardado (encendido por defecto).
+ */
 export function loadPrefs(): Prefs {
   try {
     const raw: unknown = JSON.parse(localStorage.getItem(PREFS_KEY) ?? 'null');
     const o = typeof raw === 'object' && raw !== null ? (raw as Record<string, unknown>) : {};
-    return { sound: o.sound === true, music: o.music === true };
+    return { sound: o.sound === true, music: o.music === true, fondo: o.fondo !== false };
   } catch {
-    return { sound: false, music: false };
+    return { sound: false, music: false, fondo: true };
   }
 }
 
-export function savePrefs(p: Prefs): void {
+/** Guarda solo lo que se pasa y conserva lo demás: el audio no pisa el fondo, ni al revés. */
+export function savePrefs(p: Partial<Prefs>): void {
   try {
-    localStorage.setItem(PREFS_KEY, JSON.stringify(p));
+    localStorage.setItem(PREFS_KEY, JSON.stringify({ ...loadPrefs(), ...p }));
   } catch {
     // Preferencia no persistente: no es crítica.
   }
 }
 
 export interface Audio {
-  prefs(): Prefs;
+  prefs(): AudioPrefs;
   setSound(on: boolean): void;
   setMusic(on: boolean): void;
   /** Llamar dentro de un gesto del usuario. Idempotente. */
@@ -160,8 +170,8 @@ export interface Audio {
   play(sound: Sound): void;
 }
 
-export function createAudio(initial: Prefs): Audio {
-  const prefs: Prefs = { ...initial };
+export function createAudio(initial: AudioPrefs): Audio {
+  const prefs: AudioPrefs = { sound: initial.sound, music: initial.music };
   let ctx: AudioContext | null = null;
   let sfx: GainNode | null = null;
   let music: Music | null = null;

@@ -1,5 +1,6 @@
 import { crearAtras } from './atras';
-import type { Sound } from './audio';
+import { loadPrefs, savePrefs, type Sound } from './audio';
+import { montarFondo, type Fondo } from './fondo';
 import { plato, type RasterId } from './platos';
 import {
   ANTIGUEDAD_MS,
@@ -486,6 +487,7 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
       d.remove();
       // Con diálogos apilados (vitrina sobre el Álbum) el bloqueo sigue hasta cerrar el último.
       raiz.classList.toggle('con-modal', document.querySelector('dialog.modal[open]') !== null);
+      fondo?.reanudar(); // el fondo animado se pausa mientras haya un diálogo abierto
       handlers.onSound('dialogClose');
     });
     document.body.append(d);
@@ -557,6 +559,60 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
     ajMusicIc,
     h('span', { text: 'Música' }),
   ]);
+  // Fondo animado (fondo.ts): preferencia del dispositivo que maneja la UI sola (no pasa por main ni render).
+  // No se monta con reduced motion ni con forced colors del sistema; se sigue en vivo.
+  const ajFondoIc = icon('picado-off');
+  const fondoNota = h('p', {
+    class: 'ajustes-nota',
+    text: 'Tu sistema pide menos movimiento: el fondo queda quieto.',
+  });
+  fondoNota.id = 'fondo-nota';
+  const ajFondo = h(
+    'button',
+    {
+      class: 'btn ajuste',
+      type: 'button',
+      label: 'Fondo animado',
+      onclick: () => {
+        const on = !fondoPedido;
+        savePrefs({ fondo: on });
+        setFondo(on);
+        live.textContent = on ? 'Fondo animado activado.' : 'Fondo animado desactivado.'; // ajuste, no evento
+      },
+    },
+    [ajFondoIc, h('span', { text: 'Fondo' })],
+  );
+  let fondo: Fondo | null = null;
+  let fondoPedido = false;
+  let fondoListo = false; // tras load + idle: no compite con el arranque (Lighthouse)
+  const sinMovimiento = window.matchMedia('(prefers-reduced-motion: reduce)');
+  const coloresForzados = window.matchMedia('(forced-colors: active)');
+  function syncFondo(): void {
+    const quieto = sinMovimiento.matches || coloresForzados.matches;
+    setHidden(fondoNota, !quieto);
+    // Un nodo oculto referenciado con aria-describedby se lee igual: solo se enlaza cuando la nota se ve.
+    if (quieto) ajFondo.setAttribute('aria-describedby', fondoNota.id);
+    else ajFondo.removeAttribute('aria-describedby');
+    const debe = fondoListo && fondoPedido && !quieto;
+    if (debe && !fondo) {
+      try {
+        fondo = montarFondo(top, picado);
+      } catch {
+        fondo = null; // sin canvas 2D: queda el picado del svg
+      }
+    } else if (!debe && fondo) {
+      fondo.destroy();
+      fondo = null;
+    }
+  }
+  function setFondo(on: boolean): void {
+    fondoPedido = on;
+    setPressed(ajFondo, on);
+    setIcon(ajFondoIc, on ? 'picado' : 'picado-off');
+    syncFondo();
+  }
+  sinMovimiento.addEventListener('change', syncFondo);
+  coloresForzados.addEventListener('change', syncFondo);
   /** [botón, icono, canal, icono encendido, icono apagado]: sincronizados en render(). */
   ajSound.autofocus = true; // Ajustes abre con el foco en Sonido, no en Cerrar
   const audioBtns: [Element, SVGSVGElement, 'sound' | 'music', IconName, IconName][] = [
@@ -1273,13 +1329,14 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
 
   // Orden: lateral (web), header, guía de Chelo, mejoras y personajes (en web, paneles
   // deslizantes), tarjetas, barra.
+  const top = h('header', { class: 'top' }, [
+    h('div', { class: 'title-row' }, [appTitle, h('div', {}, [rankingBtn, ajustesBtn])]),
+    h('div', { class: 'money-row' }, [money, rate, recipes]),
+    picado,
+  ]);
   root.replaceChildren(
     lateral,
-    h('header', { class: 'top' }, [
-      h('div', { class: 'title-row' }, [appTitle, h('div', {}, [rankingBtn, ajustesBtn])]),
-      h('div', { class: 'money-row' }, [money, rate, recipes]),
-      picado,
-    ]),
+    top,
     h('div', { class: 'layout' }, [
       histSection,
       guia,
@@ -1305,6 +1362,19 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
     live,
     toast,
   );
+
+  // Fondo animado: se monta tras load y en reposo (Safari y Brave iOS no tienen requestIdleCallback).
+  setFondo(loadPrefs().fondo);
+  const enReposo = (): void => {
+    const listo = (): void => {
+      fondoListo = true;
+      syncFondo();
+    };
+    if ('requestIdleCallback' in window) window.requestIdleCallback(listo, { timeout: 2000 });
+    else setTimeout(listo, 300);
+  };
+  if (document.readyState === 'complete') enReposo();
+  else window.addEventListener('load', enReposo, { once: true });
 
   let last: State | null = null;
 
@@ -1530,7 +1600,8 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
       },
     });
     const d = dialog('Ajustes', [
-      h('div', { class: 'ajustes-fila' }, [ajSound, ajMusic]),
+      h('div', { class: 'ajustes-fila' }, [ajSound, ajMusic, ajFondo]),
+      fondoNota,
       h('h3', { text: 'Respaldo' }),
       h('p', {
         text: 'Guarda este código en un lugar seguro. Si borras los datos del navegador, con él recuperas tu partida. No lo compartas: incluye tu identidad del ranking.',
@@ -2279,10 +2350,14 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
     },
 
     fiesta() {
-      // Con reduced-motion no hay animationend y la clase se quedaría puesta: se reinicia a mano.
-      picado.classList.remove('shake');
-      void picado.getBoundingClientRect();
-      picado.classList.add('shake');
+      if (fondo) {
+        fondo.sacudir(); // los banderines los pinta el canvas
+      } else {
+        // Con reduced-motion no hay animationend y la clase se quedaría puesta: se reinicia a mano.
+        picado.classList.remove('shake');
+        void picado.getBoundingClientRect();
+        picado.classList.add('shake');
+      }
       confetti();
     },
 

@@ -155,8 +155,14 @@
  * Sin zoom (pedido del user, 2026-11-17): pan-x pan-y quita el doble toque y el pellizco sin
  * user-scalable=no, que Lighthouse marca como fallo de accesibilidad. iOS además: gesturestart en ui.ts.
  */
+/*
+ * Patrón de papel en html (fondo raíz), no en body: el confeti del fondo animado (canvas.fondo-pagina,
+ * z-index -1) se pinta sobre el fondo raíz y bajo todo el contenido; el fondo de body se pintaría encima.
+ */
 html {
-  background: var(--bg);
+  background:
+    var(--grano),
+    var(--bg) url('./assets/fondo.svg') 0 0 / 192px 192px repeat;
   cursor: var(--cursor);
   touch-action: pan-x pan-y;
   overscroll-behavior-y: none; /* jalar hacia abajo no recarga la página (Chrome Android, WebKit ≥ 16) */
@@ -198,14 +204,40 @@ body {
   -webkit-tap-highlight-color: transparent;
 }
 
-/* Fondo ilustrado: azulejo propio servido por Vite (img-src 'self'), tenue en claro y oscuro.
-   min-height: con poco contenido el patrón cubre toda la ventana (html queda liso solo para el overscroll). */
+/* El fondo ilustrado (azulejo propio servido por Vite, img-src 'self') vive en html, ver arriba.
+   min-height: body cubre toda la ventana aunque haya poco contenido. */
 body {
   min-height: 100vh;
   min-height: 100dvh;
-  background:
-    var(--grano),
-    var(--bg) url('./assets/fondo.svg') 0 0 / 192px 192px repeat;
+}
+
+/* ---------- Fondo animado (src/fondo.ts) ---------- */
+/* Un canvas reemplazado no se estira con inset: ancho y alto explícitos. 100lvh: la barra de Safari no lo redimensiona. */
+.fondo-pagina {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100vh;
+  height: 100lvh;
+  z-index: -1;
+  pointer-events: none;
+}
+
+/* Dentro de .top (sticky, su propio contexto): sobre su fondo y bajo su texto. 8 px de cola para la sacudida. */
+.fondo-header {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: calc(100% + 8px);
+  z-index: -1;
+  pointer-events: none;
+}
+
+/* Con el fondo montado, los banderines los pinta el canvas; el svg conserva su caja y su borde. */
+html[data-fondo] .picado use {
+  visibility: hidden;
 }
 
 #app {
@@ -1932,6 +1964,12 @@ dialog .estampilla:not(.bloqueada) .up-icon {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
+}
+
+.ajustes-nota {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 0.9rem;
 }
 
 .btn.ajuste .icon {

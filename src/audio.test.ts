@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createAudio, SOUNDS } from './audio';
+import { createAudio, loadPrefs, savePrefs, SOUNDS } from './audio';
 
 describe('efectos de sonido', () => {
   it('cada efecto tiene notas cortas con frecuencias válidas para la rampa exponencial', () => {
@@ -125,5 +125,46 @@ describe('play()', () => {
     const gain = calls.filter((c) => c.param === 'gain' && c.method !== 'setValueAtTime');
     expect(gain.map((c) => c.method)).toEqual(['exponentialRampToValueAtTime', 'exponentialRampToValueAtTime']);
     expect(calls.some((c) => c.param === 'frequency' && c.method === 'exponentialRampToValueAtTime')).toBe(false);
+  });
+});
+
+describe('preferencias del dispositivo', () => {
+  let guardado: Record<string, string>;
+  beforeEach(() => {
+    guardado = {};
+    vi.stubGlobal('localStorage', {
+      getItem: (k: string) => guardado[k] ?? null,
+      setItem: (k: string, v: string) => {
+        guardado[k] = v;
+      },
+    });
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('sin nada guardado: sin sonido ni música, con fondo animado', () => {
+    expect(loadPrefs()).toEqual({ sound: false, music: false, fondo: true });
+  });
+
+  it('valores inválidos: sonido y música apagados, fondo encendido salvo un false', () => {
+    guardado['antojitos.prefs'] = JSON.stringify({ sound: 'si', music: 1, fondo: 'no' });
+    expect(loadPrefs()).toEqual({ sound: false, music: false, fondo: true });
+    guardado['antojitos.prefs'] = '{roto';
+    expect(loadPrefs()).toEqual({ sound: false, music: false, fondo: true });
+    guardado['antojitos.prefs'] = JSON.stringify({ fondo: false });
+    expect(loadPrefs().fondo).toBe(false);
+  });
+
+  it('guardar el audio no borra el fondo, ni al revés', () => {
+    savePrefs({ fondo: false });
+    savePrefs(createAudio({ sound: true, music: false }).prefs());
+    expect(loadPrefs()).toEqual({ sound: true, music: false, fondo: false });
+    savePrefs({ fondo: true });
+    expect(loadPrefs()).toEqual({ sound: true, music: false, fondo: true });
+  });
+
+  it('el audio no expone el fondo aunque se le pase', () => {
+    expect(createAudio(loadPrefs()).prefs()).toEqual({ sound: false, music: false });
   });
 });

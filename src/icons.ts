@@ -14,6 +14,8 @@ export const ICON_NAMES = [
   'bocina-off',
   'nota',
   'nota-off',
+  'picado',
+  'picado-off',
   'engrane',
   'ajustes',
   'lock',

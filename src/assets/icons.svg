@@ -105,6 +105,29 @@
     <path d="M6 6l36 36" fill="none" stroke="#FFFFFF" stroke-width="7" stroke-linecap="round"/>
     <path d="M6 6l36 36" fill="none" stroke="#1B2A3A" stroke-width="3.5" stroke-linecap="round"/>
   </symbol>
+  <!-- picado: dos banderines de papel (rosa y maíz) con un círculo calado, colgando de una cuerda. Fondo animado en Ajustes. -->
+  <symbol id="picado" viewBox="0 0 48 48">
+    <path d="M3 9Q24 17 45 9" fill="none" stroke="#1B2A3A" stroke-width="3" stroke-linecap="round"/>
+    <path transform="translate(5 11.5) rotate(-5 8.5 0)" fill="#E4007C" fill-rule="evenodd" d="M0 0h17v20a4.25 4.25 0 0 1-8.5 0a4.25 4.25 0 0 1-8.5 0zM6 8a2.5 2.5 0 1 0 5 0a2.5 2.5 0 1 0-5 0z"/>
+    <path transform="translate(5 11.5) rotate(-5 8.5 0)" fill="none" stroke="#1B2A3A" stroke-width="3" stroke-linejoin="round" d="M0 0h17v20a4.25 4.25 0 0 1-8.5 0a4.25 4.25 0 0 1-8.5 0z"/>
+    <path transform="translate(5 11.5) rotate(-5 8.5 0)" fill="none" stroke="#1B2A3A" stroke-width="2" d="M6 8a2.5 2.5 0 1 0 5 0a2.5 2.5 0 1 0-5 0z"/>
+    <path transform="translate(26 11.5) rotate(5 8.5 0)" fill="#F4C430" fill-rule="evenodd" d="M0 0h17v20a4.25 4.25 0 0 1-8.5 0a4.25 4.25 0 0 1-8.5 0zM6 8a2.5 2.5 0 1 0 5 0a2.5 2.5 0 1 0-5 0z"/>
+    <path transform="translate(26 11.5) rotate(5 8.5 0)" fill="none" stroke="#1B2A3A" stroke-width="3" stroke-linejoin="round" d="M0 0h17v20a4.25 4.25 0 0 1-8.5 0a4.25 4.25 0 0 1-8.5 0z"/>
+    <path transform="translate(26 11.5) rotate(5 8.5 0)" fill="none" stroke="#1B2A3A" stroke-width="2" d="M6 8a2.5 2.5 0 1 0 5 0a2.5 2.5 0 1 0-5 0z"/>
+    <path d="M8.5 15.5v5" fill="none" stroke="#FFFFFF" stroke-width="2.5" stroke-linecap="round"/>
+  </symbol>
+  <symbol id="picado-off" viewBox="0 0 48 48">
+    <path d="M3 9Q24 17 45 9" fill="none" stroke="#1B2A3A" stroke-width="3" stroke-linecap="round"/>
+    <path transform="translate(5 11.5) rotate(-5 8.5 0)" fill="#E4007C" fill-rule="evenodd" d="M0 0h17v20a4.25 4.25 0 0 1-8.5 0a4.25 4.25 0 0 1-8.5 0zM6 8a2.5 2.5 0 1 0 5 0a2.5 2.5 0 1 0-5 0z"/>
+    <path transform="translate(5 11.5) rotate(-5 8.5 0)" fill="none" stroke="#1B2A3A" stroke-width="3" stroke-linejoin="round" d="M0 0h17v20a4.25 4.25 0 0 1-8.5 0a4.25 4.25 0 0 1-8.5 0z"/>
+    <path transform="translate(5 11.5) rotate(-5 8.5 0)" fill="none" stroke="#1B2A3A" stroke-width="2" d="M6 8a2.5 2.5 0 1 0 5 0a2.5 2.5 0 1 0-5 0z"/>
+    <path transform="translate(26 11.5) rotate(5 8.5 0)" fill="#F4C430" fill-rule="evenodd" d="M0 0h17v20a4.25 4.25 0 0 1-8.5 0a4.25 4.25 0 0 1-8.5 0zM6 8a2.5 2.5 0 1 0 5 0a2.5 2.5 0 1 0-5 0z"/>
+    <path transform="translate(26 11.5) rotate(5 8.5 0)" fill="none" stroke="#1B2A3A" stroke-width="3" stroke-linejoin="round" d="M0 0h17v20a4.25 4.25 0 0 1-8.5 0a4.25 4.25 0 0 1-8.5 0z"/>
+    <path transform="translate(26 11.5) rotate(5 8.5 0)" fill="none" stroke="#1B2A3A" stroke-width="2" d="M6 8a2.5 2.5 0 1 0 5 0a2.5 2.5 0 1 0-5 0z"/>
+    <path d="M8.5 15.5v5" fill="none" stroke="#FFFFFF" stroke-width="2.5" stroke-linecap="round"/>
+    <path d="M6 6l36 36" fill="none" stroke="#FFFFFF" stroke-width="7" stroke-linecap="round"/>
+    <path d="M6 6l36 36" fill="none" stroke="#1B2A3A" stroke-width="3.5" stroke-linecap="round"/>
+  </symbol>
   <!-- engrane: rueda dentada de metal (gris de la caja fuerte) con aro claro, eje de tinta y brillo. Ajustes. -->
   <symbol id="engrane" viewBox="0 0 48 48">
     <path d="M20.7 3.3L27.3 3.3L27.7 9L32 10.7L36.3 7L41 11.7L37.3 16L39 20.3L44.7 20.7L44.7 27.3L39 27.7L37.3 32L41 36.3L36.3 41L32 37.3L27.7 39L27.3 44.7L20.7 44.7L20.3 39L16 37.3L11.7 41L7 36.3L10.7 32L9 27.7L3.3 27.3L3.3 20.7L9 20.3L10.7 16L7 11.7L11.7 7L16 10.7L20.3 9z" fill="#C8C8C8" stroke="#1B2A3A" stroke-width="3" stroke-linejoin="round"/>

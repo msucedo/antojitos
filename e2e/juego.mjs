@@ -579,7 +579,9 @@ test('ajustes: Sonido conmuta y un código exportado se carga desde el diálogo'
   await page.locator('nav.lateral button', { hasText: 'Ajustes' }).click();
   // aria-pressed cambia en el siguiente tramo de render (10 Hz), no en el clic.
   await page.locator('dialog[open] button', { hasText: 'Sonido' }).click();
-  await page.waitForFunction(() => document.querySelector('dialog[open] button[aria-pressed="true"]') !== null);
+  await page.waitForFunction(() =>
+    [...document.querySelectorAll('dialog[open] button[aria-pressed="true"]')].some((b) => b.textContent === 'Sonido'),
+  );
   await page.locator('dialog[open] textarea[aria-label="Pega aquí un código de partida"]').fill(codigo);
   await page.locator('dialog[open] button', { hasText: 'Cargar partida' }).click();
   await page.waitForFunction(() => document.querySelector('.money')?.textContent === '$2,000');
@@ -1136,6 +1138,71 @@ test('giro de papel con reduced motion: nada gira', async () => {
   const quietos = await giros(page, '#album');
   assert.equal(quietos.filter((g) => g.lograda).length, 3);
   assert.ok(quietos.every((g) => g.n === 0));
+  assert.deepEqual(errores, []);
+  await context.close();
+});
+
+const fondoEstado = (page) =>
+  page.evaluate(() => ({
+    fondo: document.documentElement.dataset.fondo ?? null,
+    lienzos: document.querySelectorAll('canvas.fondo-pagina, canvas.fondo-header').length,
+    banderines: getComputedStyle(document.querySelector('.picado use')).visibility,
+  }));
+
+test('fondo animado (web): se monta, se pausa con un diálogo y Ajustes lo apaga y lo recuerda', async () => {
+  const { context, page, errores } = await abrir();
+  await sinPaneles(page);
+  await page.waitForFunction(() => document.documentElement.dataset.fondo === 'activo');
+  assert.deepEqual(await fondoEstado(page), { fondo: 'activo', lienzos: 2, banderines: 'hidden' });
+  // El canvas de la página cubre el viewport y el del header su ancho (más la cola de la sacudida).
+  const tam = await page.evaluate(() => {
+    const p = document.querySelector('canvas.fondo-pagina').getBoundingClientRect();
+    const h = document.querySelector('canvas.fondo-header').getBoundingClientRect();
+    const top = document.querySelector('.top').getBoundingClientRect();
+    return { pw: p.width, ph: p.height, hw: h.width, hh: h.height, tw: top.width, th: top.height };
+  });
+  assert.equal(tam.pw, 1280);
+  assert.ok(tam.ph >= 800);
+  assert.equal(tam.hw, tam.tw);
+  assert.ok(Math.abs(tam.hh - (tam.th + 8)) < 0.5);
+
+  await page.locator('nav.lateral button', { hasText: 'Ajustes' }).click();
+  await page.waitForFunction(() => document.documentElement.dataset.fondo === 'pausa');
+  const boton = page.locator('dialog[open] button[aria-label="Fondo animado"]');
+  assert.equal(await boton.getAttribute('aria-pressed'), 'true');
+  assert.equal(await page.locator('#fondo-nota').isVisible(), false);
+  assert.equal(await boton.getAttribute('aria-describedby'), null); // la nota oculta no se lee
+  await boton.click();
+  assert.equal(await boton.getAttribute('aria-pressed'), 'false');
+  assert.deepEqual(await fondoEstado(page), { fondo: null, lienzos: 0, banderines: 'visible' });
+  await page.keyboard.press('Escape');
+  await sinPaneles(page); // cerrar el diálogo hace history.back() (atras.ts): que termine antes de recargar
+
+  await page.reload({ waitUntil: 'networkidle' });
+  await page.waitForSelector('#app .card');
+  await page.waitForTimeout(1500); // después del montaje en reposo: sigue apagado
+  assert.deepEqual(await fondoEstado(page), { fondo: null, lienzos: 0, banderines: 'visible' });
+  await sinPaneles(page);
+  await page.locator('nav.lateral button', { hasText: 'Ajustes' }).click();
+  await page.locator('dialog[open] button[aria-label="Fondo animado"]').click();
+  await page.waitForFunction(() => document.documentElement.dataset.fondo === 'pausa'); // montado en pausa
+  await page.keyboard.press('Escape');
+  await page.waitForFunction(() => document.documentElement.dataset.fondo === 'activo');
+  assert.deepEqual(errores, []);
+  await context.close();
+});
+
+test('fondo animado con reduced motion: no se monta y Ajustes lo explica', async () => {
+  const { context, page, errores } = await abrir({ movil: true, quieto: true });
+  await sinPaneles(page);
+  await page.waitForTimeout(1500);
+  assert.deepEqual(await fondoEstado(page), { fondo: null, lienzos: 0, banderines: 'visible' });
+  await page.locator('header .icon-btn[aria-label="Ajustes"]').click();
+  assert.equal(await page.locator('#fondo-nota').isVisible(), true);
+  assert.equal(
+    await page.locator('dialog[open] button[aria-label="Fondo animado"]').getAttribute('aria-describedby'),
+    'fondo-nota',
+  );
   assert.deepEqual(errores, []);
   await context.close();
 });
