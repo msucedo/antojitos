@@ -36,6 +36,8 @@ let browser;
  */
 const ranking = new Map();
 const envios = [];
+/** Si es true, el siguiente POST responde 429 `limite` (como el límite de 30 s por jugador) y se apaga. */
+let limitarProximo = false;
 function apiRanking(req, res) {
   res.setHeader('Content-Type', 'application/json');
   const responder = (status, body) => {
@@ -55,6 +57,10 @@ function apiRanking(req, res) {
   req.on('data', (c) => (cuerpo += c));
   req.on('end', () => {
     envios.push(cuerpo);
+    if (limitarProximo) {
+      limitarProximo = false;
+      return responder(429, { error: 'limite' });
+    }
     try {
       const state = JSON.parse(JSON.parse(cuerpo).save);
       const { id, apodo } = state.ranking;
@@ -1235,6 +1241,7 @@ test('service worker: se registra y controla la página', async () => {
 
 test('ranking (web): unirse con apodo, fila propia y badge; al recargar sigue participando', async () => {
   ranking.clear();
+  limitarProximo = false;
   const semilla = partida({ money: 5_000, lifetimeEarned: 5_000, runEarned: 5_000 }, { elotes: { count: 1 } });
   const { context, page, errores } = await abrir({ semilla });
   await sinPaneles(page);
@@ -1267,8 +1274,48 @@ test('ranking (web): unirse con apodo, fila propia y badge; al recargar sigue pa
   await context.close();
 });
 
+test('ranking: tras un 429 el envío se reintenta solo y el puesto aparece sin pulsar Actualizar', async () => {
+  ranking.clear();
+  limitarProximo = false;
+  const semilla = partida({ money: 5_000, lifetimeEarned: 5_000, runEarned: 5_000 }, { elotes: { count: 1 } });
+  const { context, page, errores } = await abrir({ semilla });
+  await sinPaneles(page);
+  await page.locator('button.ranking-btn').click();
+  const dlg = page.locator('dialog[open]');
+  await dlg.locator('input.apodo').fill('Reintento');
+  await dlg.locator('button', { hasText: 'Participar' }).click();
+  await dlg.locator('.ranking-lista li.yo').waitFor();
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(300);
+  // Recarga con reloj controlado; el 429 se arma después de recargar (el envío de `pagehide` no lo
+  // consume) y antes del primer tick de 10 s: el envío al abrir el diálogo choca con él.
+  await page.clock.install();
+  await page.reload({ waitUntil: 'networkidle' });
+  await page.waitForSelector('#app .card');
+  await sinPaneles(page);
+  limitarProximo = true;
+  await page.locator('button.ranking-btn').click();
+  await page.locator('dialog[open] .ranking-lista').waitFor();
+  assert.equal(limitarProximo, false, 'el 429 se consumió');
+  assert.equal(await page.locator('dialog[open] .ranking-yo-pos').textContent(), '…');
+  assert.match(await page.locator('dialog[open] .ranking-yo-de').textContent(), /llega en un momento/);
+  // A los 30 s el tick reintenta solo; la ficha abierta se repinta sin Actualizar.
+  await page.clock.fastForward(41_000); // 30 s de espera más el tick de 10 s
+  await page.waitForFunction(() => document.querySelector('dialog[open] .ranking-yo-pos')?.textContent === '#1', null, {
+    timeout: 5_000,
+  });
+  assert.match(await page.locator('dialog[open] .ranking-yo-de').textContent(), /de 1 jugador/);
+  // El 429 provocado sale en la consola como recurso fallido: es el caso que se prueba.
+  assert.deepEqual(
+    errores.filter((e) => !/status of 429/.test(e)),
+    [],
+  );
+  await context.close();
+});
+
 test('ranking: un apodo inválido no sale a la red', async () => {
   ranking.clear();
+  limitarProximo = false;
   envios.length = 0;
   const { context, page, errores } = await abrir();
   await sinPaneles(page);

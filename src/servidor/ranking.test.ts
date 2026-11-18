@@ -241,6 +241,24 @@ describe('POST /api/ranking', () => {
     expect(r.body).toEqual({ top: [{ pos: 1, apodo: 'Beto', money: 10 }], total: 1 });
   });
 
+  it('registro viejo (sin `ganado`) de un jugador que heredó y tiene una receta regalada: entra', async () => {
+    const redis = new RedisFalso();
+    const hash = createHash('sha256').update(SECRETO, 'utf8').digest('hex');
+    await redis.hset(`jugador:${ID}`, { secretoHash: hash, money: 10, actualizado: T0 });
+    const rico = jugador(9 * RECIPE_DIVISOR); // 3 pendientes
+    const heredado = prestige(rico, T0);
+    expect(heredado.recipes).toBe(3);
+    const conRegalo = {
+      ...heredado,
+      recipes: heredado.recipes + 1,
+      recetasRegalo: 1,
+      stats: { ...heredado.stats, regalos: RACHA_SEMANA },
+    };
+    const r = await envia(redis, conRegalo);
+    expect(r.status).toBe(200);
+    expect(redis.hashes.get('recetas')?.get(ID)).toBe('4');
+  });
+
   it('registro de cuando se competía por efectivo (sin `ganado`): entra con la cota absoluta y se migra', async () => {
     const redis = new RedisFalso();
     const hash = createHash('sha256').update(SECRETO, 'utf8').digest('hex');

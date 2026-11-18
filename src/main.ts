@@ -49,6 +49,7 @@ import {
   crearIdentidad,
   cuerpoEnvio,
   debeEnviar,
+  enVuelo,
   parsearEnvio,
   parsearTop,
   RUTA_RANKING,
@@ -125,18 +126,34 @@ function start(root: HTMLElement): void {
   // Ranking mundial: último puesto que devolvió el servidor y último envío (hora, ganado y recetas enviados).
   let puesto: Puesto | null = null;
   let ultimoEnvio: UltimoEnvio | null = null;
+  // Motivo del último fallo, para la ficha del diálogo; null tras un `ok`.
+  let ultimoError: ErrorEnvio | null = null;
   /**
    * POST del guardado completo al servidor; con `keepalive` al ocultar la pestaña. Nunca lanza.
-   * Un 429 (`limite`) no es error: el siguiente tick lo reintenta.
+   * El resultado se anota en la marca de este envío (si sigue siendo la última): `debeEnviar` decide
+   * con él cuándo reintentar.
    */
   const enviarRanking = async (keepalive = false): Promise<'ok' | ErrorEnvio> => {
-    if (!state.ranking || soloLectura) return 'save';
-    const body = cuerpoEnvio(state);
-    if (!body) return 'save';
+    const body = state.ranking && !soloLectura ? cuerpoEnvio(state) : null;
+    if (!state.ranking || !body) {
+      ultimoError = 'save';
+      dirty = true;
+      return 'save';
+    }
+    const marca = marcaEnvio(state, Date.now());
+    ultimoEnvio = marca;
+    const r = await postRanking(state.ranking.id, body, keepalive);
+    // Una respuesta vieja no pisa a un envío más nuevo (tick, diálogo y pagehide pueden cruzarse).
+    if (ultimoEnvio === marca) {
+      marca.resultado = r;
+      ultimoError = r === 'ok' ? null : r;
+    }
+    dirty = true; // la ficha del diálogo y el badge muestran el resultado
+    return r;
+  };
+  const postRanking = async (id: string, body: string, keepalive: boolean): Promise<'ok' | ErrorEnvio> => {
     // Tras el await solo se toca la identidad si sigue siendo la misma (un import pudo cambiarla).
-    const id = state.ranking.id;
     const misma = () => !soloLectura && state.ranking?.id === id;
-    ultimoEnvio = marcaEnvio(state, Date.now());
     try {
       const res = await fetch(RUTA_RANKING, {
         method: 'POST',
@@ -169,6 +186,7 @@ function start(root: HTMLElement): void {
         persist();
         puesto = null;
         ultimoEnvio = null;
+        ultimoError = null;
         dirty = true;
       }
       return motivo;
@@ -314,10 +332,18 @@ function start(root: HTMLElement): void {
     // Solo lectura: se exporta el guardado más nuevo tal cual (sin validar), no la partida vacía en memoria.
     getExport: () => (loaded.crudo !== null ? exportCrudo(loaded.crudo) : exportSave(state)),
     onRankingVer: async (fresco) => {
+      // Sin puesto se envía al abrir, salvo con uno en vuelo o tras un 429 reciente: chocaría otra vez.
+      // Tras un fallo pasajero se respeta su espera (si no, el reenvío choca con el 429 y tapa el motivo real).
+      const sinPuestoToca = (ahora: number) => {
+        const r = ultimoEnvio?.resultado;
+        return r === 'limite' || r === 'red' || r === 'salto'
+          ? debeEnviar(ultimoEnvio, state, ahora)
+          : !enVuelo(ultimoEnvio, ahora);
+      };
       // Si participa y aún no hay puesto en esta sesión (o ya toca), primero el envío: así el Top trae tu cifra.
       // Si salió, el Top se pide fresco; lo acotan `debeEnviar` (60 s) y el límite del servidor (30 s).
       const enviado =
-        state.ranking && (puesto === null || debeEnviar(ultimoEnvio, state, Date.now()))
+        state.ranking && (puesto === null ? sinPuestoToca(Date.now()) : debeEnviar(ultimoEnvio, state, Date.now()))
           ? (await enviarRanking()) === 'ok'
           : false;
       try {
@@ -339,6 +365,7 @@ function start(root: HTMLElement): void {
       return enviarRanking();
     },
     getRankingPuesto: () => puesto,
+    getRankingError: () => ultimoError,
   });
 
   /** Aplica una acción; si cambió el estado, da feedback visual y sonoro (`sound` si difiere del tipo). */
@@ -493,7 +520,10 @@ function start(root: HTMLElement): void {
     }
   }, RANKING_TICK_MS);
   const enviarAlSalir = () => {
-    if (state.ranking && ultimoEnvio !== null && cambioDesde(ultimoEnvio, state)) void enviarRanking(true);
+    const ahora = Date.now();
+    if (state.ranking && ultimoEnvio !== null && !enVuelo(ultimoEnvio, ahora) && cambioDesde(ultimoEnvio, state)) {
+      void enviarRanking(true);
+    }
   };
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'hidden') {

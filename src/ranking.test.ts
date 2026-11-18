@@ -1,7 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import { newState } from './game';
 import { MAX_IMPORT_CHARS } from './save';
-import { crearIdentidad, cuerpoEnvio, debeEnviar, ENVIO_MS, marcaEnvio, parsearEnvio, parsearTop } from './ranking';
+import {
+  crearIdentidad,
+  cuerpoEnvio,
+  debeEnviar,
+  ENVIO_MS,
+  enVuelo,
+  marcaEnvio,
+  parsearEnvio,
+  parsearTop,
+  REINTENTO_MS,
+} from './ranking';
 
 const T0 = 1_700_000_000_000;
 
@@ -56,12 +66,33 @@ describe('debeEnviar', () => {
   const s = { ...newState(T0), money: 100, lifetimeEarned: 500, recipes: 2, ranking };
   it('sin envío previo, sí; luego solo al minuto y si cambió lo ganado o las recetas', () => {
     expect(debeEnviar(null, s, T0)).toBe(true);
-    expect(debeEnviar({ en: T0, ganado: 400, recetas: 2 }, s, T0 + ENVIO_MS - 1)).toBe(false);
-    expect(debeEnviar({ en: T0, ganado: 400, recetas: 2 }, s, T0 + ENVIO_MS)).toBe(true);
-    expect(debeEnviar(marcaEnvio(s, T0), s, T0 + ENVIO_MS * 5)).toBe(false);
+    expect(debeEnviar({ en: T0, ganado: 400, recetas: 2, resultado: 'ok' as const }, s, T0 + ENVIO_MS - 1)).toBe(false);
+    expect(debeEnviar({ en: T0, ganado: 400, recetas: 2, resultado: 'ok' as const }, s, T0 + ENVIO_MS)).toBe(true);
+    expect(debeEnviar({ ...marcaEnvio(s, T0), resultado: 'ok' }, s, T0 + ENVIO_MS * 5)).toBe(false);
     // Heredar: lo ganado no cambia pero las recetas sí.
-    expect(debeEnviar({ en: T0, ganado: 500, recetas: 1 }, s, T0 + ENVIO_MS)).toBe(true);
+    expect(debeEnviar({ en: T0, ganado: 500, recetas: 1, resultado: 'ok' as const }, s, T0 + ENVIO_MS)).toBe(true);
     // Gastar efectivo no cuenta: el ranking no lo muestra.
-    expect(debeEnviar(marcaEnvio(s, T0), { ...s, money: 1 }, T0 + ENVIO_MS)).toBe(false);
+    expect(debeEnviar({ ...marcaEnvio(s, T0), resultado: 'ok' }, { ...s, money: 1 }, T0 + ENVIO_MS)).toBe(false);
+  });
+
+  it('429 y sin red se reintentan a los 30 s aunque nada cambie; salto a los 60 s; uno fijo no', () => {
+    for (const resultado of ['limite', 'red'] as const) {
+      const u = { ...marcaEnvio(s, T0), resultado };
+      expect(debeEnviar(u, s, T0 + REINTENTO_MS - 1)).toBe(false);
+      expect(debeEnviar(u, s, T0 + REINTENTO_MS)).toBe(true);
+    }
+    const salto = { ...marcaEnvio(s, T0), resultado: 'salto' as const };
+    expect(debeEnviar(salto, s, T0 + ENVIO_MS - 1)).toBe(false);
+    expect(debeEnviar(salto, s, T0 + ENVIO_MS)).toBe(true);
+    expect(debeEnviar({ ...marcaEnvio(s, T0), resultado: 'baneado' }, s, T0 + ENVIO_MS * 5)).toBe(false);
+  });
+
+  it('con un envío en vuelo no se manda otro; uno colgado vence a los 30 s', () => {
+    const vuelo = marcaEnvio({ ...s, lifetimeEarned: 1 }, T0); // aunque haya cambiado lo ganado
+    expect(enVuelo(vuelo, T0 + REINTENTO_MS - 1)).toBe(true);
+    expect(debeEnviar(vuelo, s, T0 + REINTENTO_MS - 1)).toBe(false);
+    expect(enVuelo(vuelo, T0 + REINTENTO_MS)).toBe(false);
+    expect(debeEnviar(vuelo, s, T0 + REINTENTO_MS)).toBe(true);
+    expect(enVuelo(null, T0)).toBe(false);
   });
 });

@@ -8,6 +8,14 @@ import { MAX_IMPORT_CHARS } from './save';
 export const RUTA_RANKING = '/api/ranking';
 /** Envío automático: cada minuto, solo si cambió lo ganado o las recetas y la pestaña está visible. */
 export const ENVIO_MS = 60_000;
+/** Tras un 429 o sin red: reintento a los 30 s, el límite del servidor por jugador. También vence un envío colgado. */
+export const REINTENTO_MS = 30_000;
+/**
+ * Fallos que se curan solos y cuándo reintentarlos aunque nada cambie. `salto` a 60 s: la cota del
+ * servidor crece con el tiempo y no hace falta golpearlo más seguido. Los demás (baneado, secreto,
+ * save, apodo) esperan a que cambie lo ganado o las recetas.
+ */
+const REINTENTO: Partial<Record<ErrorEnvio, number>> = { limite: REINTENTO_MS, red: REINTENTO_MS, salto: ENVIO_MS };
 
 export interface Fila {
   pos: number;
@@ -76,12 +84,15 @@ export interface UltimoEnvio {
   en: number;
   ganado: number;
   recetas: number;
+  /** Respuesta del servidor; null mientras el envío está en vuelo. */
+  resultado: 'ok' | ErrorEnvio | null;
 }
 
 export const marcaEnvio = (state: State, en: number): UltimoEnvio => ({
   en,
   ganado: state.lifetimeEarned,
   recetas: state.recipes,
+  resultado: null,
 });
 
 /** ¿Cambió algo de lo que muestra el ranking (lo ganado o las recetas) desde el último envío? */
@@ -89,9 +100,21 @@ export function cambioDesde(ultimo: UltimoEnvio, state: State): boolean {
   return state.lifetimeEarned !== ultimo.ganado || state.recipes !== ultimo.recetas;
 }
 
-/** Sin envío previo, sí; después, al minuto y solo si cambió lo ganado o las recetas. */
+/** ¿Hay un envío sin respuesta? Pasados REINTENTO_MS se da por perdido (un fetch colgado no bloquea para siempre). */
+export function enVuelo(ultimo: UltimoEnvio | null, now: number): boolean {
+  return ultimo !== null && ultimo.resultado === null && now - ultimo.en < REINTENTO_MS;
+}
+
+/**
+ * Sin envío previo, sí; con uno en vuelo, no (el segundo chocaría con el 429 del servidor). Si el
+ * último falló por algo pasajero, se reintenta aunque nada cambie (si no, un jugador quieto nunca
+ * recibe su puesto). Si no, al minuto y solo si cambió lo ganado o las recetas.
+ */
 export function debeEnviar(ultimo: UltimoEnvio | null, state: State, now: number): boolean {
   if (!ultimo) return true;
+  if (ultimo.resultado === null) return !enVuelo(ultimo, now);
+  const espera = ultimo.resultado === 'ok' ? undefined : REINTENTO[ultimo.resultado];
+  if (espera !== undefined) return now - ultimo.en >= espera;
   if (now - ultimo.en < ENVIO_MS) return false;
   return cambioDesde(ultimo, state);
 }

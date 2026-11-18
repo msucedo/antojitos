@@ -92,6 +92,8 @@ export interface Handlers {
   onRankingApodo(apodo: string): Promise<'ok' | ErrorEnvio>;
   /** Último puesto que devolvió el servidor en esta sesión, o null. */
   getRankingPuesto(): Puesto | null;
+  /** Por qué falló el último envío respondido al ranking; null si salió bien o aún no hubo respuesta (durante un reintento conserva el fallo anterior). */
+  getRankingError(): ErrorEnvio | null;
 }
 
 type Props = Partial<{
@@ -1617,6 +1619,8 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
   }
 
   let rankingDialogTitle: HTMLElement | null = null;
+  /** Repinta la ficha del diálogo Ranking abierto (el puesto puede llegar después, con el envío del minuto). */
+  let repintarRanking: (() => void) | null = null;
 
   /** Texto para el jugador según lo que contestó el servidor al unirse o cambiar de apodo. */
   function textoEnvio(r: 'ok' | ErrorEnvio, apodo: string): string {
@@ -1702,11 +1706,14 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
     const cuerpo = cuerpoDe(d);
     if (cuerpo) cuerpo.scrollTop = 0;
     rankingDialogTitle = h2;
+    repintarRanking = () => pintarTu();
     d.addEventListener('close', () => {
       rankingDialogTitle = null;
+      repintarRanking = null;
     });
 
     let top: Top | null = null;
+    let altaEnCurso = false;
 
     enviar.addEventListener('click', () => {
       const limpio = normalizarApodo(input.value);
@@ -1715,12 +1722,15 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
         return;
       }
       setDisabled(enviar, true);
+      altaEnCurso = true; // el render no oculta el formulario hasta que conteste el servidor
       void handlers.onRankingApodo(limpio).then((r) => {
+        altaEnCurso = false;
         setDisabled(enviar, false);
         const texto = textoEnvio(r, limpio);
         live.textContent = texto; // al aria-live, no al Historial: es un ajuste, no un evento
         setText(aviso, r === 'ok' ? '' : texto);
         pintarTu();
+        if (r === 'apodo') input.focus(); // el formulario sigue a la vista: a corregir el apodo
         if (r === 'ok' || r === 'limite' || r === 'red') {
           handlers.onSound('upgrade');
           if (r === 'ok') cargar(true); // el Top cacheado no trae tu fila: pedirlo fresco
@@ -1738,7 +1748,7 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
       const ranking = last?.ranking ?? null;
       // Con identidad el alta se oculta para siempre; si el servidor rechaza el apodo, main.ts
       // suelta la identidad y el formulario vuelve.
-      setHidden(alta, ranking !== null);
+      setHidden(alta, ranking !== null && !altaEnCurso);
       setHidden(ficha, ranking === null);
       if (!ranking || !last) {
         setText(tuTexto, '');
@@ -1747,19 +1757,26 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
       const puesto = handlers.getRankingPuesto();
       const ganado = formatMoney(last.lifetimeEarned);
       setText(fichaPos, puesto ? `#${formatNumber(puesto.pos)}` : '…');
+      // Sin puesto: llega en un momento (en vuelo o tras un 429, se reintenta solo), no hay conexión
+      // con el servidor (también se reintenta, pero no se disfraza de espera) o el servidor lo rechazó.
+      const error = puesto ? null : handlers.getRankingError();
+      const sinPuesto =
+        !error || error === 'limite'
+          ? 'Tu puesto llega en un momento'
+          : error === 'red'
+            ? 'Sin conexión con el ranking. Se reintenta solo'
+            : textoEnvio(error, ranking.apodo).replace(/\.$/, '');
       setText(fichaApodo, ranking.apodo);
       setText(
         fichaDe,
-        puesto
-          ? `de ${formatNumber(puesto.total)} ${puesto.total === 1 ? 'jugador' : 'jugadores'}`
-          : 'Tu puesto llega en un momento',
+        puesto ? `de ${formatNumber(puesto.total)} ${puesto.total === 1 ? 'jugador' : 'jugadores'}` : sinPuesto,
       );
       setText(fichaGanado, ganado);
       setText(fichaRecetas, formatNumber(last.recipes));
       setText(fichaRecetasEtq, last.recipes === 1 ? ' receta' : ' recetas');
       setText(
         tuTexto,
-        `Tú, ${ranking.apodo}: ${puesto ? `puesto ${formatNumber(puesto.pos)} de ${formatNumber(puesto.total)}` : 'tu puesto llega en un momento'}. Ganado en total: ${ganado}. ${recetas(last.recipes)}.`,
+        `Tú, ${ranking.apodo}: ${puesto ? `puesto ${formatNumber(puesto.pos)} de ${formatNumber(puesto.total)}` : sinPuesto}. Ganado en total: ${ganado}. ${recetas(last.recipes)}.`,
       );
     }
 
@@ -2134,6 +2151,7 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
 
       // Ranking: el puesto conocido en el badge del trofeo (solo si participa); el aria-label lo dice.
       const puesto = s.ranking ? handlers.getRankingPuesto() : null;
+      repintarRanking?.();
       setHidden(rankingBadge, puesto === null);
       if (puesto) setText(rankingBadge, puesto.pos > 999 ? '#999+' : `#${puesto.pos}`);
       setAttr(rankingBtn, 'aria-label', puesto ? `Ranking mundial: puesto ${puesto.pos}` : 'Ranking mundial');
