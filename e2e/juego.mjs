@@ -1068,9 +1068,12 @@ test('móvil: las tarjetas miden lo mismo sea cual sea el precio (si no, al fond
               if (!dentro(li.querySelector('.precio'), li.querySelector('.row')))
                 problemas.push(`precio fuera: ${cant}`);
               if (gana && !dentro(li.querySelector('.gana'), meta)) problemas.push(`ganancia fuera: ${gana}`);
-              // Desde 360, con la letra normal, todo cabe entero; la elipsis es solo el último recurso.
-              if (ancho >= 360 && letra === 16)
-                for (const s of li.querySelectorAll('.precio-tag > span, .gana'))
+              // Con la letra normal todo cabe entero (la elipsis es el último recurso): la ganancia desde 360 y
+              // el precio, al lado del botón, desde 390 (decisión del user: bajo 390 las cifras extremas se cortan).
+              const enteros = [...(ancho >= 360 ? li.querySelectorAll('.gana') : [])];
+              if (ancho >= 390) enteros.push(...li.querySelectorAll('.precio-tag > span'));
+              if (letra === 16)
+                for (const s of enteros)
                   if (s.scrollWidth > s.clientWidth + 1) problemas.push(`cortado: ${s.textContent}`);
             });
           }
@@ -1142,7 +1145,7 @@ const sinAlcanzar = () =>
     ),
   );
 
-test('móvil: botón de compra ancho, y si no alcanza se llena con lo que ya tienes', async () => {
+test('móvil: botón de compra con el precio al lado, igual en todas, y si no alcanza se llena con lo que ya tienes', async () => {
   const { context, page, errores } = await abrir({ semilla: sinAlcanzar(), movil: true });
   await sinPaneles(page);
   const r = await page.evaluate(() => {
@@ -1155,14 +1158,40 @@ test('móvil: botón de compra ancho, y si no alcanza se llena con lo que ya tie
       avance: Number(getComputedStyle(cadena).getPropertyValue('--avance')),
       fondoCadena: getComputedStyle(cadena).backgroundImage,
       fondoElotes: getComputedStyle(elotes).backgroundImage,
-      anchos: tarjetas.map((li) => [boton(li).getBoundingClientRect().width, li.querySelector('.row').clientWidth]),
+      // [ancho del botón, centro vertical del botón y del precio, borde derecho del botón, borde izquierdo del
+      // precio, izquierda de la fila y del icono, arriba de la fila, abajo del icono]
+      filas: tarjetas.map((li) => {
+        const b = boton(li).getBoundingClientRect();
+        const p = li.querySelector('.precio').getBoundingClientRect();
+        const f = li.querySelector('.row').getBoundingClientRect();
+        const s = li.querySelector('.sell').getBoundingClientRect();
+        return [b.width, b.top + b.height / 2, p.top + p.height / 2, b.right, p.left, f.left, s.left, f.top, s.bottom];
+      }),
     };
   });
   assert.equal(r.cadenaDisabled, true);
   assert.ok(r.avance >= 0.45 && r.avance <= 0.55, `avance ${r.avance}`);
   assert.match(r.fondoCadena, /linear-gradient/);
   assert.equal(r.fondoElotes, 'none'); // alcanza: relleno sólido, sin barra
-  for (const [boton, fila] of r.anchos) assert.ok(Math.abs(boton - Math.min(fila, 320)) <= 1, `${boton} vs ${fila}`);
+  // "Abrir" (Cadena) y "Comprar" miden igual: el precio no se mueve al abrir; y va en la misma línea, a la derecha.
+  // La fila va bajo el icono y a todo el ancho del papel (en web va en la columna del cuerpo).
+  for (const [
+    ancho,
+    centroBoton,
+    centroPrecio,
+    finBoton,
+    inicioPrecio,
+    filaIzq,
+    iconoIzq,
+    filaArriba,
+    iconoAbajo,
+  ] of r.filas) {
+    assert.ok(Math.abs(filaIzq - iconoIzq) <= 1, `fila ${filaIzq} vs icono ${iconoIzq}`);
+    assert.ok(filaArriba >= iconoAbajo, `fila ${filaArriba} sobre el icono ${iconoAbajo}`);
+    assert.ok(Math.abs(ancho - r.filas[0][0]) <= 1, `botón ${ancho} vs ${r.filas[0][0]}`);
+    assert.ok(Math.abs(centroBoton - centroPrecio) <= 2, `centros ${centroBoton} vs ${centroPrecio}`);
+    assert.ok(inicioPrecio >= finBoton, `precio ${inicioPrecio} antes del fin del botón ${finBoton}`);
+  }
   assert.deepEqual(errores, []);
   await context.close();
 });

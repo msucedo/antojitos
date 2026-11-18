@@ -906,12 +906,14 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
       icon('clavo', 'clavo der'),
       h('span', { class: 'nombre', text: def.name }),
     ]);
-    // li: letrero y sombra; .paper: la estampilla con la máscara perforada.
+    // li: letrero y sombra; .paper: la estampilla con la máscara perforada (grid: ver .paper en style.css).
     const cardRoot = h('li', { class: 'card' }, [
       letrero,
       h('div', { class: 'paper' }, [
         sell,
-        h('div', { class: 'body' }, [bar, meta, h('div', { class: 'row' }, [buy, precio]), bubble]),
+        h('div', { class: 'body' }, [bar, meta, bubble]),
+        // Fila de compra hija del papel: en móvil va abajo a todo el ancho (el icono sube junto a la barra).
+        h('div', { class: 'row' }, [buy, precio]),
         mark,
       ]),
     ]);

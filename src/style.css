@@ -1729,10 +1729,16 @@ html:not([data-puntero]) .up-slot:has(.estampilla-ver:focus-visible) .up-card {
     19.5vw,
     5.25rem
   ); /* lado del icono de vender: crece con la pantalla, con tope (76 px a 390) */
-  display: flex;
+  /*
+   * Grid de dos columnas: icono y cuerpo. Web: el icono a todo el alto y la fila de compra bajo el cuerpo;
+   * móvil (abajo): el icono junto a barra y ganancia, y la fila de compra a todo el ancho debajo.
+   */
+  display: grid;
+  grid-template-columns: calc(var(--icono) + 12px) minmax(0, 1fr);
+  column-gap: 6px;
+  row-gap: 4px;
   --papel-arriba: 24px; /* aire bajo la mitad del letrero que entra en el papel */
   --papel-abajo: 20px; /* la sombra del botón lejos del marco */
-  gap: 6px;
   padding: var(--papel-arriba) 16px var(--papel-abajo);
   border-radius: 4px;
   /* Cuatro puntos de esquina como capas del fondo: ni pseudo-elemento ni filter. */
@@ -1778,16 +1784,14 @@ html:not([data-puntero]) .up-slot:has(.estampilla-ver:focus-visible) .up-card {
 
 /*
  * Icono del negocio (.sell, botón de vender): sin plato ni sello, solo el raster, que trae su
- * contorno y su sombra. Su lado es el token --icono (fluido, en rem y vw; ver .paper) y el cuerpo
- * reparte sus filas en ese alto (align-content: space-between); si el cuerpo crece más (letra
- * grande del usuario), el icono queda centrado. Sin píxeles: todo sale del token.
+ * contorno y su sombra. Su lado es el token --icono (fluido, en rem y vw; ver .paper). En web abarca
+ * las dos filas del papel (cuerpo y compra) y queda centrado en el papel; en móvil solo la de arriba,
+ * con el cuerpo centrado a su lado. Sin píxeles: todo sale del token.
  */
 .sell {
   position: relative;
-  flex: none;
-  align-self: stretch; /* columna a todo el alto del papel: el icono se centra en vertical */
+  grid-area: 1 / 1 / 3; /* columna a todo el alto del papel: el icono se centra en vertical */
   margin-block: calc(-1 * var(--papel-arriba)) calc(-1 * var(--papel-abajo)); /* centrado en el papel entero, no en el hueco entre paddings desiguales */
-  width: calc(var(--icono) + 12px); /* columna un poco más ancha que el icono: centrado en horizontal */
   display: grid;
   place-items: center;
   padding: 0;
@@ -1911,24 +1915,26 @@ html:not([data-puntero]) .up-slot:has(.estampilla-ver:focus-visible) .up-card {
 
 .body {
   position: relative; /* ancla del bocadillo */
-  flex: 1;
+  grid-area: 1 / 2;
   min-width: 0;
   display: grid;
   gap: 6px;
-  align-content: space-between; /* ocupa el alto del icono repartiendo el hueco entre filas */
+  align-content: space-between; /* ocupa el alto de su fila repartiendo el hueco entre barra y ganancia */
 }
 
 /*
- * Fila de compra bajo la barra y la línea de ganancia: Comprar a la izquierda y el precio al extremo derecho
- * (en web en la misma línea; en móvil encima del botón).
+ * Fila de compra bajo la barra y la línea de ganancia: Comprar a la izquierda y el precio al extremo
+ * derecho, en la misma línea (web: bajo el cuerpo; móvil: a todo el ancho del papel).
  * Alto fijo pase lo que pase con el precio: si la tarjeta cambiaba de alto, al fondo de la página
  * se movía el scroll (DESIGN.md, "Tarjetas de negocio").
  */
-.body > .row {
+.paper > .row {
+  grid-area: 2 / 2;
+  min-width: 0;
   flex-wrap: nowrap;
 }
 
-.body > .row .btn.primary {
+.paper > .row .btn.primary {
   flex: none;
   white-space: nowrap;
 }
@@ -1990,7 +1996,7 @@ html:not([data-puntero]) .up-slot:has(.estampilla-ver:focus-visible) .up-card {
  * No alcanza: el botón se llena con lo que ya tienes (--avance, 0 a 0.99, desde render). Decorativo: la
  * señal de deshabilitado sigue siendo el borde punteado. Tinta neutra: el rosa no se ve sobre papel rosa.
  */
-.body > .row .btn.primary:disabled {
+.paper > .row .btn.primary:disabled {
   background: linear-gradient(
     to right,
     color-mix(in srgb, var(--ink) 18%, transparent) calc(var(--avance, 0) * 100%),
@@ -1999,25 +2005,32 @@ html:not([data-puntero]) .up-slot:has(.estampilla-ver:focus-visible) .up-card {
 }
 
 /*
- * Móvil: al lado del botón no cabe en una línea (a 360 px quedan ~76 px para "$16.57 billones"): el
- * precio va encima, a todo el ancho y alineado a la derecha; el botón abajo a la izquierda.
+ * Móvil: el icono sube junto a barra y ganancia (sin márgenes negativos: no toca el perforado ni el
+ * letrero) y la fila de compra baja a todo el ancho del papel, con el precio al lado del botón (al
+ * lado del icono no cabía: iba encima del botón). Con cifras extremas bajo 390 px, elipsis.
  */
 @media (width < 900px) {
-  .body > .row {
-    flex-direction: column-reverse; /* el botón sigue antes en el DOM (:disabled + .precio) */
-    align-items: flex-start;
-    gap: 4px;
+  .paper {
+    row-gap: 8px; /* el chip "Vender" del borde del icono lejos del botón */
   }
 
-  .precio {
-    flex: none; /* en columna, flex: 1 le daría el alto del contenido */
-    align-self: stretch;
+  .sell {
+    grid-area: 1 / 1;
+    margin-block: 0;
   }
 
-  /* Botón ancho: blanco táctil grande para el pulgar; tope para que en tabletas no sea una píldora enorme. */
-  .body > .row .btn.primary {
-    align-self: stretch;
-    max-width: 320px;
+  .body {
+    align-content: center;
+  }
+
+  .paper > .row {
+    grid-area: 2 / 1 / 3 / -1;
+  }
+
+  /* Ancho por su texto, con un mínimo en em para que "Abrir" y "Comprar" midan igual y el precio no se mueva. */
+  .paper > .row .btn.primary {
+    min-width: 6.5em;
+    padding-inline: 10px;
   }
 }
 
@@ -2713,8 +2726,8 @@ html[data-puntero] :focus-visible:not(input, textarea, select) {
   }
 
   /*
-   * Tarjeta compacta (~130 px, cuatro filas caben en 800 px de alto): mismo flex que en móvil
-   * (icono a la izquierda, cuerpo al lado) con padding y huecos más cortos.
+   * Tarjeta compacta (~130 px, cuatro filas caben en 800 px de alto): el grid de .paper con el icono a
+   * todo el alto y la fila de compra bajo el cuerpo, con padding y huecos más cortos.
    */
   .paper {
     --icono: 4.5rem; /* 72: con padding y bordes, cuatro tarjetas caben en 800 de alto */
