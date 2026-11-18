@@ -1779,8 +1779,8 @@ html:not([data-puntero]) .up-slot:has(.estampilla-ver:focus-visible) .up-card {
 /*
  * Icono del negocio (.sell, botón de vender): sin plato ni sello, solo el raster, que trae su
  * contorno y su sombra. Su lado es el token --icono (fluido, en rem y vw; ver .paper) y el cuerpo
- * reparte sus filas en ese alto (align-content: space-between); si el cuerpo crece más (precio
- * largo en dos líneas), el icono queda centrado. Sin píxeles: todo sale del token.
+ * reparte sus filas en ese alto (align-content: space-between); si el cuerpo crece más (letra
+ * grande del usuario), el icono queda centrado. Sin píxeles: todo sale del token.
  */
 .sell {
   position: relative;
@@ -1918,13 +1918,113 @@ html:not([data-puntero]) .up-slot:has(.estampilla-ver:focus-visible) .up-card {
   align-content: space-between; /* ocupa el alto del icono repartiendo el hueco entre filas */
 }
 
-/* Comprar alineado a la izquierda del cuerpo, bajo la barra y la línea de ganancia. */
+/*
+ * Fila de compra bajo la barra y la línea de ganancia: Comprar a la izquierda y el precio al extremo derecho
+ * (en web en la misma línea; en móvil encima del botón).
+ * Alto fijo pase lo que pase con el precio: si la tarjeta cambiaba de alto, al fondo de la página
+ * se movía el scroll (DESIGN.md, "Tarjetas de negocio").
+ */
 .body > .row {
-  justify-content: flex-start;
+  flex-wrap: nowrap;
+}
+
+.body > .row .btn.primary {
+  flex: none;
+  white-space: nowrap;
+}
+
+/* Precio en una sola línea, al extremo derecho: "×10 · $16.57 billones"; la letra encoge con su largo. */
+.precio {
+  flex: 1;
+  min-width: 0;
+  container-type: inline-size;
+  display: flex;
+  justify-content: flex-end;
+  height: calc(1.2em + 6px); /* alto fijo: la letra tope más el relleno de la etiqueta, aunque la letra encoja */
+  line-height: 1.2;
+  font-size: 0.9rem; /* tamaño tope */
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Etiqueta de precio: un tono más oscuro que el papel de la tarjeta, que abraza el texto. */
+.precio-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25em;
+  max-width: 100%;
+  height: 100%; /* del contenedor: no cambia con la letra */
+  padding: 0 8px;
+  border-radius: 999px; /* orillas suaves, como la ficha ×N */
+  background: color-mix(in srgb, var(--papel) 86%, var(--tinta));
+  /* Hundida en el papel, como la pista de la barra: sombra dura arriba y un brillo abajo (sin desenfoque). */
+  box-shadow:
+    inset 0 2px 0 color-mix(in srgb, var(--tinta) 16%, transparent),
+    inset 0 -1px 0 var(--brillo);
+  color: var(--text);
+}
+
+/* La letra va en los spans: 100cqi mide el contenedor ancestro (.precio), nunca el propio elemento; 16 px del relleno. */
+.precio-tag > span {
+  font-size: clamp(0.65rem, (100cqi - 16px) / (var(--largo, 20) * 0.6), 0.9rem);
+  white-space: nowrap;
+}
+
+.precio-cant {
+  flex: none;
+}
+
+.precio-escala {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis; /* último recurso; el aria-label del botón lo dice completo */
+  color: var(--muted);
+}
+
+/* No alcanza: la etiqueta también se apaga (el botón ya va punteado). */
+.btn.primary:disabled + .precio .precio-tag {
+  opacity: 0.55;
+}
+
+/*
+ * No alcanza: el botón se llena con lo que ya tienes (--avance, 0 a 0.99, desde render). Decorativo: la
+ * señal de deshabilitado sigue siendo el borde punteado. Tinta neutra: el rosa no se ve sobre papel rosa.
+ */
+.body > .row .btn.primary:disabled {
+  background: linear-gradient(
+    to right,
+    color-mix(in srgb, var(--ink) 18%, transparent) calc(var(--avance, 0) * 100%),
+    transparent 0
+  );
+}
+
+/*
+ * Móvil: al lado del botón no cabe en una línea (a 360 px quedan ~76 px para "$16.57 billones"): el
+ * precio va encima, a todo el ancho y alineado a la derecha; el botón abajo a la izquierda.
+ */
+@media (width < 900px) {
+  .body > .row {
+    flex-direction: column-reverse; /* el botón sigue antes en el DOM (:disabled + .precio) */
+    align-items: flex-start;
+    gap: 4px;
+  }
+
+  .precio {
+    flex: none; /* en columna, flex: 1 le daría el alto del contenido */
+    align-self: stretch;
+  }
+
+  /* Botón ancho: blanco táctil grande para el pulgar; tope para que en tabletas no sea una píldora enorme. */
+  .body > .row .btn.primary {
+    align-self: stretch;
+    max-width: 320px;
+  }
 }
 
 /* Cantidad como ficha al inicio de la línea de ganancia; vacía (sin abrir) no se pinta. */
 .count {
+  position: relative; /* ancla del número que sale al rodar */
+  overflow: hidden; /* recorta el rodillo: el óvalo queda quieto */
   flex: none;
   padding: 0 7px;
   border: 1.5px solid var(--border);
@@ -1939,6 +2039,17 @@ html:not([data-puntero]) .up-slot:has(.estampilla-ver:focus-visible) .up-card {
 
 .count:empty {
   display: none;
+}
+
+/* Rodillo de la ficha (fx.ts rodar): el nuevo en el flujo; el viejo encima, centrado, y sale hacia arriba. */
+.count .rodar {
+  display: inline-block;
+}
+
+.count .rodar-viejo {
+  position: absolute;
+  inset: 0;
+  text-align: center;
 }
 
 /*
@@ -2014,19 +2125,28 @@ html:not([data-puntero]) .up-slot:has(.estampilla-ver:focus-visible) .up-card {
   }
 }
 
-/* "$10 por vuelta" o "Sin abrir". */
+/* "×30 $10/vuelta", "×30 $2/s" o "Sin abrir". */
 .meta {
   display: flex;
   align-items: baseline;
   gap: 6px;
+  min-width: 0;
+  height: max(20px, 1.25rem); /* la ficha .count (20 px) o la letra grande del usuario: fijo aunque la cifra encoja */
+  white-space: nowrap; /* una sola línea: si se partía, la tarjeta cambiaba de alto */
+  container-type: inline-size; /* 100cqi para encoger la cifra (.gana) si no cabe */
   font-size: 0.85rem;
   color: var(--muted);
   font-variant-numeric: tabular-nums;
 }
 
 .gana {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis; /* último recurso, solo bajo 360 px con cifras extremas */
   color: var(--text);
-  font-size: 0.95rem;
+  /* --largo (caracteres de la cifra, desde render) × 0.6 em; 3.5rem: la ficha .count y el hueco. */
+  font-size: clamp(0.6rem, (100cqi - 3.5rem) / (var(--largo, 12) * 0.6), 0.95rem);
 }
 
 .gana:empty {
@@ -2035,7 +2155,9 @@ html:not([data-puntero]) .up-slot:has(.estampilla-ver:focus-visible) .up-card {
 
 .por {
   flex: 1;
-  white-space: nowrap;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis; /* último recurso */
 }
 
 .row {
@@ -2420,6 +2542,30 @@ html[data-puntero] :focus-visible:not(input, textarea, select) {
   background: var(--nopal);
 }
 
+/* Moneda del gasto (fx.ts monedasDesde): disco plano de maíz con contorno de tinta y un brillo. */
+.fx-moneda {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid var(--ink);
+  background: var(--corn);
+  will-change: transform, opacity;
+}
+
+.fx-moneda::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #fff;
+}
+
 /* ---------- Web: puntero fino y pantallas anchas ---------- */
 @media (hover: hover) and (pointer: fine) {
   .btn:not(:disabled):not([aria-disabled='true']):hover {
@@ -2587,11 +2733,6 @@ html[data-puntero] :focus-visible:not(input, textarea, select) {
   .bar {
     height: 22px;
     border-radius: 11px;
-  }
-
-  .row .btn.primary {
-    flex: none;
-    white-space: nowrap;
   }
 
   /* Los controles del header y el botón de heredar viven en el lateral, salvo el trofeo del Ranking. */

@@ -66,6 +66,90 @@ export function pulse(el: Element): void {
   });
 }
 
+/** Ya alcanza: el botón crece un poco y vuelve (sin opacidad: no desaparece justo cuando se puede usar). */
+export function latido(el: Element): void {
+  if (reducedMotion()) return;
+  el.animate([{ transform: 'scale(1)' }, { transform: 'scale(1.06)' }, { transform: 'scale(1)' }], {
+    duration: 240,
+    easing: 'ease-out',
+  });
+}
+
+/**
+ * Contador que rueda: el número viejo sube y sale, el nuevo entra desde abajo, recortados por el
+ * contenedor (overflow: hidden en CSS); el contenedor (la ficha) no se mueve. Sin movimiento, o si
+ * antes o después está vacío, cambia sin más.
+ */
+export function rodar(el: HTMLElement, texto: string): void {
+  const antes = el.textContent ?? '';
+  if (reducedMotion() || antes === '' || texto === '') {
+    el.textContent = texto;
+    return;
+  }
+  const nuevo = document.createElement('span');
+  nuevo.className = 'rodar';
+  nuevo.textContent = texto;
+  const viejo = document.createElement('span');
+  viejo.className = 'rodar rodar-viejo';
+  viejo.textContent = antes;
+  viejo.setAttribute('aria-hidden', 'true');
+  el.replaceChildren(nuevo, viejo);
+  const opts = { duration: 280, easing: 'ease-out' }; // que se lea el rodillo: sin el arranque brusco
+  nuevo.animate([{ transform: 'translateY(100%)' }, { transform: 'translateY(0)' }], opts);
+  const sale = viejo.animate([{ transform: 'translateY(0)' }, { transform: 'translateY(-100%)' }], opts);
+  done(sale, () => viejo.remove());
+}
+
+/** Vuelos de compra a la vez: tocar muy seguido no acumula capas. */
+const MAX_COMPRAS = 3;
+const MONEDAS_POR_COMPRA = 3;
+let comprasActivas = 0;
+
+/**
+ * El gasto a la vista: monedas que salen de `desde` (el dinero del header) y caen en arco sobre
+ * `hasta` (el botón de comprar). Una capa por compra, encima del header porque nacen en él.
+ */
+export function monedasDesde(desde: Element, hasta: Element): void {
+  if (reducedMotion() || comprasActivas >= MAX_COMPRAS) return;
+  const a = desde.getBoundingClientRect();
+  const b = hasta.getBoundingClientRect();
+  const visible = (r: DOMRect) => r.width > 0 && r.bottom > 0 && r.top < window.innerHeight;
+  if (!visible(a) || !visible(b)) return;
+  comprasActivas++;
+  const layer = document.createElement('div');
+  layer.className = 'fx-layer fx-compra';
+  layer.setAttribute('aria-hidden', 'true');
+  document.body.append(layer);
+  const x0 = a.left + a.width / 2;
+  const y0 = a.top + a.height / 2;
+  const x1 = b.left + b.width / 2;
+  const y1 = b.top + b.height / 2;
+  const anims: Promise<unknown>[] = [];
+  for (let i = 0; i < MONEDAS_POR_COMPRA; i++) {
+    const m = document.createElement('span');
+    m.className = 'fx-moneda';
+    layer.append(m);
+    // Arco: el punto medio se abre a un lado de la recta; cada moneda con un leve desvío para no ir en fila.
+    const desvio = (i - 1) * 14;
+    const xm = (x0 + x1) / 2 + 50 + desvio;
+    const ym = (y0 + y1) / 2 - 20;
+    const anim = m.animate(
+      [
+        { transform: `translate(${x0}px, ${y0}px) translate(-50%, -50%) scale(0.6)`, opacity: 0 },
+        { transform: `translate(${xm}px, ${ym}px) translate(-50%, -50%) scale(1)`, opacity: 1, offset: 0.45 },
+        { transform: `translate(${x1}px, ${y1}px) translate(-50%, -50%) scale(0.5)`, opacity: 0 },
+      ],
+      // both: antes del retraso, invisible en el dinero; al acabar, invisible (sin both volvería a 0,0 opaca).
+      { duration: 420, delay: i * 60, easing: 'ease-in', fill: 'both' },
+    );
+    anims.push(anim.finished.catch(() => undefined));
+  }
+  void Promise.all(anims).then(() => {
+    layer.remove();
+    comprasActivas--;
+  });
+}
+
 /** Lluvia de papel picado. */
 export function confetti(): void {
   if (reducedMotion() || confettiActive) return;
@@ -89,7 +173,12 @@ export function confetti(): void {
         { transform: `translate(${x}px, -20px) rotate(0deg)`, opacity: 1 },
         { transform: `translate(${x + drift}px, ${h + 20}px) rotate(${spin}deg)`, opacity: 0.9 },
       ],
-      { duration: 1600 + Math.random() * 900, delay: Math.random() * 300, easing: 'cubic-bezier(.2,.6,.4,1)' },
+      {
+        duration: 1600 + Math.random() * 900,
+        delay: Math.random() * 300,
+        easing: 'cubic-bezier(.2,.6,.4,1)',
+        fill: 'both', // sin esto, cada trozo terminado volvía a 0,0 visible hasta que acababa el último
+      },
     );
     anims.push(anim.finished.catch(() => undefined));
   }

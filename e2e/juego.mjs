@@ -213,7 +213,7 @@ test('vender un elote a mano: cobra al terminar la barra', async () => {
   await context.close();
 });
 
-test('con empleado la tarjeta dice /s y la barra queda fija si la vuelta es rápida; a mano, por vuelta', async () => {
+test('con empleado la tarjeta dice /s y la barra queda fija si la vuelta es rápida; a mano, /vuelta', async () => {
   // Aguas con 50 (dos hitos: 3 s → 750 ms) y empleado; tacos con 25 (6 s → 3 s) barre; elote a mano.
   const semilla = partida(
     { lifetimeEarned: 1e6, runEarned: 1e6 },
@@ -228,8 +228,7 @@ test('con empleado la tarjeta dice /s y la barra queda fija si la vuelta es ráp
   assert.equal(await tacos.locator('.bar.fija').count(), 0);
   assert.match(await tacos.locator('.gana').textContent(), /\/s$/);
   const elotes = page.locator('.card').nth(0); // sin empleado
-  assert.match(await elotes.locator('.por').textContent(), /por vuelta/);
-  assert.doesNotMatch(await elotes.locator('.gana').textContent(), /\/s$/);
+  assert.match(await elotes.locator('.gana').textContent(), /\/vuelta$/);
   assert.deepEqual(errores, []);
   await context.close();
 });
@@ -1009,6 +1008,257 @@ test('móvil: el header mide lo mismo sea cual sea la cifra (si no, al fondo la 
     assert.equal(altos.length, 1, `${width} px: alturas ${altos.join(', ')}`);
     assert.deepEqual(fuera, [], `${width} px`);
   }
+  assert.deepEqual(errores, []);
+  await context.close();
+});
+
+/** Siete negocios abiertos (con y sin empleado) y el octavo sin abrir: todas las variantes de tarjeta. */
+const conTodas = () =>
+  partida(
+    { version: 6, money: 5e13, lifetimeEarned: 1e15, runEarned: 1e15 },
+    {
+      elotes: { count: 110, manager: true, running: true },
+      aguas: { count: 111, manager: true, running: true },
+      tacos: { count: 112, manager: true, running: true },
+      tortas: { count: 113 },
+      fonda: { count: 114 },
+      panaderia: { count: 115, manager: true, running: true },
+      franquicia: { count: 116, manager: true, running: true },
+    },
+  );
+
+test('móvil: las tarjetas miden lo mismo sea cual sea el precio (si no, al fondo la página sube sola)', async () => {
+  const { context, page, errores } = await abrir({ semilla: conTodas(), movil: true });
+  await sinPaneles(page);
+  // Letra del usuario normal y "Grande" (raíz a 20 px): la tarjeta mide fijo en las dos.
+  for (const letra of [16, 20])
+    for (const width of [320, 359, 360, 390, 700, 899]) {
+      await page.setViewportSize({ width, height: 800 });
+      const r = await page.evaluate(
+        ([ancho, letra]) => {
+          document.documentElement.style.fontSize = `${letra}px`;
+          // [cantidad · número, escala, ganancia, "Sin abrir"]: como los escribe render().
+          const textos = [
+            ['×1 · $6,828', '', '$2,147/s', ''],
+            ['×10 · $16.57', 'billones', '$177.59 millones/s', ''],
+            ['×299 · $999.99', 'mil cuatrillones', '$1.03 mil millones/vuelta', ''],
+            ['×1 · $8,640', '', '', 'Sin abrir'],
+          ];
+          const tarjetas = [...document.querySelectorAll('.list > li:not([hidden])')];
+          const altos = tarjetas.map(() => new Set());
+          const problemas = [];
+          const dentro = (hijo, padre) => {
+            const a = hijo.getBoundingClientRect();
+            const b = padre.getBoundingClientRect();
+            return a.left >= b.left - 0.5 && a.right <= b.right + 0.5;
+          };
+          for (const [cant, escala, gana, por] of textos) {
+            tarjetas.forEach((li) => {
+              const precio = li.querySelector('.precio');
+              li.querySelector('.precio-cant').textContent = cant;
+              li.querySelector('.precio-escala').textContent = escala;
+              precio.style.setProperty('--largo', String(cant.length + 1 + escala.length));
+              li.querySelector('.gana').textContent = gana;
+              li.querySelector('.por').textContent = por;
+              li.querySelector('.meta').style.setProperty('--largo', String(gana.length)); // como render()
+            });
+            tarjetas.forEach((li, i) => {
+              altos[i].add(Math.round(li.getBoundingClientRect().height));
+              const meta = li.querySelector('.meta');
+              if (!dentro(li.querySelector('.precio'), li.querySelector('.row')))
+                problemas.push(`precio fuera: ${cant}`);
+              if (gana && !dentro(li.querySelector('.gana'), meta)) problemas.push(`ganancia fuera: ${gana}`);
+              // Desde 360, con la letra normal, todo cabe entero; la elipsis es solo el último recurso.
+              if (ancho >= 360 && letra === 16)
+                for (const s of li.querySelectorAll('.precio-tag > span, .gana'))
+                  if (s.scrollWidth > s.clientWidth + 1) problemas.push(`cortado: ${s.textContent}`);
+            });
+          }
+          return { altos: altos.map((a) => [...a]), problemas: [...new Set(problemas)] };
+        },
+        [width, letra],
+      );
+      r.altos.forEach((a, i) =>
+        assert.equal(a.length, 1, `${width} px, letra ${letra}, tarjeta ${i}: alturas ${a.join(', ')}`),
+      );
+      assert.deepEqual(r.problemas, [], `${width} px, letra ${letra}`);
+    }
+  assert.deepEqual(errores, []);
+  await context.close();
+});
+
+test('móvil: al fondo, si la página encoge y recrece, se devuelve lo recortado; un negocio nuevo no mueve nada', async () => {
+  const { context, page, errores } = await abrir({ semilla: conTodas(), movil: true });
+  await sinPaneles(page);
+  const medir = () =>
+    page.evaluate(() => ({ y: window.scrollY, max: document.documentElement.scrollHeight - window.innerHeight }));
+  const cuadros = () => page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+  await page.evaluate(() => {
+    // Como Safari: sin scroll anchoring (en html solo no basta: Chrome anclaba la región live del final).
+    // Hoja construida (CSSOM): la CSP bloquea <style> en línea.
+    const sinAncla = new CSSStyleSheet();
+    sinAncla.replaceSync('* { overflow-anchor: none !important; }');
+    document.adoptedStyleSheets = [...document.adoptedStyleSheets, sinAncla];
+    const sep = document.createElement('div');
+    sep.id = 'sep';
+    sep.style.height = '20px';
+    document.querySelector('.col-main').append(sep);
+  });
+  await cuadros();
+  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+  await cuadros();
+  let m = await medir();
+  assert.ok(m.max > 0 && Math.abs(m.y - m.max) <= 1); // al fondo, con scroll de verdad
+  await page.evaluate(() => (document.getElementById('sep').style.height = '0px')); // encoge: recorta scrollY
+  await cuadros();
+  await page.evaluate(() => (document.getElementById('sep').style.height = '20px')); // recrece
+  await cuadros();
+  m = await medir();
+  assert.ok(Math.abs(m.y - m.max) <= 1, `sigue al fondo: y ${m.y}, max ${m.max}`);
+  // Sin recorte previo, crecer (un negocio que aparece) no desplaza la lista.
+  const y0 = m.y;
+  await page.evaluate(() => (document.getElementById('sep').style.height = '170px'));
+  await cuadros();
+  assert.equal((await medir()).y, y0);
+  // Al fondo la página se queda sin scroll (como tras heredar) y luego recrece: no hay nada que devolver.
+  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+  await cuadros();
+  await page.evaluate(() => (document.querySelector('.list').style.display = 'none'));
+  await cuadros();
+  assert.equal((await medir()).y, 0);
+  await page.evaluate(() => (document.querySelector('.list').style.display = ''));
+  await cuadros();
+  assert.equal((await medir()).y, 0, 'al recrecer desde sin scroll no salta al fondo');
+  assert.deepEqual(errores, []);
+  await context.close();
+});
+
+/** Siete negocios con uno cada uno, sin empleados (el dinero no se mueve) y Cadena sin abrir a medio precio. */
+const sinAlcanzar = () =>
+  partida(
+    { version: 6, money: 90_000_000, lifetimeEarned: 1e9, runEarned: 1e9 },
+    Object.fromEntries(
+      ['elotes', 'aguas', 'tacos', 'tortas', 'fonda', 'panaderia', 'franquicia'].map((id) => [id, { count: 1 }]),
+    ),
+  );
+
+test('móvil: botón de compra ancho, y si no alcanza se llena con lo que ya tienes', async () => {
+  const { context, page, errores } = await abrir({ semilla: sinAlcanzar(), movil: true });
+  await sinPaneles(page);
+  const r = await page.evaluate(() => {
+    const tarjetas = [...document.querySelectorAll('.list > li:not([hidden])')];
+    const boton = (li) => li.querySelector('.btn.primary');
+    const cadena = boton(tarjetas.at(-1)); // Abrir Cadena: 179 millones con 90 millones
+    const elotes = boton(tarjetas[0]);
+    return {
+      cadenaDisabled: cadena.disabled,
+      avance: Number(getComputedStyle(cadena).getPropertyValue('--avance')),
+      fondoCadena: getComputedStyle(cadena).backgroundImage,
+      fondoElotes: getComputedStyle(elotes).backgroundImage,
+      anchos: tarjetas.map((li) => [boton(li).getBoundingClientRect().width, li.querySelector('.row').clientWidth]),
+    };
+  });
+  assert.equal(r.cadenaDisabled, true);
+  assert.ok(r.avance >= 0.45 && r.avance <= 0.55, `avance ${r.avance}`);
+  assert.match(r.fondoCadena, /linear-gradient/);
+  assert.equal(r.fondoElotes, 'none'); // alcanza: relleno sólido, sin barra
+  for (const [boton, fila] of r.anchos) assert.ok(Math.abs(boton - Math.min(fila, 320)) <= 1, `${boton} vs ${fila}`);
+  assert.deepEqual(errores, []);
+  await context.close();
+});
+
+test('comprar: monedas del dinero a la tarjeta, con tope al tocar seguido; nada con reduced motion', async () => {
+  const { context, page, errores } = await abrir({ semilla: sinAlcanzar(), movil: true });
+  await sinPaneles(page);
+  const comprar = page.locator('.list > li').first().locator('.btn.primary');
+  // Cada frame del vuelo: ninguna moneda visible en la esquina (una terminada volvía a 0,0 opaca).
+  const esquina = page.evaluate(
+    () =>
+      new Promise((listo) => {
+        let vista = false;
+        const fin = performance.now() + 900;
+        const mirar = () => {
+          for (const m of document.querySelectorAll('.fx-moneda')) {
+            const r = m.getBoundingClientRect();
+            if (Number(getComputedStyle(m).opacity) > 0.5 && r.left < 1 && r.top < 1) vista = true;
+          }
+          if (performance.now() < fin) requestAnimationFrame(mirar);
+          else listo(vista);
+        };
+        requestAnimationFrame(mirar);
+      }),
+  );
+  const ficha = page.locator('.list > li').first().locator('.count');
+  const cajaAntes = await ficha.boundingBox();
+  // La ficha ×N: el número rueda dentro (el viejo sale) y el óvalo no se mueve ni cambia de alto.
+  const rodillo = page.evaluate(
+    () =>
+      new Promise((listo) => {
+        const ficha = document.querySelector('.list > li .count');
+        const obs = new MutationObserver(() => {
+          if (!ficha.querySelector('.rodar-viejo')) return;
+          obs.disconnect();
+          const r = ficha.getBoundingClientRect();
+          listo({ y: Math.round(r.y), alto: Math.round(r.height) });
+        });
+        obs.observe(ficha, { childList: true });
+      }),
+  );
+  await comprar.click();
+  const durante = await rodillo;
+  assert.equal(durante.y, Math.round(cajaAntes.y));
+  assert.equal(durante.alto, Math.round(cajaAntes.height));
+  await page.locator('.fx-compra .fx-moneda').first().waitFor({ state: 'attached' });
+  assert.equal(await esquina, false);
+  await ficha.locator('.rodar-viejo').waitFor({ state: 'detached' });
+  assert.equal(await ficha.textContent(), '×2');
+  await page.waitForFunction(() => !document.querySelector('.fx-compra'), null, { timeout: 4000 });
+  // Diez toques seguidos (sin las esperas de Playwright): como mucho tres vuelos a la vez.
+  const vivas = await page.evaluate(() => {
+    const b = document.querySelector('.list > li .btn.primary');
+    for (let i = 0; i < 10; i++) b.click();
+    return document.querySelectorAll('.fx-compra').length;
+  });
+  assert.equal(vivas, 3); // el tope
+  await page.waitForFunction(() => !document.querySelector('.fx-compra'), null, { timeout: 4000 });
+  assert.deepEqual(errores, []);
+  await context.close();
+
+  const quieto = await abrir({ semilla: sinAlcanzar(), movil: true, quieto: true });
+  await sinPaneles(quieto.page);
+  await quieto.page.locator('.list > li').first().locator('.btn.primary').click();
+  await quieto.page.waitForTimeout(100);
+  assert.equal(await quieto.page.locator('.fx-moneda').count(), 0);
+  assert.equal(await quieto.page.locator('.rodar-viejo').count(), 0); // sin rodillo: cambia sin más
+  assert.equal(await quieto.page.locator('.list > li').first().locator('.count').textContent(), '×2');
+  assert.deepEqual(quieto.errores, []);
+  await quieto.context.close();
+});
+
+test('móvil: cambiar la cantidad no hace latir los botones que pasan a alcanzar', async () => {
+  const { context, page, errores } = await abrir({ semilla: sinAlcanzar(), movil: true });
+  await sinPaneles(page);
+  const modo = page.locator('.bottom .modo-btn');
+  const habilitados = () =>
+    page.evaluate(() => [...document.querySelectorAll('.list > li .btn.primary')].map((b) => !b.disabled));
+  const enX1 = await habilitados();
+  await modo.click(); // ×10: varios dejan de alcanzar
+  await page.waitForFunction(() =>
+    document.querySelector('.bottom .modo-btn').getAttribute('aria-label').endsWith('×10'),
+  );
+  await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+  const enX10 = await habilitados();
+  assert.ok(
+    enX1.some((h, i) => h && !enX10[i]),
+    'la prueba no es en vacío: alguno deja de alcanzar',
+  );
+  await page.waitForTimeout(2300); // más que el antirrebote del latido
+  await modo.click(); // Máx: vuelven a alcanzar uno; no es "recién alcanzado"
+  await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+  const animando = await page.evaluate(
+    () => [...document.querySelectorAll('.list > li .btn.primary')].filter((b) => b.getAnimations().length > 0).length,
+  );
+  assert.equal(animando, 0);
   assert.deepEqual(errores, []);
   await context.close();
 });

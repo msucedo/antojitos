@@ -59,7 +59,21 @@ import { icon, setIcon, tabla, use, type IconName } from './icons';
 import { portrait } from './characters';
 import { albumCompleto, LOGROS, type LogroDef } from './logros';
 import { diaDeSemana, estadoRacha, type Regalo } from './racha';
-import { aparecer, coin, completar, confetti, deslizar, flip, pop, pulse, stamp, tilt } from './fx';
+import {
+  aparecer,
+  coin,
+  completar,
+  confetti,
+  deslizar,
+  flip,
+  latido,
+  monedasDesde,
+  pop,
+  pulse,
+  rodar,
+  stamp,
+  tilt,
+} from './fx';
 import { crearHistorial, formatHora, HISTORIAL_MAX } from './historial';
 import { normalizarApodo, APODO_MAX } from './apodo';
 import { haceTexto, type ErrorEnvio, type Puesto, type Top } from './ranking';
@@ -214,7 +228,19 @@ interface Card {
   meta: HTMLElement;
   gana: HTMLElement;
   por: HTMLElement;
+  /** Solo el verbo ("Comprar"/"Abrir"); cantidad y precio van en `precio` (aria-hidden) y en su aria-label. */
   buy: HTMLButtonElement;
+  /** Precio fuera del botón, una línea de alto fijo: "×10 · $16.57" y la escala ("billones") en --muted. */
+  precio: HTMLElement;
+  cant: HTMLElement;
+  escala: HTMLElement;
+  /** Último --avance escrito (relleno del botón cuando no alcanza): solo se escribe si cambia. */
+  avance: number;
+  /** performance.now() desde que no alcanza (null si alcanza o no se sabe): latido al alcanzar tras 2 s. */
+  noAlcanzaDesde: number | null;
+  /** Texto de la ficha ×N ya pintado, y si el próximo cambio (una compra) entra rodando. */
+  cuenta: string;
+  rodarCuenta: boolean;
   /** Sello del gerente a todo el alto de la tarjeta; solo se ve con .managed. */
   mark: Element;
   bubble: HTMLElement;
@@ -312,6 +338,8 @@ const modeLabel = (m: BuyMode) => (m === 'max' ? 'Máx' : `×${m}`);
 const modeIcon = (m: BuyMode): IconName => (m === 'max' ? 'pilas' : m === 10 ? 'monedas' : 'moneda');
 const UPGRADE_SLOTS = 4;
 const UPGRADE_LOCK_MS = 500;
+/** Sin alcanzar al menos este tiempo para que el botón lata al alcanzar (ver render de tarjetas). */
+const LATIDO_TRAS_MS = 2000;
 
 /** Qué deja el nivel `nivel` (1-based) de un cupón del recetario, en una frase corta (cupón y anuncio). */
 export function textoNivel(def: RecetarioDef, nivel: number): string {
@@ -456,6 +484,10 @@ function papelPicado(): SVGSVGElement {
 export function createUI(root: HTMLElement, handlers: Handlers): UI {
   // Atrás del navegador cierra el último diálogo que abrió el jugador (ver atras.ts). Sin la API de
   // activación (navegadores viejos) se asume gesto: solo Chrome salta entradas sin él, y Chrome la tiene.
+  // Cerrar un diálogo hace history.go: con 'auto' el navegador restauraba el scroll de cuando se abrió y
+  // deshacía lo que la página cambió mientras tanto (la última tarjeta volvía tras la barra). Al recargar
+  // la página empieza arriba.
+  history.scrollRestoration = 'manual';
   const atras = crearAtras(history, () => navigator.userActivation?.isActive ?? true);
   window.addEventListener('popstate', (e) => atras.popstate(e.state));
   // Sin zoom con pellizco en iOS: WebKit no siempre respeta touch-action para pellizcar (style.css, html).
@@ -854,6 +886,13 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
     const por = h('span', { class: 'por' });
     const meta = h('p', { class: 'meta' }, [count, gana, por]);
     const buy = h('button', { class: 'btn primary', type: 'button', onclick: () => handlers.onBuy(def.id) });
+    // Precio aparte: dentro del botón, al cambiar de largo, partía en dos líneas y la tarjeta cambiaba de
+    // alto (al fondo de la página eso movía el scroll). Va después del botón: `:disabled + .precio`.
+    const cant = h('span', { class: 'precio-cant' });
+    const escala = h('span', { class: 'precio-escala' });
+    // Etiqueta oscura que abraza el texto; .precio es el contenedor (ancho fijo, 100cqi) que la alinea.
+    const precio = h('div', { class: 'precio' }, [h('span', { class: 'precio-tag' }, [cant, escala])]);
+    precio.setAttribute('aria-hidden', 'true'); // el lector lo oye en el aria-label del botón
     // Sello del gerente: va al final del papel para quedar bajo el contenido (z-index -1 en la máscara).
     const mark = portrait(def.manager.id, 'icon card-mark', true);
     // Overlay anclado al cuerpo: no entra en el flujo, así la tarjeta no crece ni se mueven los
@@ -872,7 +911,7 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
       letrero,
       h('div', { class: 'paper' }, [
         sell,
-        h('div', { class: 'body' }, [bar, meta, h('div', { class: 'row' }, [buy]), bubble]),
+        h('div', { class: 'body' }, [bar, meta, h('div', { class: 'row' }, [buy, precio]), bubble]),
         mark,
       ]),
     ]);
@@ -893,11 +932,23 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
       gana,
       por,
       buy,
+      precio,
+      cant,
+      escala,
+      avance: -1,
+      noAlcanzaDesde: null,
+      cuenta: '',
+      rodarCuenta: false,
       mark,
       bubble,
       bubbleUntil: 0,
     };
   });
+  /** Cambio de modo, herencia o partida importada: lo que ya alcanza no es "recién alcanzado". */
+  const olvidarAlcance = (): void => {
+    for (const c of cards) c.noAlcanzaDesde = null;
+  };
+  let ultimoRender = performance.now();
 
   // Logo (corona y banderín del sprite) más el nombre en Rye a dos líneas: el salto va en el texto
   // (white-space: pre-line) y un solo nodo de texto da el nombre accesible, sin aria-label.
@@ -1383,6 +1434,37 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
     toast,
   );
 
+  /*
+   * Safari no tiene scroll anchoring: al fondo, si la página encoge el navegador recorta scrollY y al
+   * recrecer no lo devuelve (la última tarjeta acababa tras la barra). Se devuelve solo lo que el
+   * navegador recortó de verdad (scrollY antes y después); un crecimiento sin recorte previo (un negocio
+   * nuevo) no mueve nada, y sin scroll (tras heredar, web corta) no hay nada que devolver.
+   */
+  let altoPagina = raiz.scrollHeight;
+  let yPrevio = window.scrollY;
+  let recortado = 0;
+  window.addEventListener(
+    'scroll',
+    () => {
+      yPrevio = window.scrollY;
+      // El jugador se fue del fondo: nada que devolver.
+      if (window.scrollY + window.innerHeight < raiz.scrollHeight - 2) recortado = 0;
+    },
+    { passive: true },
+  );
+  new ResizeObserver(() => {
+    const h = raiz.scrollHeight;
+    if (h <= window.innerHeight) recortado = 0;
+    else if (h < altoPagina) recortado += Math.max(0, yPrevio - window.scrollY);
+    else if (h > altoPagina && recortado > 0) {
+      const d = Math.min(recortado, h - altoPagina);
+      recortado -= d;
+      window.scrollBy(0, d);
+    }
+    altoPagina = h;
+    yPrevio = window.scrollY;
+  }).observe(root, { box: 'border-box' });
+
   // Fondo animado: se monta tras load y en reposo (Safari y Brave iOS no tienen requestIdleCallback).
   setFondo(loadPrefs().fondo);
   const enReposo = (): void => {
@@ -1608,8 +1690,9 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
       onclick: () => {
         const r = handlers.onImport(input.value);
         if (r === true) {
-          // Partida nueva: las estrellas que trae no son "recién ganadas" (sin pop).
+          // Partida nueva: las estrellas que trae no son "recién ganadas" (sin pop), ni lo que ya alcanza.
           for (const slot of charSlots) slot.shownStars = -1;
+          olvidarAlcance();
           d.close();
         } else if (r === 'bloqueado')
           setText(
@@ -2155,6 +2238,11 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
 
   return {
     render(s, mode, audio) {
+      // Más de 1 s sin pintar (pestaña oculta, hilo congelado, vuelta de una ausencia): lo que alcance
+      // ahora no es "recién alcanzado"; si no, latirían todas a la vez.
+      const ahora = performance.now();
+      if (ahora - ultimoRender > 1000) olvidarAlcance();
+      ultimoRender = ahora;
       last = s;
       const moneyText = formatMoney(s.money);
       setText(money, moneyText);
@@ -2192,6 +2280,7 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
 
       if (mode !== currentMode) {
         currentMode = mode;
+        olvidarAlcance(); // otro precio: que no lata todo a la vez
         setIcon(latModo.ic, modeIcon(mode));
         setText(latModo.label, modeLabel(mode));
         latModo.btn.setAttribute('aria-label', `Cantidad a comprar: ${modeLabel(mode)}`);
@@ -2227,30 +2316,57 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
 
         const owned = b.count > 0;
         c.root.classList.toggle('owned', owned);
-        setText(c.count, owned ? `×${formatNumber(b.count)}` : '');
+        const cuenta = owned ? `×${formatNumber(b.count)}` : '';
+        if (cuenta !== c.cuenta) {
+          // Tras una compra el número rueda dentro de la ficha (el óvalo queda quieto); si no, cambia sin más.
+          if (c.rodarCuenta) rodar(c.count, cuenta);
+          else c.count.textContent = cuenta;
+          c.cuenta = cuenta;
+        }
+        c.rodarCuenta = false;
         setDisabled(c.sell, !owned || b.running || b.manager);
 
         // El tiempo de la vuelta no se escribe (la barra enseña el ritmo); el siguiente hito lo cuenta Chelo.
         // Con empleado el negocio corre solo: "$X/s", lo que de verdad entra (con propina) y lo mismo
-        // que suma el /s del header; un hito lo duplica a la vista. A mano, "$X por vuelta": lo que
-        // deja cada toque.
-        setText(
-          c.gana,
-          !owned
-            ? ''
-            : b.manager
-              ? `${formatMoney(ventasConPropina(s, c.def.id))}/s`
-              : formatMoney(revenuePerCycle(s, c.def.id)),
-        );
-        setText(c.por, !owned ? 'Sin abrir' : b.manager ? '' : ' por vuelta');
+        // que suma el /s del header; un hito lo duplica a la vista. A mano, "$X/vuelta": lo que deja cada
+        // toque (antes " por vuelta" aparte: con cifras largas no cabía en la línea de alto fijo).
+        const ganaTexto = !owned
+          ? ''
+          : `${formatMoney(b.manager ? ventasConPropina(s, c.def.id) : revenuePerCycle(s, c.def.id))}${b.manager ? '/s' : '/vuelta'}`;
+        setText(c.gana, ganaTexto);
+        setText(c.por, owned ? '' : 'Sin abrir');
+        // La línea no se parte (alto fijo): en pantallas estrechas la cifra encoge con su largo (style.css).
+        c.meta.style.setProperty('--largo', String(ganaTexto.length));
 
         const q = quantityFor(s, c.def.id, mode);
         const k = q > 0 ? q : mode === 'max' ? 1 : mode;
-        setText(
-          c.buy,
-          `${owned ? 'Comprar' : 'Abrir'} ×${formatNumber(k)} · ${formatMoney(costOf(c.def, b.count, k))}`,
-        );
+        const verbo = owned ? 'Comprar' : 'Abrir';
+        const monto = formatMoney(costOf(c.def, b.count, k));
+        // "$16.57 billones": número arriba con la cantidad, escala abajo (vacía en "$6,828").
+        const corte = monto.indexOf(' ');
+        const cant = `×${formatNumber(k)} · ${corte < 0 ? monto : monto.slice(0, corte)}`;
+        const escala = corte < 0 ? '' : monto.slice(corte + 1);
+        setText(c.buy, verbo);
+        setText(c.cant, cant);
+        setText(c.escala, escala);
+        // Una línea de alto fijo: la letra encoge con su largo (como .money).
+        c.precio.style.setProperty('--largo', String(cant.length + 1 + escala.length));
+        setAttr(c.buy, 'aria-label', `${verbo} ${formatNumber(k)} de ${c.def.name} por ${monto}`);
         setDisabled(c.buy, q === 0);
+        if (q === 0) {
+          // Relleno con lo que ya tienes, a pasos de 1 % y nunca lleno (deshabilitado no se ve listo).
+          const avance = Math.min(0.99, Math.floor((s.money / costOf(c.def, b.count, k)) * 100) / 100);
+          if (avance !== c.avance) {
+            c.avance = avance;
+            c.buy.style.setProperty('--avance', String(avance));
+          }
+          c.noAlcanzaDesde ??= now;
+        } else {
+          // Recién alcanza tras un rato sin alcanzar: un latido. Los 2 s evitan que el vaivén de cada
+          // compra (el dinero baja y vuelve a subir en ~100 ms) haga latir varias tarjetas.
+          if (c.noAlcanzaDesde !== null && now - c.noAlcanzaDesde >= LATIDO_TRAS_MS) latido(c.buy);
+          c.noAlcanzaDesde = null;
+        }
 
         c.root.classList.toggle('managed', b.manager);
         c.root.classList.toggle('propina', b.manager && propinaActiva(b));
@@ -2412,7 +2528,12 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
       const c = cards.find((x) => x.def.id === id);
       if (!c) return;
       if (kind === 'buy') {
+        // El gasto a la vista: el botón late, el número de la ficha ×N rueda (en el render siguiente,
+        // cuando llega), el plato brinca (no al Abrir: está en gris) y salen monedas del dinero a la tarjeta.
         pulse(c.buy);
+        c.rodarCuenta = true; // la ficha ×N rueda al número nuevo en el render siguiente
+        if ((last?.businesses[id]?.count ?? 0) > 0) tiltCard(c); // el suave en vueltas rápidas, mismo id
+        monedasDesde(money, c.buy);
         return;
       }
       // Contratado: el sello cae sobre la tarjeta (se ve desde el render que pone .managed) y el
@@ -2426,6 +2547,7 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
     celebrate() {
       // La partida se reinicia: ningún bocadillo sobrevive a la herencia.
       for (const c of cards) c.bubbleUntil = 0;
+      olvidarAlcance();
       eventUntil = 0;
       answer = null;
       autoCloseAt = 0;
