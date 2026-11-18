@@ -470,6 +470,24 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
    * en orden (Cerrar) salvo que el llamador marque otro con `autofocus` o enfoque el h2.
    */
   const raiz = document.documentElement;
+  /*
+   * Modalidad de entrada para el anillo de foco (style.css, data-puntero): táctil de inicio (la racha abre
+   * sin gesto), toque o clic lo pone, teclado físico lo quita. El teclado en pantalla de iOS también lanza
+   * keydown al escribir: en campos de texto solo cuentan Tab y Esc (no existe en pantalla).
+   */
+  if (matchMedia('(hover: none) and (pointer: coarse)').matches) raiz.dataset.puntero = '';
+  document.addEventListener('pointerdown', () => (raiz.dataset.puntero = ''), { capture: true, passive: true });
+  document.addEventListener(
+    'keydown',
+    (e) => {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      const t = e.target;
+      const escribe = t instanceof HTMLElement && (t.matches('input, textarea, select') || t.isContentEditable);
+      if (escribe && e.key !== 'Tab' && e.key !== 'Escape') return;
+      delete raiz.dataset.puntero;
+    },
+    { capture: true },
+  );
   function dialog(title: string, body: Node[], actions: HTMLButtonElement[] = [], clase = ''): HTMLDialogElement {
     // dialog: sombra y marco exterior; .modal-paper: la estampilla con la máscara perforada.
     const d = h('dialog', { class: clase ? `modal ${clase}` : 'modal' });
