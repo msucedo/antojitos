@@ -3,20 +3,24 @@
  * Upstash. Vive bajo `src/` para que tsc, eslint y vitest la cubran como al resto del juego.
  *
  * Datos en Redis:
- *   ranking        ZSET  id del jugador → money (efectivo actual)
- *   apodos         HASH  id → apodo (un HMGET da los cien del top)
- *   jugador:<id>   HASH  secretoHash, money, actualizado (ms); `baneado` tras un DELETE de moderación
+ *   ranking        ZSET  id del jugador → lifetimeEarned (ganado en todas las partidas; heredar no lo baja)
+ *   apodos         HASH  id → apodo (fijo: lo escribe el alta con HSETNX y nunca se sobrescribe)
+ *   recetas        HASH  id → recipes (otro HMGET para el top)
+ *   jugador:<id>   HASH  secretoHash, ganado, tasa (tasaMaxima del último envío), actualizado (ms);
+ *                        `baneado` tras un DELETE de moderación. Registros previos al 2026-11-18 traen
+ *                        `money` en vez de `ganado`: su siguiente envío pasa solo con la cota absoluta.
  *   rl:id:<id>     STR   un envío cada 30 s por jugador (SET NX EX)
  *   rl:ip:<ip>     STR   30 envíos por minuto por IP (INCR + EXPIRE)
  */
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { normalizarApodo } from '../apodo.js';
 import { RACHA_MIN_POR_DIA, RACHA_SEMANA } from '../data.js';
-import { arranqueDinero, tasaMaxima, type State } from '../game.js';
+import { arranqueDinero, recipesFor, tasaMaxima, type State } from '../game.js';
 import { MAX_IMPORT_CHARS, validate } from '../save.js';
 
 export interface RedisMin {
-  zadd(key: string, sm: { score: number; member: string }): Promise<unknown>;
+  /** Con `gt`: solo sube el score (dos aparatos o un respaldo viejo con el mismo id no lo bajan). */
+  zadd(key: string, opts: { gt: true }, sm: { score: number; member: string }): Promise<unknown>;
   /** Con `rev` y `withScores`: lista plana [member, score, member, score…]. */
   zrange(key: string, start: number, stop: number, opts: { rev: true; withScores: true }): Promise<unknown[]>;
   zrevrank(key: string, member: string): Promise<number | null>;
@@ -30,6 +34,7 @@ export interface RedisMin {
   /** Forma cruda: un valor por campo, en orden, `null` donde falta. */
   hmget(key: string, ...fields: string[]): Promise<unknown[]>;
   hset(key: string, kv: Record<string, string | number>): Promise<number>;
+  hsetnx(key: string, field: string, value: string): Promise<number>;
   hdel(key: string, field: string): Promise<number>;
   del(key: string): Promise<number>;
   set(key: string, value: string, opts: { nx: true; ex: number }): Promise<unknown>;
@@ -62,7 +67,10 @@ export type ErrorRanking = 'save' | 'apodo' | 'secreto' | 'salto' | 'limite' | '
 export interface Fila {
   pos: number;
   apodo: string;
+  /** Ganado en total (`lifetimeEarned`); se llama `money` para no romper clientes viejos. */
   money: number;
+  /** Ausente si el jugador no ha enviado desde que hay recetas (el cliente no pinta el dato). */
+  recetas?: number;
 }
 
 export const TOP_N = 100;
@@ -79,6 +87,7 @@ export const HOLGURA_RACHA_S = RACHA_MIN_POR_DIA * 60 * (RACHA_SEMANA - 1);
 
 const K_RANKING = 'ranking';
 const K_APODOS = 'apodos';
+const K_RECETAS = 'recetas';
 const kJugador = (id: string) => `jugador:${id}`;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -116,18 +125,30 @@ function aHash(plano: unknown[]): Record<string, string> | null {
   return out;
 }
 
+/** Lo que el servidor recuerda del último envío aceptado. */
+export interface Previo {
+  ganado: number;
+  tasa: number;
+  actualizado: number;
+}
+
 /**
- * ¿Puede un jugador honesto tener este dinero? Siempre: todo el dinero nace en ventas y regalos,
- * que suman también a `lifetimeEarned`; solo el Guardadito sube `money` aparte. Con registro previo:
- * desde el último envío pudo vender a lo más `tasaMaxima` por segundo (×2 de margen por relojes y
- * compras que suben la tasa), más el regalo de racha, más el Guardadito.
+ * ¿Puede un jugador honesto tener esto? Siempre: todo el dinero nace en ventas y regalos, que suman
+ * también a `lifetimeEarned` (solo el Guardadito sube `money` aparte), y las recetas salen de lo
+ * ganado más las regaladas por la racha (una cada RACHA_SEMANA regalos). Con registro previo: desde
+ * el último envío pudo ganar a lo más la tasa mayor entre la de entonces y la de ahora (heredar
+ * reinicia los negocios y la de ahora queda casi en 0) por segundo, ×2 de margen por relojes y
+ * compras que suben la tasa, más el regalo de racha. Un `lifetimeEarned` menor (otro aparato, un
+ * respaldo viejo) siempre pasa: el ZSET no baja.
  */
-export function plausible(state: State, previo: { money: number; actualizado: number } | null, now: number): boolean {
-  const guardadito = arranqueDinero(state);
-  if (state.money > state.lifetimeEarned + guardadito + 1) return false;
+export function plausible(state: State, previo: Previo | null, now: number): boolean {
+  if (state.money > state.lifetimeEarned + arranqueDinero(state) + 1) return false;
+  const regaladas = Math.min(state.recetasRegalo, Math.floor(state.stats.regalos / RACHA_SEMANA));
+  if (state.recipes > recipesFor(state.lifetimeEarned) + regaladas) return false;
   if (!previo) return true;
   const dt = Math.max(now - previo.actualizado, 0) / 1000;
-  return state.money <= previo.money + tasaMaxima(state) * (2 * dt + HOLGURA_RACHA_S) + guardadito + 1;
+  const tasa = Math.max(previo.tasa, tasaMaxima(state));
+  return state.lifetimeEarned <= previo.ganado + tasa * (2 * dt + HOLGURA_RACHA_S) + 1;
 }
 
 function parsearSave(body: string | null): State | null {
@@ -151,12 +172,17 @@ async function top(redis: RedisMin): Promise<Respuesta> {
     money.push(Number(plano[i + 1]));
   }
   const apodos = ids.length > 0 ? await redis.hmget(K_APODOS, ...ids) : [];
+  const recetas = ids.length > 0 ? await redis.hmget(K_RECETAS, ...ids) : [];
   const total = await redis.zcard(K_RANKING);
-  const filas: Fila[] = ids.map((_, i) => ({
-    pos: i + 1,
-    apodo: texto(apodos[i]) || '¿?',
-    money: Number.isFinite(money[i]) ? money[i]! : 0,
-  }));
+  const filas: Fila[] = ids.map((_, i) => {
+    const r = Number(texto(recetas[i]) || NaN);
+    return {
+      pos: i + 1,
+      apodo: texto(apodos[i]) || '¿?',
+      money: Number.isFinite(money[i]) ? money[i]! : 0,
+      ...(Number.isInteger(r) && r >= 0 ? { recetas: r } : {}),
+    };
+  });
   return responder(200, { top: filas, total }, CACHE_TOP);
 }
 
@@ -166,7 +192,8 @@ async function enviar(p: Peticion, redis: RedisMin, now: number): Promise<Respue
   if (!state?.ranking) return fallo(400, 'save');
   const { id, secreto } = state.ranking;
   const apodo = normalizarApodo(state.ranking.apodo);
-  if (!apodo) return fallo(400, 'apodo');
+  // Sin apodo válido solo se rechaza el alta: con registro, el apodo guardado manda (fijo) y un cambio
+  // de reglas o un respaldo editado no deben dejar al jugador sin su id.
 
   // Primero la IP: si el rechazo fuera por IP, un SET NX previo gastaría el turno del jugador.
   const porIp = await redis.incr(`rl:ip:${p.ip}`);
@@ -176,20 +203,33 @@ async function enviar(p: Peticion, redis: RedisMin, now: number): Promise<Respue
 
   const hash = sha256(secreto);
   const previo = aHash(await redis.hgetall(kJugador(id)));
-  let anterior: { money: number; actualizado: number } | null = null;
+  if (!previo && !apodo) return fallo(400, 'apodo');
+  let anterior: Previo | null = null;
   if (previo) {
     if (previo.baneado) return fallo(403, 'baneado');
     if (!mismoHash(previo.secretoHash ?? '', hash)) return fallo(403, 'secreto');
-    anterior = { money: Number(previo.money) || 0, actualizado: Number(previo.actualizado) || 0 };
+    // Sin `ganado` es un registro de cuando se competía por efectivo: solo cota absoluta, una vez.
+    if (previo.ganado !== undefined) {
+      anterior = {
+        ganado: Number(previo.ganado) || 0,
+        tasa: Number(previo.tasa) || 0,
+        actualizado: Number(previo.actualizado) || 0,
+      };
+    }
   }
   if (!plausible(state, anterior, now)) return fallo(400, 'salto');
 
-  await redis.zadd(K_RANKING, { score: state.money, member: id });
-  await redis.hset(K_APODOS, { [id]: apodo });
-  await redis.hset(kJugador(id), { secretoHash: hash, money: state.money, actualizado: now });
+  const ganado = Math.max(state.lifetimeEarned, anterior?.ganado ?? 0);
+  await redis.zadd(K_RANKING, { gt: true }, { score: state.lifetimeEarned, member: id });
+  // El apodo queda fijo: el alta lo escribe y ningún save posterior lo cambia (HSETNX repara si faltó).
+  if (apodo) await redis.hsetnx(K_APODOS, id, apodo);
+  await redis.hset(K_RECETAS, { [id]: state.recipes });
+  await redis.hset(kJugador(id), { secretoHash: hash, ganado, tasa: tasaMaxima(state), actualizado: now });
+  if (previo?.money !== undefined) await redis.hdel(kJugador(id), 'money');
+  const [vigente] = await redis.hmget(K_APODOS, id);
   const rank = await redis.zrevrank(K_RANKING, id);
   const total = await redis.zcard(K_RANKING);
-  return responder(200, { pos: (rank ?? 0) + 1, total });
+  return responder(200, { pos: (rank ?? 0) + 1, total, apodo: texto(vigente) || apodo });
 }
 
 async function borrar(p: Peticion, redis: RedisMin, entorno: Entorno): Promise<Respuesta> {
@@ -200,6 +240,7 @@ async function borrar(p: Peticion, redis: RedisMin, entorno: Entorno): Promise<R
   if (!UUID_RE.test(id)) return responder(400, { error: 'id' });
   await redis.zrem(K_RANKING, id);
   await redis.hdel(K_APODOS, id);
+  await redis.hdel(K_RECETAS, id);
   await redis.del(kJugador(id));
   // Sin esto el cliente lo daría de alta otra vez en el siguiente envío, con el mismo apodo.
   await redis.hset(kJugador(id), { baneado: 1 });

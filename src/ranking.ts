@@ -6,13 +6,16 @@ import type { Ranking, State } from './game';
 import { MAX_IMPORT_CHARS } from './save';
 
 export const RUTA_RANKING = '/api/ranking';
-/** Envío automático: cada minuto, solo si cambió el dinero y la pestaña está visible. */
+/** Envío automático: cada minuto, solo si cambió lo ganado o las recetas y la pestaña está visible. */
 export const ENVIO_MS = 60_000;
 
 export interface Fila {
   pos: number;
   apodo: string;
+  /** Ganado en total (`lifetimeEarned`); el servidor lo sigue llamando `money`. */
   money: number;
+  /** Recetas del jugador; null si la respuesta (cacheada, de antes) no las trae. */
+  recetas: number | null;
 }
 
 export interface Top {
@@ -23,6 +26,8 @@ export interface Top {
 export interface Puesto {
   pos: number;
   total: number;
+  /** Apodo vigente en el servidor (fijo desde el alta); null si no vino. */
+  apodo: string | null;
 }
 
 /** Lo que cuenta el servidor de un envío; `red` es que no respondió. */
@@ -56,25 +61,37 @@ export function parsearTop(json: unknown): Top | null {
   const top: Fila[] = [];
   for (const f of json.top) {
     if (!esObj(f) || !esEntero(f.pos) || typeof f.apodo !== 'string' || !esMonto(f.money)) return null;
-    top.push({ pos: f.pos, apodo: f.apodo, money: f.money });
+    if (f.recetas !== undefined && !esEntero(f.recetas)) return null;
+    top.push({ pos: f.pos, apodo: f.apodo, money: f.money, recetas: f.recetas ?? null });
   }
   return { top, total: json.total };
 }
 
 export function parsearEnvio(json: unknown): Puesto | null {
   if (!esObj(json) || !esEntero(json.pos) || json.pos < 1 || !esEntero(json.total)) return null;
-  return { pos: json.pos, total: json.total };
+  return { pos: json.pos, total: json.total, apodo: typeof json.apodo === 'string' ? json.apodo : null };
 }
 
 export interface UltimoEnvio {
   en: number;
-  money: number;
-  apodo: string;
+  ganado: number;
+  recetas: number;
 }
 
-/** Sin envío previo, sí; después, al minuto y solo si cambió el dinero o el apodo (un apodo nuevo que chocó con un 429 debe salir). */
+export const marcaEnvio = (state: State, en: number): UltimoEnvio => ({
+  en,
+  ganado: state.lifetimeEarned,
+  recetas: state.recipes,
+});
+
+/** ¿Cambió algo de lo que muestra el ranking (lo ganado o las recetas) desde el último envío? */
+export function cambioDesde(ultimo: UltimoEnvio, state: State): boolean {
+  return state.lifetimeEarned !== ultimo.ganado || state.recipes !== ultimo.recetas;
+}
+
+/** Sin envío previo, sí; después, al minuto y solo si cambió lo ganado o las recetas. */
 export function debeEnviar(ultimo: UltimoEnvio | null, state: State, now: number): boolean {
   if (!ultimo) return true;
   if (now - ultimo.en < ENVIO_MS) return false;
-  return state.money !== ultimo.money || state.ranking?.apodo !== ultimo.apodo;
+  return cambioDesde(ultimo, state);
 }

@@ -115,7 +115,7 @@ async function simularRanking(context) {
     ['Doña Tere', 3.1e7],
     ['Taquero 4821', 1.5e6],
     ['Elotero Novato', 12_345],
-  ].map(([apodo, money], i) => ({ pos: i + 1, apodo, money }));
+  ].map(([apodo, money], i) => ({ pos: i + 1, apodo, money, recetas: Math.max(0, 48 - i * 5) }));
   await context.route('**/api/ranking*', (route) => {
     const json = route.request().method() === 'GET' ? { top, total: 12 } : { pos: 3, total: 12 };
     return route.fulfill({ json });

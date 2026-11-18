@@ -1624,11 +1624,11 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
       case 'ok':
         return `Ya estás en el ranking como ${apodo}.`;
       case 'limite':
-        return 'Apodo guardado. Tu puesto se actualiza en un momento.';
+        return 'Listo. Tu puesto llega en un momento.';
       case 'red':
         return 'Sin conexión. Tu apodo quedó guardado y se enviará cuando haya red.';
       case 'apodo':
-        return 'Ese apodo no se puede usar.';
+        return 'Ese apodo no se puede usar. Elige otro.';
       case 'salto':
         return 'El servidor no aceptó tu cifra todavía. Se reintenta solo.';
       case 'secreto':
@@ -1641,38 +1641,59 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
   }
 
   /**
-   * Diálogo Ranking: tu tarjeta arriba (puesto, o el formulario de apodo), el Top 100 debajo y el
-   * total al pie. Los nodos se crean una vez y se actualizan en sitio: refrescar no borra lo que el
-   * jugador escribe ni le quita el foco. Los apodos ajenos se pintan con textContent: nunca HTML.
+   * Diálogo Ranking: tu ficha arriba (puesto, ganado y recetas; o el formulario de apodo si aún no
+   * participas), el Top 100 en filas tarjeta debajo y el total al pie. Los nodos se crean una vez y
+   * se actualizan en sitio: refrescar no borra lo que el jugador escribe ni le quita el foco. El
+   * apodo es fijo desde el alta: no hay "Cambiar apodo". Los apodos ajenos se pintan con textContent.
    */
   function openRanking(): void {
-    const tuTexto = h('p', { class: 'ranking-tu' });
+    // Lectores de pantalla: la ficha visual va aria-hidden y esta frase la dice completa.
+    const tuTexto = h('p', { class: 'ranking-tu sr-only' });
+    const fichaPos = h('span', { class: 'ranking-yo-pos' });
+    const fichaApodo = h('span', { class: 'ranking-yo-apodo' });
+    const fichaDe = h('span', { class: 'ranking-yo-de' });
+    const fichaGanado = h('span', { class: 'ranking-dato-valor ranking-yo-ganado' });
+    const fichaRecetas = h('span', { class: 'ranking-dato-valor' });
+    const fichaRecetasEtq = h('span', { class: 'ranking-dato-etq' });
+    const ficha = h('div', { class: 'ranking-ficha', hidden: true }, [
+      fichaPos,
+      h('div', { class: 'ranking-yo-quien' }, [fichaApodo, fichaDe]),
+      h('div', { class: 'ranking-yo-cifras' }, [
+        h('div', { class: 'ranking-dato' }, [
+          fichaGanado,
+          h('span', { class: 'ranking-dato-etq', text: 'ganado en total' }),
+        ]),
+        h('div', { class: 'ranking-dato ranking-dato-recetas' }, [
+          icon('recipe', 'icon'),
+          h('span', {}, [fichaRecetas, fichaRecetasEtq]),
+        ]),
+      ]),
+    ]);
+    ficha.setAttribute('aria-hidden', 'true');
+    const intro = h('p', {
+      class: 'ranking-intro',
+      text: 'Compite con todo lo que has ganado: heredar no te quita lo acumulado. Elige un apodo:',
+    });
     const input = h('input', { class: 'apodo' });
     input.type = 'text';
     input.maxLength = APODO_MAX;
     input.autocomplete = 'off';
     input.setAttribute('aria-label', 'Apodo');
     input.placeholder = 'Tu apodo';
+    const nota = h('p', { class: 'ranking-nota', text: 'El apodo no se podrá cambiar después.' });
     const aviso = h('p', { class: 'ranking-aviso' });
     aviso.setAttribute('aria-live', 'polite');
     const enviar = h('button', { class: 'btn primary', type: 'button', text: 'Participar' });
     const form = h('div', { class: 'ranking-form' }, [input, enviar]);
-    const cambiar = h('button', {
-      class: 'btn',
-      type: 'button',
-      text: 'Cambiar apodo',
-      onclick: () => {
-        setHidden(form, !form.hidden);
-        if (!form.hidden) input.focus();
-      },
-    });
-    const tu = h('div', { class: 'ranking-yo' }, [tuTexto, cambiar, form, aviso]);
+    const alta = h('div', { class: 'ranking-alta' }, [intro, form, nota]);
+    const tu = h('div', { class: 'ranking-yo' }, [tuTexto, ficha, alta, aviso]);
     const estado = h('p', { class: 'ranking-estado', text: 'Buscando el ranking…' });
     estado.setAttribute('role', 'status');
+    const sub = h('h3', { class: 'ranking-sub', text: 'Top 100', hidden: true });
     const lista = h('ol', { class: 'ranking-lista', hidden: true });
     const pie = h('p', { class: 'ranking-pie', hidden: true });
     const refrescar = h('button', { class: 'btn', type: 'button', text: 'Actualizar', onclick: () => cargar(false) });
-    const d = dialog('Ranking', [tu, estado, lista, pie], [refrescar]);
+    const d = dialog('Ranking', [tu, estado, sub, lista, pie], [refrescar]);
     const h2 = d.querySelector('h2');
     if (h2) {
       h2.tabIndex = -1;
@@ -1686,8 +1707,6 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
     });
 
     let top: Top | null = null;
-    // Con identidad el formulario va plegado hasta "Cambiar apodo"; sin ella, siempre a la vista.
-    let identidadPintada: string | null | undefined;
 
     enviar.addEventListener('click', () => {
       const limpio = normalizarApodo(input.value);
@@ -1701,9 +1720,8 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
         const texto = textoEnvio(r, limpio);
         live.textContent = texto; // al aria-live, no al Historial: es un ajuste, no un evento
         setText(aviso, r === 'ok' ? '' : texto);
+        pintarTu();
         if (r === 'ok' || r === 'limite' || r === 'red') {
-          identidadPintada = undefined; // la identidad cambió: replegar el formulario
-          pintarTu();
           handlers.onSound('upgrade');
           if (r === 'ok') cargar(true); // el Top cacheado no trae tu fila: pedirlo fresco
         }
@@ -1718,24 +1736,31 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
 
     function pintarTu(): void {
       const ranking = last?.ranking ?? null;
+      // Con identidad el alta se oculta para siempre; si el servidor rechaza el apodo, main.ts
+      // suelta la identidad y el formulario vuelve.
+      setHidden(alta, ranking !== null);
+      setHidden(ficha, ranking === null);
+      if (!ranking || !last) {
+        setText(tuTexto, '');
+        return;
+      }
       const puesto = handlers.getRankingPuesto();
-      const cifra = last ? formatMoney(last.money) : '';
+      const ganado = formatMoney(last.lifetimeEarned);
+      setText(fichaPos, puesto ? `#${formatNumber(puesto.pos)}` : '…');
+      setText(fichaApodo, ranking.apodo);
+      setText(
+        fichaDe,
+        puesto
+          ? `de ${formatNumber(puesto.total)} ${puesto.total === 1 ? 'jugador' : 'jugadores'}`
+          : 'Tu puesto llega en un momento',
+      );
+      setText(fichaGanado, ganado);
+      setText(fichaRecetas, formatNumber(last.recipes));
+      setText(fichaRecetasEtq, last.recipes === 1 ? ' receta' : ' recetas');
       setText(
         tuTexto,
-        !ranking
-          ? 'Compite con tu efectivo actual. Elige un apodo:'
-          : puesto
-            ? `Tú, ${ranking.apodo}: puesto ${formatNumber(puesto.pos)} de ${formatNumber(puesto.total)} · ${cifra}`
-            : `Tú, ${ranking.apodo}: tu puesto llega en un momento · ${cifra}`,
+        `Tú, ${ranking.apodo}: ${puesto ? `puesto ${formatNumber(puesto.pos)} de ${formatNumber(puesto.total)}` : 'tu puesto llega en un momento'}. Ganado en total: ${ganado}. ${recetas(last.recipes)}.`,
       );
-      setHidden(cambiar, ranking === null);
-      setText(enviar, ranking ? 'Guardar apodo' : 'Participar');
-      const clave = ranking?.id ?? null;
-      if (identidadPintada !== clave) {
-        identidadPintada = clave;
-        setHidden(form, ranking !== null);
-        if (ranking) input.value = ranking.apodo;
-      }
     }
 
     function pintarLista(): void {
@@ -1746,9 +1771,20 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
         ...top.top.map((f) => {
           // Por puesto y apodo: el Top puede venir de la caché (10 s) y el puesto, fresco del envío.
           const yo = puesto !== null && puesto.pos === f.pos && ranking?.apodo === f.apodo;
+          const quien = h('span', { class: 'ranking-quien' }, [h('span', { class: 'ranking-apodo', text: f.apodo })]);
+          if (f.recetas !== null) {
+            // Visible solo el número junto al icono (como en el header); la palabra va para lectores de pantalla.
+            quien.append(
+              h('span', { class: 'ranking-recetas' }, [
+                icon('recipe', 'icon'),
+                h('span', { text: formatNumber(f.recetas) }),
+                h('span', { class: 'sr-only', text: f.recetas === 1 ? ' receta' : ' recetas' }),
+              ]),
+            );
+          }
           const li = h('li', { class: yo ? 'yo' : '' }, [
             h('span', { class: 'ranking-pos', text: String(f.pos) }),
-            h('span', { class: 'ranking-apodo', text: f.apodo }),
+            quien,
             h('span', { class: 'ranking-money', text: formatMoney(f.money) }),
           ]);
           if (yo) li.prepend(h('span', { class: 'sr-only', text: 'Tú: ' }));
@@ -1756,6 +1792,7 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
         }),
       );
       setHidden(lista, top.top.length === 0);
+      setHidden(sub, top.top.length === 0);
       setText(
         pie,
         top.total === 0

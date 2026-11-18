@@ -1,7 +1,8 @@
+import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
-import { RACHA_MIN_POR_DIA, RACHA_SEMANA } from '../data';
+import { RACHA_MIN_POR_DIA, RACHA_SEMANA, RECIPE_DIVISOR } from '../data';
 import { buyRecetario, hireManager, newState, prestige, tasaMaxima, tick, type State } from '../game';
-import { manejar, type Peticion, type RedisMin, type Respuesta } from './ranking';
+import { HOLGURA_RACHA_S, manejar, type Peticion, type RedisMin, type Respuesta } from './ranking';
 
 const T0 = 1_700_000_000_000;
 const ID = '6f1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d';
@@ -33,9 +34,10 @@ class RedisFalso implements RedisMin {
   private orden(key: string): [string, number][] {
     return [...this.z(key)].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
   }
-  zadd(key: string, sm: { score: number; member: string }): Promise<unknown> {
+  zadd(key: string, _opts: { gt: true }, sm: { score: number; member: string }): Promise<unknown> {
     this.comandos++;
-    this.z(key).set(sm.member, sm.score);
+    const z = this.z(key);
+    if (!(sm.score <= (z.get(sm.member) ?? -Infinity))) z.set(sm.member, sm.score);
     return Promise.resolve(1);
   }
   zrange(key: string, start: number, stop: number): Promise<unknown[]> {
@@ -73,6 +75,13 @@ class RedisFalso implements RedisMin {
     this.comandos++;
     for (const [f, v] of Object.entries(kv)) this.h(key).set(f, String(v));
     return Promise.resolve(Object.keys(kv).length);
+  }
+  hsetnx(key: string, field: string, value: string): Promise<number> {
+    this.comandos++;
+    const m = this.h(key);
+    if (m.has(field)) return Promise.resolve(0);
+    m.set(field, value);
+    return Promise.resolve(1);
   }
   hdel(key: string, field: string): Promise<number> {
     this.comandos++;
@@ -138,36 +147,115 @@ describe('GET /api/ranking', () => {
     const r = await manejar(get(), redis, sinAdmin, redis.ahora);
     expect(r.body).toEqual({
       top: [
-        { pos: 1, apodo: 'Lupita', money: 5_000 },
-        { pos: 2, apodo: 'Beto', money: 100 },
+        { pos: 1, apodo: 'Lupita', money: 5_000, recetas: 0 },
+        { pos: 2, apodo: 'Beto', money: 100, recetas: 0 },
       ],
       total: 2,
     });
-    expect(redis.comandos).toBeLessThanOrEqual(3);
+    expect(redis.comandos).toBeLessThanOrEqual(4);
   });
 });
 
 describe('POST /api/ranking', () => {
-  it('alta: guarda dinero y apodo, devuelve puesto y total, no guarda el secreto en claro', async () => {
+  it('alta: guarda lo ganado, apodo y recetas, devuelve puesto, total y apodo, no guarda el secreto en claro', async () => {
     const redis = new RedisFalso();
     const r = await envia(redis, jugador(100));
     expect(r.status).toBe(200);
-    expect(r.body).toEqual({ pos: 1, total: 1 });
+    expect(r.body).toEqual({ pos: 1, total: 1, apodo: 'Beto' });
+    expect(redis.hashes.get('recetas')?.get(ID)).toBe('0');
     expect(r.headers['Cache-Control']).toBe('no-store');
     expect(JSON.stringify([...redis.hashes])).not.toContain(SECRETO);
-    // INCR, EXPIRE (solo el primero del minuto por IP), SET NX, HGETALL, ZADD, HSET ×2, ZREVRANK, ZCARD.
-    expect(redis.comandos).toBe(9);
+    // INCR, EXPIRE (solo el primero del minuto por IP), SET NX, HGETALL, ZADD, HSETNX, HSET ×2, HMGET, ZREVRANK, ZCARD.
+    expect(redis.comandos).toBe(11);
   });
 
-  it('actualiza: el dinero nuevo sustituye al viejo y el puesto cambia', async () => {
+  it('lo ganado nunca baja: un save con menos (otro aparato, respaldo viejo) pasa sin bajar el score', async () => {
     const redis = new RedisFalso();
     await envia(redis, jugador(100));
     redis.tick(31_000);
     await envia(redis, jugador(5_000, {}, ID2, 'Lupita'), '5.5.5.5');
     redis.tick(31_000);
-    // Un elote con empleado vende poco: 60 s × tasa × 2 no llega a 5,000. Baja de dinero siempre pasa.
     const r = await envia(redis, jugador(50));
-    expect(r.body).toEqual({ pos: 2, total: 2 });
+    expect(r.body).toEqual({ pos: 2, total: 2, apodo: 'Beto' });
+    expect(redis.zsets.get('ranking')?.get(ID)).toBe(100);
+    expect(redis.hashes.get(`jugador:${ID}`)?.get('ganado')).toBe('100');
+  });
+
+  it('heredar no quita puesto: lo ganado sigue y lo vendido antes de heredar entra con la tasa de antes', async () => {
+    const redis = new RedisFalso();
+    // Con 4e10 ganados hay una receta pendiente: prestige sí hereda.
+    const s0 = hireManager({ ...jugador(RECIPE_DIVISOR), money: 1_000 }, 'elotes');
+    const elotes = s0.businesses.elotes!;
+    const base = { ...s0, businesses: { ...s0.businesses, elotes: { ...elotes, count: 200 } } };
+    await envia(redis, base);
+    redis.tick(60_000);
+    const jugado = tick(base, 60_000);
+    const heredado = prestige(jugado, redis.ahora);
+    expect(heredado.recipes).toBe(1);
+    // Con la tasa del estado heredado sola, lo vendido en el minuto no cabría.
+    const vendido = jugado.lifetimeEarned - base.lifetimeEarned;
+    expect(vendido).toBeGreaterThan(tasaMaxima(heredado) * (2 * 60 + HOLGURA_RACHA_S) + 1);
+    const r = await envia(redis, heredado);
+    expect(r.status).toBe(200);
+    expect(redis.zsets.get('ranking')?.get(ID)).toBe(jugado.lifetimeEarned);
+  });
+
+  it('recetas: van al top y no pueden pasar de lo ganado más las regaladas por la racha', async () => {
+    const redis = new RedisFalso();
+    const dos = 4 * RECIPE_DIVISOR; // recipesFor = 2
+    expect((await envia(redis, { ...jugador(dos), recipes: 3 })).body).toEqual({ error: 'salto' });
+    // recetasRegalo no basta: hacen falta RACHA_SEMANA regalos por receta regalada
+    redis.tick(31_000);
+    const sinRegalos = { ...jugador(dos), recipes: 3, recetasRegalo: 1 };
+    expect((await envia(redis, sinRegalos)).body).toEqual({ error: 'salto' });
+    redis.tick(31_000);
+    const conRegalo = { ...sinRegalos, stats: { ...sinRegalos.stats, regalos: RACHA_SEMANA } };
+    expect((await envia(redis, conRegalo)).status).toBe(200);
+    const r = await manejar(get(), redis, sinAdmin, redis.ahora);
+    expect((r.body as { top: { recetas: unknown }[] }).top[0]?.recetas).toBe(3);
+  });
+
+  it('el apodo queda fijo: un save posterior con otro apodo no lo cambia y la respuesta trae el vigente', async () => {
+    const redis = new RedisFalso();
+    await envia(redis, jugador(100));
+    redis.tick(31_000);
+    const r = await envia(redis, jugador(100, {}, ID, 'Otro Nombre'));
+    expect(r.body).toEqual({ pos: 1, total: 1, apodo: 'Beto' });
+    expect(redis.hashes.get('apodos')?.get(ID)).toBe('Beto');
+  });
+
+  it('con registro, un apodo que ya no pasa las reglas no rechaza el envío ni toca el guardado', async () => {
+    const redis = new RedisFalso();
+    await envia(redis, jugador(100));
+    redis.tick(31_000);
+    const r = await envia(redis, jugador(100, {}, ID, 'x'));
+    expect(r.status).toBe(200);
+    expect(r.body).toEqual({ pos: 1, total: 1, apodo: 'Beto' });
+  });
+
+  it('top: sin recetas guardadas (registro viejo que no ha vuelto) la fila no trae el campo', async () => {
+    const redis = new RedisFalso();
+    await redis.zadd('ranking', { gt: true }, { score: 10, member: ID });
+    await redis.hset('apodos', { [ID]: 'Beto' });
+    const r = await manejar(get(), redis, sinAdmin, T0);
+    expect(r.body).toEqual({ top: [{ pos: 1, apodo: 'Beto', money: 10 }], total: 1 });
+  });
+
+  it('registro de cuando se competía por efectivo (sin `ganado`): entra con la cota absoluta y se migra', async () => {
+    const redis = new RedisFalso();
+    const hash = createHash('sha256').update(SECRETO, 'utf8').digest('hex');
+    await redis.hset(`jugador:${ID}`, { secretoHash: hash, money: 10, actualizado: T0 });
+    await redis.zadd('ranking', { gt: true }, { score: 10, member: ID });
+    await redis.hset('apodos', { [ID]: 'Beto' });
+    const r = await envia(redis, { ...jugador(10), lifetimeEarned: 1e9 });
+    expect(r.status).toBe(200);
+    const j = redis.hashes.get(`jugador:${ID}`);
+    expect(j?.get('ganado')).toBe('1000000000');
+    expect(j?.has('money')).toBe(false);
+    expect(redis.zsets.get('ranking')?.get(ID)).toBe(1e9);
+    // Ya migrado, la cota de salto vuelve a aplicar.
+    redis.tick(31_000);
+    expect((await envia(redis, { ...jugador(10), lifetimeEarned: 1e15 })).body).toEqual({ error: 'salto' });
   });
 
   it('secreto distinto al del alta: 403 y no toca el ranking', async () => {
@@ -191,7 +279,7 @@ describe('POST /api/ranking', () => {
     const r = await envia(redis, tramposo);
     expect(r.status).toBe(400);
     expect(r.body).toEqual({ error: 'salto' });
-    expect(redis.zsets.get('ranking')?.get(ID)).toBe(base.money);
+    expect(redis.zsets.get('ranking')?.get(ID)).toBe(base.lifetimeEarned);
   });
 
   it('lo que de verdad vende un minuto entra; el regalo de racha del día 6 también', async () => {
@@ -210,7 +298,7 @@ describe('POST /api/ranking', () => {
 
   it('el Guardadito tras heredar sube el dinero sin tocar lo ganado y se acepta', async () => {
     const redis = new RedisFalso();
-    const rico = { ...jugador(1e13), recipes: 10 };
+    const rico = { ...jugador(1e14), recipes: 10 };
     await envia(redis, rico);
     redis.tick(31_000);
     const heredado = prestige(buyRecetario(buyRecetario(rico, 'guardadito'), 'guardadito'), redis.ahora);
@@ -218,7 +306,7 @@ describe('POST /api/ranking', () => {
     expect(heredado.ranking?.id).toBe(ID);
     const r = await envia(redis, heredado);
     expect(r.status).toBe(200);
-    expect(redis.zsets.get('ranking')?.get(ID)).toBe(10_000);
+    expect(redis.zsets.get('ranking')?.get(ID)).toBe(1e14);
   });
 
   it('dinero por encima de lo ganado más el Guardadito: 400 salto, también en el alta', async () => {
@@ -299,6 +387,7 @@ describe('DELETE /api/ranking', () => {
     expect(r.status).toBe(200);
     expect(redis.zsets.get('ranking')?.has(ID)).toBe(false);
     expect(redis.hashes.get('apodos')?.has(ID)).toBe(false);
+    expect(redis.hashes.get('recetas')?.has(ID)).toBe(false);
     // Queda baneado: el cliente reintenta cada minuto y no debe volver a entrar.
     redis.tick(31_000);
     const otra = await envia(redis, jugador(100));

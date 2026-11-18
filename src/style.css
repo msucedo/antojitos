@@ -454,13 +454,120 @@ p {
 .ranking-yo {
   display: grid;
   gap: 8px;
-  padding: 10px 12px;
+}
+
+/* Tu ficha: disco de puesto en elote, apodo y "de N", y abajo las dos cifras en pastillas. */
+.ranking-ficha {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px 12px;
+  padding: 12px;
   border: 2px solid var(--border);
-  border-radius: 12px;
+  border-radius: 14px;
+  background: var(--card);
+  box-shadow: var(--sombra-btn);
+}
+
+.ranking-yo-pos {
+  display: grid;
+  place-items: center;
+  min-width: 64px;
+  height: 64px;
+  padding: 0 8px;
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  background: var(--corn);
+  color: var(--on-corn);
+  font-family: var(--fuente-rotulo);
+  font-size: 1.5rem;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.ranking-yo-quien {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.ranking-yo-apodo {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 1.15rem;
+  font-weight: 800;
+}
+
+.ranking-yo-de {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.ranking-yo-cifras {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ranking-dato {
+  display: grid;
+  gap: 2px;
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 8px 12px;
+  border-radius: 10px;
   background: var(--track);
 }
 
-.ranking-tu {
+/* El monto en Rye a 24 px (texto grande: en oscuro --primary da 4.47 sobre --card, sobre --track más). */
+.ranking-yo-ganado {
+  overflow-wrap: anywhere;
+  font-family: var(--fuente-rotulo);
+  font-size: 1.5rem;
+  line-height: 1.1;
+  color: var(--primary);
+}
+
+.ranking-dato-etq {
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.ranking-dato-recetas {
+  flex: 0 0 auto;
+  grid-template-columns: auto auto;
+  align-items: center;
+  gap: 6px;
+}
+
+.ranking-dato-recetas .icon {
+  width: 28px;
+  height: 28px;
+}
+
+.ranking-dato-recetas .ranking-dato-valor {
+  font-size: 1.15rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.ranking-dato-recetas .ranking-dato-etq {
+  font-size: 0.9rem;
+}
+
+.ranking-alta {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 2px solid var(--border);
+  border-radius: 14px;
+  background: var(--track);
+}
+
+.ranking-intro {
   font-weight: 700;
 }
 
@@ -488,6 +595,7 @@ p {
   display: none;
 }
 
+.ranking-nota,
 .ranking-aviso,
 .ranking-estado,
 .ranking-pie {
@@ -495,42 +603,86 @@ p {
   font-size: 0.9rem;
 }
 
+.ranking-sub {
+  margin: 6px 0 0;
+  font-size: 0.8rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* Top 100: cada jugador en su tarjeta. */
 .ranking-lista {
   list-style: none;
   margin: 0;
   padding: 0;
   display: grid;
-  gap: 2px;
+  gap: 6px;
 }
 
+/* Dos renglones: apodo y recetas (icono + número) arriba; el monto debajo, con todo el ancho (en móvil no caben en uno). */
 .ranking-lista li {
   display: grid;
-  grid-template-columns: 2.5em minmax(0, 1fr) auto;
-  align-items: baseline;
-  gap: 8px;
-  padding: 6px 8px;
-  border-bottom: 1.5px dashed var(--marco);
-  font-size: 0.95rem;
-}
-
-.ranking-lista li:last-child {
-  border-bottom: 0;
+  grid-template-columns: 36px minmax(0, 1fr) auto;
+  grid-template-areas:
+    'pos apodo recetas'
+    'pos money money';
+  align-items: center;
+  gap: 2px 10px;
+  padding: 8px 12px 8px 8px;
+  border: 2px solid transparent;
+  border-radius: 10px;
+  background: var(--track);
 }
 
 .ranking-pos {
-  color: var(--muted);
-  font-weight: 700;
+  grid-area: pos;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 2px solid var(--border);
+  border-radius: 999px;
+  background: var(--card);
+  font-size: 0.9rem;
+  font-weight: 800;
   font-variant-numeric: tabular-nums;
 }
 
+.ranking-quien {
+  display: contents;
+}
+
 .ranking-apodo {
+  grid-area: apodo;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-weight: 700;
+}
+
+.ranking-recetas {
+  grid-area: recetas;
+  justify-self: end;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.ranking-recetas .icon {
+  width: 18px;
+  height: 18px;
 }
 
 .ranking-money {
-  font-weight: 700;
+  grid-area: money;
+  font-weight: 800;
   font-variant-numeric: tabular-nums;
 }
 
@@ -538,11 +690,16 @@ p {
 .ranking-lista li.yo {
   background: var(--corn);
   color: var(--on-corn);
-  border: 2px solid var(--ink);
-  border-radius: 8px;
+  border-color: var(--ink);
+}
+
+.ranking-lista li.yo .ranking-recetas {
+  color: var(--on-corn);
 }
 
 .ranking-lista li.yo .ranking-pos {
+  border-color: var(--ink);
+  background: var(--papel-crema);
   color: var(--on-corn);
 }
 

@@ -45,6 +45,7 @@ import { backup, exportCrudo, exportSave, importSave, load, save, type KV } from
 import { createUI, showLocked, textoNivel, type UI } from './ui';
 import { formatDuration, formatMoney, recetas } from './format';
 import {
+  cambioDesde,
   crearIdentidad,
   cuerpoEnvio,
   debeEnviar,
@@ -54,6 +55,7 @@ import {
   type ErrorEnvio,
   type Puesto,
   type UltimoEnvio,
+  marcaEnvio,
 } from './ranking';
 
 const AUTOSAVE_MS = 5_000;
@@ -120,7 +122,7 @@ function start(root: HTMLElement): void {
     }
   };
 
-  // Ranking mundial: último puesto que devolvió el servidor y último envío (hora y dinero enviado).
+  // Ranking mundial: último puesto que devolvió el servidor y último envío (hora, ganado y recetas enviados).
   let puesto: Puesto | null = null;
   let ultimoEnvio: UltimoEnvio | null = null;
   /**
@@ -131,7 +133,10 @@ function start(root: HTMLElement): void {
     if (!state.ranking || soloLectura) return 'save';
     const body = cuerpoEnvio(state);
     if (!body) return 'save';
-    ultimoEnvio = { en: Date.now(), money: state.money, apodo: state.ranking.apodo };
+    // Tras el await solo se toca la identidad si sigue siendo la misma (un import pudo cambiarla).
+    const id = state.ranking.id;
+    const misma = () => !soloLectura && state.ranking?.id === id;
+    ultimoEnvio = marcaEnvio(state, Date.now());
     try {
       const res = await fetch(RUTA_RANKING, {
         method: 'POST',
@@ -144,6 +149,11 @@ function start(root: HTMLElement): void {
         const p = parsearEnvio(json);
         if (!p) return 'red';
         puesto = p;
+        // El apodo es fijo desde el alta: si el save trae otro (respaldo importado), manda el del servidor.
+        if (p.apodo && misma() && state.ranking && p.apodo !== state.ranking.apodo) {
+          set({ ...state, ranking: { ...state.ranking, apodo: p.apodo } });
+          persist();
+        }
         dirty = true;
         return 'ok';
       }
@@ -151,7 +161,17 @@ function start(root: HTMLElement): void {
         typeof json === 'object' && json !== null && 'error' in json && typeof json.error === 'string'
           ? json.error
           : '';
-      return ERRORES_ENVIO.find((e) => e === error) ?? 'red';
+      const motivo = ERRORES_ENVIO.find((e) => e === error) ?? 'red';
+      // Apodo rechazado: solo pasa en el alta (con registro el servidor no valida el apodo), así que
+      // no hay nada que perder; se suelta la identidad para elegir otro.
+      if (motivo === 'apodo' && misma()) {
+        set({ ...state, ranking: null });
+        persist();
+        puesto = null;
+        ultimoEnvio = null;
+        dirty = true;
+      }
+      return motivo;
     } catch {
       return 'red';
     }
@@ -311,9 +331,11 @@ function start(root: HTMLElement): void {
     },
     onRankingApodo: (apodo) => {
       if (soloLectura) return Promise.resolve('save');
-      const ranking = state.ranking ? { ...state.ranking, apodo } : crearIdentidad(apodo, crypto);
-      set({ ...state, ranking });
-      persist();
+      // El apodo no se cambia: con identidad solo se reenvía; sin ella se crea con este apodo.
+      if (!state.ranking) {
+        set({ ...state, ranking: crearIdentidad(apodo, crypto) });
+        persist();
+      }
       return enviarRanking();
     },
     getRankingPuesto: () => puesto,
@@ -464,14 +486,14 @@ function start(root: HTMLElement): void {
 
   setInterval(persist, AUTOSAVE_MS);
   setInterval(respaldar, BACKUP_MS);
-  // Ranking: cada minuto si cambió el dinero y la pestaña está visible; al ocultarse, un último envío.
+  // Ranking: cada minuto si cambió lo ganado o las recetas y la pestaña está visible; al ocultarse, un último envío.
   setInterval(() => {
     if (document.visibilityState === 'visible' && state.ranking && debeEnviar(ultimoEnvio, state, Date.now())) {
       void enviarRanking();
     }
   }, RANKING_TICK_MS);
   const enviarAlSalir = () => {
-    if (state.ranking && ultimoEnvio !== null && ultimoEnvio.money !== state.money) void enviarRanking(true);
+    if (state.ranking && ultimoEnvio !== null && cambioDesde(ultimoEnvio, state)) void enviarRanking(true);
   };
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'hidden') {

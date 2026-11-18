@@ -31,8 +31,8 @@ let server;
 let browser;
 
 /**
- * /api/ranking de mentira (la función real corre en Vercel y se prueba con vitest): guarda apodo y
- * dinero por id y ordena. `envios` cuenta los POST que llegaron, para comprobar que algo NO se envió.
+ * /api/ranking de mentira (la función real corre en Vercel y se prueba con vitest): guarda apodo
+ * (fijo desde el alta), lo ganado y las recetas por id y ordena. `envios` cuenta los POST que llegaron, para comprobar que algo NO se envió.
  */
 const ranking = new Map();
 const envios = [];
@@ -45,9 +45,10 @@ function apiRanking(req, res) {
   const top = () =>
     [...ranking.entries()]
       .sort((a, b) => b[1].money - a[1].money)
-      .map(([id, j], i) => ({ id, pos: i + 1, apodo: j.apodo, money: j.money }));
+      .map(([id, j], i) => ({ id, pos: i + 1, apodo: j.apodo, money: j.money, recetas: j.recetas }));
   if (req.method === 'GET') {
-    return responder(200, { top: top().map(({ pos, apodo, money }) => ({ pos, apodo, money })), total: ranking.size });
+    const filas = top().map(({ pos, apodo, money, recetas }) => ({ pos, apodo, money, recetas }));
+    return responder(200, { top: filas, total: ranking.size });
   }
   if (req.method !== 'POST') return responder(405, { error: 'metodo' });
   let cuerpo = '';
@@ -58,8 +59,9 @@ function apiRanking(req, res) {
       const state = JSON.parse(JSON.parse(cuerpo).save);
       const { id, apodo } = state.ranking;
       if (typeof apodo !== 'string' || apodo.trim().length < 3) return responder(400, { error: 'apodo' });
-      ranking.set(id, { apodo: apodo.trim(), money: state.money });
-      responder(200, { pos: top().find((f) => f.id === id).pos, total: ranking.size });
+      const fijo = ranking.get(id)?.apodo ?? apodo.trim();
+      ranking.set(id, { apodo: fijo, money: state.lifetimeEarned, recetas: state.recipes });
+      responder(200, { pos: top().find((f) => f.id === id).pos, total: ranking.size, apodo: fijo });
     } catch {
       responder(400, { error: 'save' });
     }

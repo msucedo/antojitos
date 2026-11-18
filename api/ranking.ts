@@ -14,7 +14,7 @@ function redis(): RedisMin {
   // tipos sigan prometiendo objetos: aquí se declara la forma real, que es la que RedisMin espera.
   const r = new Redis({ url, token, automaticDeserialization: false });
   return {
-    zadd: (key, sm) => r.zadd(key, sm),
+    zadd: (key, opts, sm) => r.zadd(key, opts, sm),
     zrange: (key, start, stop, opts) => r.zrange(key, start, stop, opts),
     zrevrank: (key, member) => r.zrevrank(key, member),
     zcard: (key) => r.zcard(key),
@@ -22,6 +22,7 @@ function redis(): RedisMin {
     hgetall: (key) => r.hgetall(key) as unknown as Promise<unknown[]>,
     hmget: (key, ...fields) => r.hmget(key, ...fields) as unknown as Promise<unknown[]>,
     hset: (key, kv) => r.hset(key, kv),
+    hsetnx: (key, field, value) => r.hsetnx(key, field, value),
     hdel: (key, field) => r.hdel(key, field),
     del: (key) => r.del(key),
     set: (key, value, opts) => r.set(key, value, opts),
