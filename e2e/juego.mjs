@@ -1030,6 +1030,31 @@ test('hundido al tocar y sin recarga al jalar', async () => {
   await context.close();
 });
 
+test('móvil: el título que recibe el foco al abrir una ventana no muestra el anillo; los botones sí', async () => {
+  const { context, page, errores } = await abrir({ movil: true });
+  await sinPaneles(page);
+  // Abrir con teclado: así Chromium sí considera :focus-visible el foco por código (la prueba no es en vacío).
+  const hist = page.locator('.bottom button[aria-label="Historial"]');
+  await hist.focus();
+  await page.keyboard.press('Enter');
+  const dlg = page.locator('dialog[open]');
+  await dlg.waitFor();
+  const titulo = await page.evaluate(() => {
+    const a = document.activeElement;
+    return {
+      tag: a?.tagName,
+      focusVisible: a?.matches(':focus-visible'),
+      outline: a ? getComputedStyle(a).outlineStyle : '',
+    };
+  });
+  assert.deepEqual(titulo, { tag: 'H2', focusVisible: true, outline: 'none' });
+  await page.keyboard.press('Tab'); // al botón Cerrar: ese sí lleva anillo
+  const boton = await page.evaluate(() => getComputedStyle(document.activeElement).outlineStyle);
+  assert.equal(boton, 'solid');
+  assert.deepEqual(errores, []);
+  await context.close();
+});
+
 /** Animaciones del icono de cada estampilla: { lograda, n, estados } en el orden del catálogo. */
 const giros = (page, raiz) =>
   page.evaluate(

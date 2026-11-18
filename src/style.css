@@ -2159,6 +2159,15 @@ dialog .estampilla:not(.bloqueada) .up-icon {
   outline-offset: 2px;
 }
 
+/*
+ * Títulos que reciben el foco por código al abrir una ventana o un panel (openInDialog, sidePanel): no son
+ * controles, el foco va ahí para que el lector anuncie la ventana. Sin anillo: WebKit (Safari/Brave iOS)
+ * lo pintaba en cada apertura tocada. Botones, pestañas y discos conservan el suyo.
+ */
+h2[tabindex='-1']:focus {
+  outline: none;
+}
+
 /* ---------- Efectos (fx.ts) ---------- */
 .fx-coin {
   position: fixed;
