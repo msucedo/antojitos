@@ -951,6 +951,68 @@ test('móvil: barra de seis discos en el orden del escritorio; arriba solo Ranki
   await context.close();
 });
 
+test('móvil: el header mide lo mismo sea cual sea la cifra (si no, al fondo la página sube sola)', async () => {
+  const { context, page, errores } = await abrir({ movil: true });
+  await sinPaneles(page);
+  for (const width of [320, 390, 700, 899]) {
+    await page.setViewportSize({ width, height: 800 });
+    const { altos, fuera } = await page.evaluate(() => {
+      const top = document.querySelector('.top');
+      const money = document.querySelector('.money');
+      const rate = document.querySelector('.rate');
+      const recipes = document.querySelector('.recipes');
+      const cifras = [
+        '$1.00 mil',
+        '$1.11 mil',
+        '$9.99 mil',
+        '$1.00 millones',
+        '$100.47 mil millones',
+        '$87.94 billones',
+      ];
+      const fila = document.querySelector('.money-row');
+      const texto = document.createRange();
+      const altos = new Set();
+      const fuera = [];
+      // Las cuatro combinaciones: sin empleados ni recetas, solo "/s" (inicio), solo recetas, ambos.
+      for (const [conRate, conRecetas] of [
+        [false, false],
+        [true, false],
+        [false, true],
+        [true, true],
+      ]) {
+        rate.hidden = !conRate;
+        recipes.hidden = !conRecetas;
+        rate.firstChild.textContent = '$100.47 mil millones/s'; // larga: antes empujaba las recetas a otra línea
+        for (const t of cifras) {
+          // Como render(): texto y --largo.
+          money.textContent = t;
+          money.style.setProperty('--largo', String(t.length));
+          altos.add(Math.round(top.getBoundingClientRect().height));
+          // Alto fijo no basta: nada se sale de la fila (ni el dinero con nowrap ni "/s" o recetas solapando).
+          const f = fila.getBoundingClientRect();
+          texto.selectNodeContents(money);
+          const cajas = [['dinero', texto.getBoundingClientRect()]];
+          if (conRate) cajas.push(['rate', rate.getBoundingClientRect()]);
+          if (conRecetas) cajas.push(['recetas', recipes.getBoundingClientRect()]);
+          for (const [nombre, r] of cajas)
+            // El dinero solo en horizontal: la caja de glifos de Rye es más alta que su línea fija.
+            if (
+              r.left < f.left - 0.5 ||
+              r.right > f.right + 0.5 ||
+              (nombre !== 'dinero' && (r.top < f.top - 0.5 || r.bottom > f.bottom + 0.5))
+            )
+              fuera.push(`${nombre} con ${t}`);
+        }
+      }
+      return { altos: [...altos], fuera };
+    });
+    assert.equal(altos.length, 1, `${width} px: alturas ${altos.join(', ')}`);
+    assert.deepEqual(fuera, [], `${width} px`);
+  }
+  assert.deepEqual(errores, []);
+  await context.close();
+});
+
 test('móvil: con una ventana abierta solo hace scroll la ventana, no la página de abajo', async () => {
   const { context, page, errores } = await abrir({ semilla: conMejoras(), movil: true });
   await sinPaneles(page);
