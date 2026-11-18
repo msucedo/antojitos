@@ -48,7 +48,11 @@ import {
   cambioDesde,
   crearIdentidad,
   cuerpoEnvio,
+  CLAVE_PUESTO,
   debeEnviar,
+  leerPuestoGuardado,
+  puestoDesdeTop,
+  serializarPuesto,
   enVuelo,
   parsearEnvio,
   parsearTop,
@@ -125,6 +129,33 @@ function start(root: HTMLElement): void {
 
   // Ranking mundial: último puesto que devolvió el servidor y último envío (hora, ganado y recetas enviados).
   let puesto: Puesto | null = null;
+  // Lo último que el servidor te aceptó (o la cifra de tu fila del Top): piso para reconocerte en el Top.
+  let pisoGanado = 0;
+  /** Puesto del caché local para la identidad actual (al arrancar o tras importar). */
+  const cargarPuesto = () => {
+    const g = state.ranking ? leerPuestoGuardado(kv.getItem(CLAVE_PUESTO), state.ranking.id) : null;
+    puesto = g?.puesto ?? null;
+    pisoGanado = g?.ganado ?? 0;
+  };
+  const guardarPuesto = (id: string) => {
+    if (soloLectura || !puesto) return;
+    try {
+      kv.setItem(CLAVE_PUESTO, serializarPuesto(id, puesto, pisoGanado));
+    } catch {
+      // Caché del puesto: no es crítico.
+    }
+  };
+  const olvidarPuesto = () => {
+    puesto = null;
+    pisoGanado = 0;
+    if (soloLectura) return;
+    try {
+      kv.setItem(CLAVE_PUESTO, '');
+    } catch {
+      // Caché del puesto: no es crítico.
+    }
+  };
+  cargarPuesto();
   let ultimoEnvio: UltimoEnvio | null = null;
   // Motivo del último fallo, para la ficha del diálogo; null tras un `ok`.
   let ultimoError: ErrorEnvio | null = null;
@@ -142,7 +173,7 @@ function start(root: HTMLElement): void {
     }
     const marca = marcaEnvio(state, Date.now());
     ultimoEnvio = marca;
-    const r = await postRanking(state.ranking.id, body, keepalive);
+    const r = await postRanking(state.ranking.id, marca.ganado, body, keepalive);
     // Una respuesta vieja no pisa a un envío más nuevo (tick, diálogo y pagehide pueden cruzarse).
     if (ultimoEnvio === marca) {
       marca.resultado = r;
@@ -151,7 +182,12 @@ function start(root: HTMLElement): void {
     dirty = true; // la ficha del diálogo y el badge muestran el resultado
     return r;
   };
-  const postRanking = async (id: string, body: string, keepalive: boolean): Promise<'ok' | ErrorEnvio> => {
+  const postRanking = async (
+    id: string,
+    ganado: number,
+    body: string,
+    keepalive: boolean,
+  ): Promise<'ok' | ErrorEnvio> => {
     // Tras el await solo se toca la identidad si sigue siendo la misma (un import pudo cambiarla).
     const misma = () => !soloLectura && state.ranking?.id === id;
     try {
@@ -165,7 +201,10 @@ function start(root: HTMLElement): void {
       if (res.ok) {
         const p = parsearEnvio(json);
         if (!p) return 'red';
-        puesto = p;
+        if (!misma()) return 'ok'; // la identidad cambió durante el envío: este puesto no es del jugador actual
+        puesto = { pos: p.pos, total: p.total, en: Date.now(), guardado: false };
+        pisoGanado = ganado;
+        guardarPuesto(id);
         // El apodo es fijo desde el alta: si el save trae otro (respaldo importado), manda el del servidor.
         if (p.apodo && misma() && state.ranking && p.apodo !== state.ranking.apodo) {
           set({ ...state, ranking: { ...state.ranking, apodo: p.apodo } });
@@ -179,12 +218,17 @@ function start(root: HTMLElement): void {
           ? json.error
           : '';
       const motivo = ERRORES_ENVIO.find((e) => e === error) ?? 'red';
+      // Retirado o identidad que no coincide: el puesto guardado ya no vale y taparía el motivo.
+      if ((motivo === 'baneado' || motivo === 'secreto') && misma()) {
+        olvidarPuesto();
+        dirty = true;
+      }
       // Apodo rechazado: solo pasa en el alta (con registro el servidor no valida el apodo), así que
       // no hay nada que perder; se suelta la identidad para elegir otro.
       if (motivo === 'apodo' && misma()) {
         set({ ...state, ranking: null });
         persist();
-        puesto = null;
+        olvidarPuesto();
         ultimoEnvio = null;
         ultimoError = null;
         dirty = true;
@@ -300,7 +344,14 @@ function start(root: HTMLElement): void {
       const next = importSave(text, Date.now());
       if (!next) return false;
       respaldar();
+      const idAntes = state.ranking?.id;
       set({ ...next, lastSeen: Date.now() });
+      // Otra identidad: su puesto (del caché, si lo hay) y sus envíos empiezan de cero.
+      if (state.ranking?.id !== idAntes) {
+        cargarPuesto();
+        ultimoEnvio = null;
+        ultimoError = null;
+      }
       logrosSilencio = true;
       diaVisto = ''; // la partida importada puede tener otro día de racha
       persist();
@@ -343,14 +394,30 @@ function start(root: HTMLElement): void {
       // Si participa y aún no hay puesto en esta sesión (o ya toca), primero el envío: así el Top trae tu cifra.
       // Si salió, el Top se pide fresco; lo acotan `debeEnviar` (60 s) y el límite del servidor (30 s).
       const enviado =
-        state.ranking && (puesto === null ? sinPuestoToca(Date.now()) : debeEnviar(ultimoEnvio, state, Date.now()))
+        state.ranking &&
+        (puesto === null || puesto.guardado ? sinPuestoToca(Date.now()) : debeEnviar(ultimoEnvio, state, Date.now()))
           ? (await enviarRanking()) === 'ok'
           : false;
       try {
         // La URL con query es otra entrada de la CDN (10 s): salta la caché tras unirse o tras tu envío.
         const res = await fetch(fresco || enviado ? `${RUTA_RANKING}?t=${Date.now()}` : RUTA_RANKING);
         if (!res.ok) return 'error';
-        return parsearTop(await res.json()) ?? 'error';
+        const top = parsearTop(await res.json());
+        if (!top) return 'error';
+        // Tu fila del Top da el puesto exacto aunque tu envío haya chocado con el 429. Un Top cacheado
+        // (10 s) no pisa a un puesto de esta sesión, que es igual o más nuevo.
+        // Con secreto o baneo no: la fila sigue ahí (o era tuya) pero el motivo del rechazo manda.
+        const rechazado = ultimoError === 'secreto' || ultimoError === 'baneado';
+        if (state.ranking && !rechazado && (puesto === null || puesto.guardado)) {
+          const desdeTop = puestoDesdeTop(top, state.ranking.apodo, pisoGanado, state.lifetimeEarned, Date.now());
+          if (desdeTop) {
+            puesto = desdeTop.puesto;
+            pisoGanado = desdeTop.ganado;
+            guardarPuesto(state.ranking.id);
+            dirty = true;
+          }
+        }
+        return top;
       } catch {
         return 'error';
       }

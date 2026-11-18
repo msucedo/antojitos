@@ -7,10 +7,14 @@ import {
   debeEnviar,
   ENVIO_MS,
   enVuelo,
+  haceTexto,
+  leerPuestoGuardado,
   marcaEnvio,
   parsearEnvio,
   parsearTop,
+  puestoDesdeTop,
   REINTENTO_MS,
+  serializarPuesto,
 } from './ranking';
 
 const T0 = 1_700_000_000_000;
@@ -94,5 +98,49 @@ describe('debeEnviar', () => {
     expect(enVuelo(vuelo, T0 + REINTENTO_MS)).toBe(false);
     expect(debeEnviar(vuelo, s, T0 + REINTENTO_MS)).toBe(true);
     expect(enVuelo(null, T0)).toBe(false);
+  });
+});
+
+describe('puesto al instante', () => {
+  const ID = '6f1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d';
+  const fila = (pos: number, apodo: string, money: number) => ({ pos, apodo, money, recetas: 0 });
+
+  it('puestoDesdeTop: tu fila por apodo y una cifra posible (entre lo último aceptado y lo ganado aquí)', () => {
+    const top = { top: [fila(1, 'Lupita', 900), fila(2, 'Beto', 500), fila(3, 'Chuy', 100)], total: 40 };
+    expect(puestoDesdeTop(top, 'Beto', 400, 600, T0)).toEqual({
+      puesto: { pos: 2, total: 40, en: T0, guardado: false },
+      ganado: 500,
+    });
+    // Mismo apodo que otro jugador: solo cuenta la fila cuya cifra cabe.
+    const dobles = { top: [fila(1, 'Beto', 9_000), fila(2, 'Beto', 500)], total: 2 };
+    expect(puestoDesdeTop(dobles, 'Beto', 400, 600, T0)?.puesto.pos).toBe(2);
+    // Fuera del Top (o la fila es de otro Beto más rico): sin puesto, nunca el ajeno.
+    expect(puestoDesdeTop({ top: [fila(1, 'Beto', 9_000)], total: 300 }, 'Beto', 400, 600, T0)).toBeNull();
+    // Dos candidatas posibles: ambiguo, sin puesto.
+    expect(
+      puestoDesdeTop({ top: [fila(1, 'Beto', 550), fila(2, 'Beto', 500)], total: 2 }, 'Beto', 0, 600, T0),
+    ).toBeNull();
+    expect(puestoDesdeTop({ top: [], total: 0 }, 'Beto', 0, 600, T0)).toBeNull();
+  });
+
+  it('caché: ida y vuelta, solo para la misma identidad, y basura vale null', () => {
+    const p = { pos: 3, total: 12, en: T0, guardado: false };
+    const texto = serializarPuesto(ID, p, 500);
+    expect(leerPuestoGuardado(texto, ID)).toEqual({ puesto: { ...p, guardado: true }, ganado: 500 });
+    expect(leerPuestoGuardado(texto, '11111111-2222-4333-8444-555555555555')).toBeNull();
+    expect(leerPuestoGuardado(null, ID)).toBeNull();
+    expect(leerPuestoGuardado('', ID)).toBeNull();
+    expect(leerPuestoGuardado('{no json', ID)).toBeNull();
+    expect(leerPuestoGuardado(JSON.stringify({ id: ID, pos: 0, total: 1, en: T0, ganado: 1 }), ID)).toBeNull();
+    expect(leerPuestoGuardado(JSON.stringify({ id: ID, pos: 5, total: 2, en: T0, ganado: 1 }), ID)).toBeNull();
+    expect(leerPuestoGuardado(JSON.stringify({ id: ID, pos: 1, total: 2, en: 'ayer', ganado: 1 }), ID)).toBeNull();
+    expect(leerPuestoGuardado(JSON.stringify({ id: ID, pos: 1, total: 2, en: T0, ganado: -1 }), ID)).toBeNull();
+  });
+
+  it('haceTexto: minutos, horas y días', () => {
+    expect(haceTexto(0)).toBe('hace 1 min');
+    expect(haceTexto(5 * 60_000)).toBe('hace 5 min');
+    expect(haceTexto(3 * 3_600_000)).toBe('hace 3 h');
+    expect(haceTexto(3 * 86_400_000)).toBe('hace 3 días');
   });
 });

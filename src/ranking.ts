@@ -31,12 +31,26 @@ export interface Top {
   total: number;
 }
 
-export interface Puesto {
+/** Lo que contesta el servidor a un envío aceptado. */
+export interface RespuestaEnvio {
   pos: number;
   total: number;
   /** Apodo vigente en el servidor (fijo desde el alta); null si no vino. */
   apodo: string | null;
 }
+
+/** Tu puesto conocido: del servidor en esta sesión, de tu fila del Top, o del caché local (`guardado`). */
+export interface Puesto {
+  pos: number;
+  total: number;
+  /** Cuándo se supo (ms). */
+  en: number;
+  /** true si viene de una sesión anterior: se muestra como "hace N min" hasta que llegue uno nuevo. */
+  guardado: boolean;
+}
+
+/** Clave de localStorage del último puesto conocido (aparte del save: no viaja al servidor ni a los respaldos). */
+export const CLAVE_PUESTO = 'antojitos.puesto';
 
 /** Lo que cuenta el servidor de un envío; `red` es que no respondió. */
 export type ErrorEnvio = 'save' | 'apodo' | 'secreto' | 'salto' | 'limite' | 'baneado' | 'red';
@@ -75,7 +89,7 @@ export function parsearTop(json: unknown): Top | null {
   return { top, total: json.total };
 }
 
-export function parsearEnvio(json: unknown): Puesto | null {
+export function parsearEnvio(json: unknown): RespuestaEnvio | null {
   if (!esObj(json) || !esEntero(json.pos) || json.pos < 1 || !esEntero(json.total)) return null;
   return { pos: json.pos, total: json.total, apodo: typeof json.apodo === 'string' ? json.apodo : null };
 }
@@ -117,4 +131,51 @@ export function debeEnviar(ultimo: UltimoEnvio | null, state: State, now: number
   if (espera !== undefined) return now - ultimo.en >= espera;
   if (now - ultimo.en < ENVIO_MS) return false;
   return cambioDesde(ultimo, state);
+}
+
+/**
+ * Tu puesto sacado de tu fila del Top. Los apodos no son únicos, así que una fila cuenta como tuya
+ * solo si además su cifra cabe en lo posible: el servidor nunca baja el score (ZADD GT), así que no
+ * es menor que lo último que te aceptó (`piso`), ni mayor que lo ganado en este aparato (`techo`).
+ * Con dos candidatas o ninguna, null (mejor sin puesto que con el de otro). Devuelve también la
+ * cifra de la fila: es el nuevo piso.
+ */
+export function puestoDesdeTop(
+  top: Top,
+  apodo: string,
+  piso: number,
+  techo: number,
+  now: number,
+): { puesto: Puesto; ganado: number } | null {
+  const mias = top.top.filter((f) => f.apodo === apodo && f.money >= piso && f.money <= techo);
+  if (mias.length !== 1) return null;
+  const f = mias[0]!;
+  return { puesto: { pos: f.pos, total: top.total, en: now, guardado: false }, ganado: f.money };
+}
+
+export function serializarPuesto(id: string, puesto: Puesto, ganado: number): string {
+  return JSON.stringify({ id, pos: puesto.pos, total: puesto.total, en: puesto.en, ganado });
+}
+
+/** Lee el caché del puesto; null si no es de esta identidad o no cuadra (nunca lanza). */
+export function leerPuestoGuardado(texto: string | null, id: string): { puesto: Puesto; ganado: number } | null {
+  if (!texto) return null;
+  let o: unknown;
+  try {
+    o = JSON.parse(texto);
+  } catch {
+    return null;
+  }
+  if (!esObj(o) || o.id !== id || !esEntero(o.pos) || o.pos < 1 || !esEntero(o.total) || o.total < o.pos) return null;
+  if (!esMonto(o.en) || !esMonto(o.ganado) || o.ganado < 0) return null;
+  return { puesto: { pos: o.pos, total: o.total, en: o.en, guardado: true }, ganado: o.ganado };
+}
+
+/** "hace 5 min", "hace 3 h", "hace 2 días": cuánto tiene el puesto guardado. */
+export function haceTexto(ms: number): string {
+  const min = Math.max(Math.floor(ms / 60_000), 1);
+  if (min < 60) return `hace ${min} min`;
+  const h = Math.floor(min / 60);
+  if (h < 48) return `hace ${h} h`;
+  return `hace ${Math.floor(h / 24)} días`;
 }

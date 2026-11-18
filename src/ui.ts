@@ -62,7 +62,7 @@ import { diaDeSemana, estadoRacha, type Regalo } from './racha';
 import { aparecer, coin, completar, confetti, deslizar, flip, pop, pulse, stamp, tilt } from './fx';
 import { crearHistorial, formatHora, HISTORIAL_MAX } from './historial';
 import { normalizarApodo, APODO_MAX } from './apodo';
-import type { ErrorEnvio, Puesto, Top } from './ranking';
+import { haceTexto, type ErrorEnvio, type Puesto, type Top } from './ranking';
 
 export interface Handlers {
   onStart(id: string): void;
@@ -1766,17 +1766,20 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
           : error === 'red'
             ? 'Sin conexión con el ranking. Se reintenta solo'
             : textoEnvio(error, ranking.apodo).replace(/\.$/, '');
+      // Puesto del caché con más de un minuto: se avisa cuánto tiene hasta que llegue uno nuevo.
+      const edad = puesto?.guardado ? Date.now() - puesto.en : 0;
+      const viejo = edad >= 60_000 ? ` · ${haceTexto(edad)}` : '';
       setText(fichaApodo, ranking.apodo);
       setText(
         fichaDe,
-        puesto ? `de ${formatNumber(puesto.total)} ${puesto.total === 1 ? 'jugador' : 'jugadores'}` : sinPuesto,
+        puesto ? `de ${formatNumber(puesto.total)} ${puesto.total === 1 ? 'jugador' : 'jugadores'}${viejo}` : sinPuesto,
       );
       setText(fichaGanado, ganado);
       setText(fichaRecetas, formatNumber(last.recipes));
       setText(fichaRecetasEtq, last.recipes === 1 ? ' receta' : ' recetas');
       setText(
         tuTexto,
-        `Tú, ${ranking.apodo}: ${puesto ? `puesto ${formatNumber(puesto.pos)} de ${formatNumber(puesto.total)}` : sinPuesto}. Ganado en total: ${ganado}. ${recetas(last.recipes)}.`,
+        `Tú, ${ranking.apodo}: ${puesto ? `puesto ${formatNumber(puesto.pos)} de ${formatNumber(puesto.total)}${viejo}` : sinPuesto}. Ganado en total: ${ganado}. ${recetas(last.recipes)}.`,
       );
     }
 
@@ -1787,7 +1790,8 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
       lista.replaceChildren(
         ...top.top.map((f) => {
           // Por puesto y apodo: el Top puede venir de la caché (10 s) y el puesto, fresco del envío.
-          const yo = puesto !== null && puesto.pos === f.pos && ranking?.apodo === f.apodo;
+          // Un puesto del caché puede ser viejo: con él no se marca ninguna fila (podría ser la de otro con tu apodo).
+          const yo = puesto !== null && !puesto.guardado && puesto.pos === f.pos && ranking?.apodo === f.apodo;
           const quien = h('span', { class: 'ranking-quien' }, [h('span', { class: 'ranking-apodo', text: f.apodo })]);
           if (f.recetas !== null) {
             // Visible solo el número junto al icono (como en el header); la palabra va para lectores de pantalla.
@@ -2154,7 +2158,13 @@ export function createUI(root: HTMLElement, handlers: Handlers): UI {
       repintarRanking?.();
       setHidden(rankingBadge, puesto === null);
       if (puesto) setText(rankingBadge, puesto.pos > 999 ? '#999+' : `#${puesto.pos}`);
-      setAttr(rankingBtn, 'aria-label', puesto ? `Ranking mundial: puesto ${puesto.pos}` : 'Ranking mundial');
+      setAttr(
+        rankingBtn,
+        'aria-label',
+        puesto
+          ? `Ranking mundial: puesto ${puesto.pos}${puesto.guardado ? ' (último conocido)' : ''}`
+          : 'Ranking mundial',
+      );
 
       for (const [btn, ic, canal, onName, offName] of audioBtns) {
         const on = audio[canal];

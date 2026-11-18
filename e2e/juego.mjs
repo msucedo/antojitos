@@ -49,7 +49,9 @@ function apiRanking(req, res) {
       .sort((a, b) => b[1].money - a[1].money)
       .map(([id, j], i) => ({ id, pos: i + 1, apodo: j.apodo, money: j.money, recetas: j.recetas }));
   if (req.method === 'GET') {
-    const filas = top().map(({ pos, apodo, money, recetas }) => ({ pos, apodo, money, recetas }));
+    const filas = top()
+      .slice(0, 100)
+      .map(({ pos, apodo, money, recetas }) => ({ pos, apodo, money, recetas }));
     return responder(200, { top: filas, total: ranking.size });
   }
   if (req.method !== 'POST') return responder(405, { error: 'metodo' });
@@ -1274,42 +1276,81 @@ test('ranking (web): unirse con apodo, fila propia y badge; al recargar sigue pa
   await context.close();
 });
 
-test('ranking: tras un 429 el envío se reintenta solo y el puesto aparece sin pulsar Actualizar', async () => {
+/** Se une al ranking desde el diálogo y lo cierra; deja el puesto en el caché local. */
+async function unirse(page, apodo) {
+  await page.locator('button.ranking-btn').click();
+  const dlg = page.locator('dialog[open]');
+  await dlg.locator('input.apodo').fill(apodo);
+  await dlg.locator('button', { hasText: 'Participar' }).click();
+  await dlg.locator('.ranking-lista li.yo').waitFor();
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(300);
+}
+
+const sin429 = (errores) => errores.filter((e) => !/status of 429/.test(e)); // el 429 provocado es el caso que se prueba
+
+test('ranking: el último puesto sale al instante del caché y, tras un 429, el reintento lo actualiza', async () => {
   ranking.clear();
   limitarProximo = false;
   const semilla = partida({ money: 5_000, lifetimeEarned: 5_000, runEarned: 5_000 }, { elotes: { count: 1 } });
   const { context, page, errores } = await abrir({ semilla });
   await sinPaneles(page);
-  await page.locator('button.ranking-btn').click();
-  const dlg = page.locator('dialog[open]');
-  await dlg.locator('input.apodo').fill('Reintento');
-  await dlg.locator('button', { hasText: 'Participar' }).click();
-  await dlg.locator('.ranking-lista li.yo').waitFor();
-  await page.keyboard.press('Escape');
-  await page.waitForTimeout(300);
-  // Recarga con reloj controlado; el 429 se arma después de recargar (el envío de `pagehide` no lo
-  // consume) y antes del primer tick de 10 s: el envío al abrir el diálogo choca con él.
+  await unirse(page, 'Reintento');
+  // Cien jugadores más ricos: tras recargar quedas en el 101, fuera del Top 100.
+  for (let i = 0; i < 100; i++) {
+    const id = `00000000-0000-4000-8000-${String(i).padStart(12, '0')}`;
+    ranking.set(id, { apodo: `Rico ${i}`, money: 1e9 + i, recetas: 1 });
+  }
+  // El caché guardado tiene 5 min.
+  await page.evaluate(() => {
+    const c = JSON.parse(localStorage.getItem('antojitos.puesto'));
+    localStorage.setItem('antojitos.puesto', JSON.stringify({ ...c, en: Date.now() - 5 * 60_000 }));
+  });
   await page.clock.install();
   await page.reload({ waitUntil: 'networkidle' });
   await page.waitForSelector('#app .card');
   await sinPaneles(page);
-  limitarProximo = true;
+  // Antes de abrir y sin red de por medio: el badge ya trae el último puesto conocido.
+  await page.waitForFunction(() => document.querySelector('.ranking-btn .lat-badge')?.textContent === '#1');
+  assert.match(await page.locator('button.ranking-btn').getAttribute('aria-label'), /último conocido/);
+  limitarProximo = true; // el envío al abrir choca con el límite de 30 s
   await page.locator('button.ranking-btn').click();
   await page.locator('dialog[open] .ranking-lista').waitFor();
   assert.equal(limitarProximo, false, 'el 429 se consumió');
-  assert.equal(await page.locator('dialog[open] .ranking-yo-pos').textContent(), '…');
-  assert.match(await page.locator('dialog[open] .ranking-yo-de').textContent(), /llega en un momento/);
+  assert.equal(await page.locator('dialog[open] .ranking-yo-pos').textContent(), '#1');
+  assert.match(await page.locator('dialog[open] .ranking-yo-de').textContent(), /de 1 jugador · hace 5 min/);
   // A los 30 s el tick reintenta solo; la ficha abierta se repinta sin Actualizar.
-  await page.clock.fastForward(41_000); // 30 s de espera más el tick de 10 s
+  await page.clock.fastForward(41_000);
+  await page.waitForFunction(
+    () => document.querySelector('dialog[open] .ranking-yo-pos')?.textContent === '#101',
+    null,
+    { timeout: 5_000 },
+  );
+  assert.equal(await page.locator('dialog[open] .ranking-yo-de').textContent(), 'de 101 jugadores');
+  assert.deepEqual(sin429(errores), []);
+  await context.close();
+});
+
+test('ranking: sin caché y con el envío en 429, el puesto sale de tu fila del Top', async () => {
+  ranking.clear();
+  limitarProximo = false;
+  const semilla = partida({ money: 5_000, lifetimeEarned: 5_000, runEarned: 5_000 }, { elotes: { count: 1 } });
+  const { context, page, errores } = await abrir({ semilla });
+  await sinPaneles(page);
+  await unirse(page, 'Solo Top');
+  await page.evaluate(() => localStorage.removeItem('antojitos.puesto'));
+  await page.reload({ waitUntil: 'networkidle' });
+  await page.waitForSelector('#app .card');
+  await sinPaneles(page);
+  assert.equal(await page.locator('.ranking-btn .lat-badge').isHidden(), true);
+  limitarProximo = true;
+  await page.locator('button.ranking-btn').click();
   await page.waitForFunction(() => document.querySelector('dialog[open] .ranking-yo-pos')?.textContent === '#1', null, {
     timeout: 5_000,
   });
-  assert.match(await page.locator('dialog[open] .ranking-yo-de').textContent(), /de 1 jugador/);
-  // El 429 provocado sale en la consola como recurso fallido: es el caso que se prueba.
-  assert.deepEqual(
-    errores.filter((e) => !/status of 429/.test(e)),
-    [],
-  );
+  assert.equal(limitarProximo, false, 'el envío chocó con el 429');
+  assert.equal(await page.locator('dialog[open] .ranking-yo-de').textContent(), 'de 1 jugador');
+  assert.deepEqual(sin429(errores), []);
   await context.close();
 });
 
